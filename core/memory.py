@@ -38,12 +38,19 @@ class FireworksEmbeddingFunction(EmbeddingFunction):
             print("[Memory] No embedding API key — using local embeddings (lower quality, fine for dev)")
             return
 
-        # Route to Gemini if configured, otherwise Fireworks
-        if config.GEMINI_API_KEY:
-            self.api_key = config.GEMINI_API_KEY
+        # Route to Gemini only if the key actually looks like a Google API key
+        # (real Gemini keys start with "AIza"). A miskeyed value silently routes
+        # to Fireworks, which has a valid embedding model — avoids hard failures.
+        gemini_key = (config.GEMINI_API_KEY or "").strip()
+        use_gemini = gemini_key.startswith("AIza")
+
+        if use_gemini:
+            self.api_key = gemini_key
             self.base_url = config.GEMINI_BASE_URL
             self.model = config.GEMINI_EMBED_MODEL
         else:
+            if gemini_key and not use_gemini:
+                print("[Memory] GEMINI_API_KEY does not look like a Gemini key — using Fireworks embeddings.")
             self.api_key = config.FIREWORKS_API_KEY
             self.base_url = config.FIREWORKS_BASE_URL
             self.model = config.FIREWORKS_EMBED_MODEL
@@ -56,11 +63,23 @@ class FireworksEmbeddingFunction(EmbeddingFunction):
     def __call__(self, input: Documents) -> Embeddings:
         if self._local_fallback:
             return self._local_ef(input)
-        response = self._client.embeddings.create(
-            model=self.model,
-            input=[text[:8000] for text in input],  # safe truncation
-        )
-        return [item.embedding for item in response.data]
+        try:
+            response = self._client.embeddings.create(
+                model=self.model,
+                input=[text[:8000] for text in input],  # safe truncation
+            )
+            return [item.embedding for item in response.data]
+        except Exception as e:
+            # Never let an embedding API failure crash a live query or store.
+            # Permanently switch this instance to local embeddings so every
+            # subsequent call uses the same vector space (avoids dimension
+            # mismatch between remote and local vectors mid-session).
+            print(f"[Memory] Embedding API failed ({e}); switching to local embeddings.")
+            from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+            if not getattr(self, "_local_ef", None):
+                self._local_ef = DefaultEmbeddingFunction()
+            self._local_fallback = True
+            return self._local_ef(input)
 
 
 class KairosMemory:
