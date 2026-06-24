@@ -1,3 +1,6 @@
+# Un-ignore lib/ (root .gitignore blocks it for Python packaging)
+!lib/
+
 # Next.js build output
 .next/
 out/
