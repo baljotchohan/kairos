@@ -1,0 +1,65 @@
+import type { Config } from "tailwindcss";
+
+const config: Config = {
+  content: [
+    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        kairos: {
+          bg: "#080808",
+          surface: "#111111",
+          border: "#1e1e1e",
+          accent: "#7c3aed",
+          "accent-light": "#8b5cf6",
+          "text-primary": "#f5f5f5",
+          "text-muted": "#6b7280",
+          green: "#10b981",
+          red: "#ef4444",
+        },
+        source: {
+          slack: "#4a154b",
+          email: "#ea4335",
+          drive: "#4285f4",
+          jira: "#0052cc",
+          meeting: "#ff6b35",
+        },
+      },
+      fontFamily: {
+        sans: ["Inter", "sans-serif"],
+        mono: ["JetBrains Mono", "Fira Code", "monospace"],
+      },
+      animation: {
+        "blink": "blink 1s step-end infinite",
+        "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "fade-in": "fadeIn 0.3s ease-out",
+        "slide-up": "slideUp 0.3s ease-out",
+        "shimmer": "shimmer 1.5s infinite",
+      },
+      keyframes: {
+        blink: {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0" },
+        },
+        fadeIn: {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
+        slideUp: {
+          "0%": { opacity: "0", transform: "translateY(8px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+      },
+    },
+  },
+  plugins: [],
+};
+
+export default config;

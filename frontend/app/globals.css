@@ -1,0 +1,159 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0b0b0c;
+  --surface: #121214;
+  --surface-hover: #18181b;
+  --border: #222226;
+  --border-focus: #3f3f46;
+  --accent: #6366f1;
+  --text-primary: #e4e4e7;
+  --text-muted: #71717a;
+  
+  --graph-node-bg: #18181b;
+  --graph-node-border: #27272a;
+}
+
+[data-theme='light'] {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-hover: #f1f5f9;
+  --border: #e2e8f0;
+  --border-focus: #94a3b8;
+  --accent: #4f46e5;
+  --text-primary: #0f172a;
+  --text-muted: #64748b;
+  
+  --graph-node-bg: #f8fafc;
+  --graph-node-border: #cbd5e1;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Theme smooth color changes (excluding graph elements) */
+.theme-transition {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, fill 0.2s ease;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-focus);
+}
+
+/* Selection */
+::selection {
+  background-color: rgba(99, 102, 241, 0.25);
+  color: inherit;
+}
+
+/* Focus visible outline */
+:focus-visible {
+  outline: 1.5px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+/* Shimmer load */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--bg) 25%,
+    var(--surface-hover) 50%,
+    var(--bg) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Stream Cursor */
+.cursor-blink::after {
+  content: '▊';
+  display: inline-block;
+  color: var(--accent);
+  animation: blink 1s step-end infinite;
+  margin-left: 1px;
+  font-size: 0.85em;
+  vertical-align: middle;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Thinking Indicator Dots */
+.thinking-dot {
+  animation: thinkingDot 1.4s ease-in-out infinite;
+}
+
+.thinking-dot:nth-child(1) { animation-delay: 0ms; }
+.thinking-dot:nth-child(2) { animation-delay: 200ms; }
+.thinking-dot:nth-child(3) { animation-delay: 400ms; }
+
+@keyframes thinkingDot {
+  0%, 80%, 100% {
+    transform: scale(0.7);
+    opacity: 0.3;
+  }
+  40% {
+    transform: scale(1.1);
+    opacity: 0.95;
+  }
+}
+
+/* Markdown formatting */
+.kairos-prose strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.kairos-prose code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85em;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 0.15em 0.3em;
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+
+.kairos-prose {
+  line-height: 1.6;
+  font-size: 0.925rem;
+}

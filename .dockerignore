@@ -1,0 +1,30 @@
+# Secrets — never bake into Docker image layers
+.env
+.env.*
+firebase-service-account.json
+
+# Local dev data — use docker-compose volume mounts instead
+chroma_db/
+kairos.db
+demo.db
+obsidian_vault/
+data/
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Frontend build (built inside container)
+frontend/node_modules/
+frontend/.next/
+
+# Git / IDE
+.git/
+.gitignore
+.DS_Store
+*.swp

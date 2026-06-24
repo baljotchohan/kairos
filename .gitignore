@@ -216,3 +216,26 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# KAIROS — project-specific exclusions
+# Sensitive credentials — NEVER commit
+firebase-service-account.json
+*-service-account.json
+*.pem
+*.key
+
+# SQLite databases (regenerated via demo_graph.py)
+*.db
+
+# ChromaDB vector store (generated, not source)
+chroma_db/
+
+# Generated content
+obsidian_vault/
+graphify-out/
+__pycache__/
+
+# OS / editor
+.DS_Store
+**/.DS_Store
+firebase-debug.log

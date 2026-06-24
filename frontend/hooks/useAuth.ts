@@ -1,0 +1,154 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  User,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signInAnonymously as firebaseSignInAnonymously,
+  signOut,
+  onAuthStateChanged,
+} from "firebase/auth";
+import { auth } from "@/lib/firebase";
+
+export interface AuthUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+  isAnonymous: boolean;
+}
+
+// Check if Firebase config variables are loaded
+const isConfigured = !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+
+export function useAuth() {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isConfigured || !auth) {
+      // Simulation mode
+      const savedUser = localStorage.getItem("kairos-sim-user");
+      const savedToken = localStorage.getItem("kairos-sim-token");
+      if (savedUser && savedToken) {
+        setUser(JSON.parse(savedUser));
+        setToken(savedToken);
+      }
+      setLoading(false);
+      return;
+    }
+
+    // Live Firebase mode
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setLoading(true);
+      if (firebaseUser) {
+        const idToken = await firebaseUser.getIdToken();
+        setToken(idToken);
+        setUser({
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName: firebaseUser.displayName,
+          photoURL: firebaseUser.photoURL,
+          isAnonymous: firebaseUser.isAnonymous,
+        });
+      } else {
+        setUser(null);
+        setToken(null);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const loginWithGoogle = async () => {
+    setLoading(true);
+    try {
+      if (!isConfigured || !auth) {
+        // Mock Google Login
+        const mockUser: AuthUser = {
+          uid: "sim-google-uid-8123",
+          email: "baljot@company.com",
+          displayName: "Baljot Chohan",
+          photoURL: null,
+          isAnonymous: false,
+        };
+        const mockToken = "simulated-google-jwt-token-99823";
+        setUser(mockUser);
+        setToken(mockToken);
+        localStorage.setItem("kairos-sim-user", JSON.stringify(mockUser));
+        localStorage.setItem("kairos-sim-token", mockToken);
+        setLoading(false);
+        return;
+      }
+
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("KAIROS Auth: Google login failed", error);
+      setLoading(false);
+      throw error;
+    }
+  };
+
+  const loginAnonymously = async () => {
+    setLoading(true);
+    try {
+      if (!isConfigured || !auth) {
+        // Mock Anonymous login
+        const mockUser: AuthUser = {
+          uid: `sim-guest-uid-${Math.floor(1000 + Math.random() * 9000)}`,
+          email: null,
+          displayName: "Guest User",
+          photoURL: null,
+          isAnonymous: true,
+        };
+        const mockToken = "simulated-anonymous-jwt-token-11029";
+        setUser(mockUser);
+        setToken(mockToken);
+        localStorage.setItem("kairos-sim-user", JSON.stringify(mockUser));
+        localStorage.setItem("kairos-sim-token", mockToken);
+        setLoading(false);
+        return;
+      }
+
+      await firebaseSignInAnonymously(auth);
+    } catch (error) {
+      console.error("KAIROS Auth: Guest login failed", error);
+      setLoading(false);
+      throw error;
+    }
+  };
+
+  const logout = async () => {
+    setLoading(true);
+    try {
+      if (!isConfigured || !auth) {
+        setUser(null);
+        setToken(null);
+        localStorage.removeItem("kairos-sim-user");
+        localStorage.removeItem("kairos-sim-token");
+        setLoading(false);
+        return;
+      }
+
+      await signOut(auth);
+    } catch (error) {
+      console.error("KAIROS Auth: Logout failed", error);
+      setLoading(false);
+      throw error;
+    }
+  };
+
+  return {
+    user,
+    token,
+    loading,
+    loginWithGoogle,
+    loginAnonymously,
+    logout,
+    isSimulation: !isConfigured || !auth,
+  };
+}
