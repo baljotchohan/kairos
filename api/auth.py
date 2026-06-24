@@ -9,22 +9,47 @@ Provides:
 from __future__ import annotations
 
 import os
+import json
 from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import firebase_admin
-from firebase_admin import auth
+from firebase_admin import auth, credentials
 from config import config
 
 # ── Firebase Admin SDK Initialisation ─────────────────────────────────────────
 
 firebase_enabled = False
 
+
+def _build_credential():
+    """Resolve a Firebase Admin credential from (in order):
+      1. FIREBASE_SERVICE_ACCOUNT  — full service-account JSON (HF secret / env)
+      2. GOOGLE_APPLICATION_CREDENTIALS or ./firebase-service-account.json file
+      3. None → Application Default Credentials (local gcloud / GCP metadata)
+    """
+    sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
+    if sa_json:
+        return credentials.Certificate(json.loads(sa_json))
+
+    for path in (
+        os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"),
+        "firebase-service-account.json",
+    ):
+        if path and os.path.exists(path):
+            return credentials.Certificate(path)
+
+    return None  # falls through to ApplicationDefault()
+
+
 try:
     # Check if Firebase app is already initialized
     if not firebase_admin._apps:
-        # Try initializing with default credentials
-        firebase_admin.initialize_app()
+        cred = _build_credential()
+        if cred is not None:
+            firebase_admin.initialize_app(cred)
+        else:
+            firebase_admin.initialize_app()
     firebase_enabled = True
     print("🔥 KAIROS Auth: Firebase Admin SDK initialised successfully.")
 except Exception as e:
