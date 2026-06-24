@@ -78,9 +78,7 @@ export default function StreamingText({
         }
         return <span key={i}>{seg.content}</span>;
       })}
-      {isStreaming && (
-        <span className="inline-block w-[1.5px] h-[1em] bg-indigo-400 ml-0.5 align-middle animate-[blink_1s_step-end_infinite]" />
-      )}
+      {isStreaming && <span className="stream-cursor" aria-hidden="true" />}
     </span>
   );
 }

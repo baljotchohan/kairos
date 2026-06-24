@@ -16,10 +16,23 @@ if (!isConfigured && typeof window !== "undefined") {
   console.warn("KAIROS: Firebase env variables are missing. Auth will default to local client simulation.");
 }
 
-// Initialise Firebase with server-side and config check
-const app = isConfigured
-  ? (getApps().length === 0 ? initializeApp(firebaseConfig) : getApp())
-  : null;
-const auth = app ? getAuth(app) : null;
+// Initialise Firebase defensively. A throw here (bad/partial config) would
+// crash the entire client bundle at import time, so we fall back to null
+// (simulation mode) instead of letting it bubble.
+let app: ReturnType<typeof initializeApp> | null = null;
+let auth: ReturnType<typeof getAuth> | null = null;
+
+try {
+  if (isConfigured) {
+    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    auth = getAuth(app);
+  }
+} catch (err) {
+  if (typeof window !== "undefined") {
+    console.error("KAIROS: Firebase init failed, falling back to simulation mode.", err);
+  }
+  app = null;
+  auth = null;
+}
 
 export { app, auth };

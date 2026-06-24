@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   User,
   signInWithPopup,
+  signInWithRedirect,
   GoogleAuthProvider,
   signInAnonymously as firebaseSignInAnonymously,
   signOut,
@@ -29,12 +30,18 @@ export function useAuth() {
 
   useEffect(() => {
     if (!isConfigured || !auth) {
-      // Simulation mode
-      const savedUser = localStorage.getItem("kairos-sim-user");
-      const savedToken = localStorage.getItem("kairos-sim-token");
-      if (savedUser && savedToken) {
-        setUser(JSON.parse(savedUser));
-        setToken(savedToken);
+      // Simulation mode — guard against corrupted localStorage payloads
+      try {
+        const savedUser = localStorage.getItem("kairos-sim-user");
+        const savedToken = localStorage.getItem("kairos-sim-token");
+        if (savedUser && savedToken) {
+          setUser(JSON.parse(savedUser));
+          setToken(savedToken);
+        }
+      } catch (err) {
+        console.warn("KAIROS Auth: clearing corrupted simulation session", err);
+        localStorage.removeItem("kairos-sim-user");
+        localStorage.removeItem("kairos-sim-token");
       }
       setLoading(false);
       return;
@@ -85,7 +92,23 @@ export function useAuth() {
       }
 
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      provider.setCustomParameters({ prompt: "select_account" });
+      try {
+        await signInWithPopup(auth, provider);
+      } catch (popupErr: any) {
+        const code = popupErr?.code ?? "";
+        // Popup blocked / closed / not supported → fall back to full-page redirect
+        if (
+          code === "auth/popup-blocked" ||
+          code === "auth/popup-closed-by-user" ||
+          code === "auth/cancelled-popup-request" ||
+          code === "auth/operation-not-supported-in-this-environment"
+        ) {
+          await signInWithRedirect(auth, provider);
+          return;
+        }
+        throw popupErr;
+      }
     } catch (error) {
       console.error("KAIROS Auth: Google login failed", error);
       setLoading(false);

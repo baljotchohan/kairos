@@ -991,7 +991,7 @@ export default function Home() {
                     {chatHistory.map((msg, i) => (
                       <div
                         key={msg.id || i}
-                        className={`w-full flex gap-5 items-start ${
+                        className={`w-full flex gap-5 items-start animate-message-in ${
                           msg.role === "user" ? "justify-end py-1" : "py-5 border-b border-[rgb(var(--border))]/30"
                         }`}
                       >
@@ -1137,7 +1137,7 @@ export default function Home() {
 
                 {/* Floating Chat Input form */}
                 <form onSubmit={handleSend} className="p-6 shrink-0 bg-gradient-to-t from-[rgb(var(--bg))] via-[rgb(var(--bg))]/90 to-transparent theme-transition">
-                  <div className="max-w-4xl mx-auto relative bg-[rgb(var(--surface))] border border-[rgb(var(--border))] focus-within:border-[rgb(var(--border-focus))] focus-within:ring-2 focus-within:ring-[rgb(var(--accent))]/15 rounded-[26px] shadow-xl transition-all p-2 flex items-center">
+                  <div className="max-w-4xl mx-auto relative bg-[rgb(var(--surface))] border border-[rgb(var(--border))] focus-within:border-[rgb(var(--border-focus))] focus-within:ring-2 focus-within:ring-[rgb(var(--accent))]/15 focus-within:shadow-[0_0_30px_-8px_rgb(var(--accent)/0.25)] rounded-[26px] shadow-xl transition-all duration-300 p-2 flex items-center">
                     <input
                       type="text"
                       value={inputVal}
@@ -1149,9 +1149,9 @@ export default function Home() {
                     <button
                       type="submit"
                       disabled={isChatStreaming || !inputVal.trim()}
-                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shrink-0 shadow ${
+                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 shrink-0 shadow active:scale-90 ${
                         inputVal.trim()
-                          ? "bg-[rgb(var(--accent))] text-white hover:opacity-90"
+                          ? "bg-[rgb(var(--accent))] text-white hover:opacity-90 hover:scale-105 hover:shadow-[0_0_16px_-2px_rgb(var(--accent)/0.6)]"
                           : "bg-[rgb(var(--surface-hover))] text-[rgb(var(--text-muted))] opacity-40 cursor-not-allowed"
                       }`}
                     >
