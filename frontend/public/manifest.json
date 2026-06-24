@@ -1,0 +1,17 @@
+{
+  "name": "KAIROS — Organizational Memory OS",
+  "short_name": "KAIROS",
+  "description": "Every company forgets why it made its decisions. KAIROS never does.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#171717",
+  "theme_color": "#171717",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

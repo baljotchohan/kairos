@@ -367,8 +367,8 @@ export function useKairosChat(token: string | null) {
       },
     ]);
 
-    wsClient.send({ type: "query", question: question.trim() });
-  }, [isStreaming]);
+    wsClient.send({ type: "query", question: question.trim(), session_id: activeSessionId });
+  }, [isStreaming, activeSessionId]);
 
   const startIngest = useCallback((sources: string[]) => {
     wsClient.send({ type: "ingest", sources });

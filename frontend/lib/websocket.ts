@@ -14,8 +14,15 @@ class KairosWebSocket {
   private reconnectDelay = 2000;
   private url = (process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000") + "/ws";
   private manuallyDisconnected = false;
+  private token?: string;
 
   connect(token?: string): void {
+    if (typeof window === "undefined") return;
+
+    if (token) {
+      this.token = token;
+    }
+
     if (
       this.ws &&
       (this.ws.readyState === WebSocket.OPEN ||
@@ -27,7 +34,8 @@ class KairosWebSocket {
     this.manuallyDisconnected = false;
 
     try {
-      const connectionUrl = token ? `${this.url}?token=${encodeURIComponent(token)}` : this.url;
+      const activeToken = this.token;
+      const connectionUrl = activeToken ? `${this.url}?token=${encodeURIComponent(activeToken)}` : this.url;
       this.ws = new WebSocket(connectionUrl);
 
       this.ws.onopen = () => {
@@ -67,7 +75,7 @@ class KairosWebSocket {
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.reconnectAttempts++;
-      this.connect();
+      this.connect(this.token);
     }, this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts));
   }
 

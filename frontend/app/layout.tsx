@@ -13,6 +13,11 @@ export const metadata: Metadata = {
     "enterprise",
   ],
   authors: [{ name: "Antigravity" }],
+  icons: {
+    icon: "/icon.svg",
+    apple: "/apple-icon.svg",
+  },
+  manifest: "/manifest.json",
   openGraph: {
     title: "KAIROS — Company Organizational Memory OS",
     description:
@@ -36,10 +41,13 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,500;1,600;1,700;1,800&family=JetBrains+Mono:wght@400;500&display=swap"
           rel="stylesheet"
         />
-        <meta name="theme-color" content="#080808" />
+        <meta name="theme-color" content="#171717" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="KAIROS" />
       </head>
       <body className="h-full bg-[#080808] text-[#f5f5f5] font-sans antialiased">
         {children}

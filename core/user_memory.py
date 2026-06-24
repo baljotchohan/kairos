@@ -79,10 +79,18 @@ class UserMemory:
         self.db_path = db_path or config.SQLITE_PATH
         self._init_tables()
 
+    # ── SQLite Connections ───────────────────────────────────────────────────
+
+    def _get_connection(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        return conn
+
     # ── Schema ────────────────────────────────────────────────────────────────
 
     def _init_tables(self):
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS user_conversations (
                     id TEXT PRIMARY KEY,
@@ -141,7 +149,7 @@ class UserMemory:
             query_intent=query_intent,
             metadata=metadata or {},
         )
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             conn.execute("""
                 INSERT INTO user_conversations
                 (id, user_id, session_id, role, content, query_intent, timestamp, metadata)
@@ -169,7 +177,7 @@ class UserMemory:
         self, user_id: str, session_id: str, limit: int = 50
     ) -> list[ConversationTurn]:
         """Get all messages in a specific session."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             rows = conn.execute("""
                 SELECT id, user_id, session_id, role, content, query_intent, timestamp, metadata
                 FROM user_conversations
@@ -183,7 +191,7 @@ class UserMemory:
         self, user_id: str, limit: int = 10
     ) -> list[ConversationTurn]:
         """Get most recent messages across all sessions."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             rows = conn.execute("""
                 SELECT id, user_id, session_id, role, content, query_intent, timestamp, metadata
                 FROM user_conversations
@@ -194,13 +202,14 @@ class UserMemory:
         return list(reversed([self._row_to_turn(r) for r in rows]))
 
     def get_current_session_context(
-        self, user_id: str, max_turns: int = 6
+        self, user_id: str, max_turns: int = 6, session_id: str | None = None
     ) -> list[dict]:
         """
         Get the current session's recent turns as LLM-ready message dicts.
         Used to inject conversational context into the synthesis agent prompt.
         """
-        session_id = self.get_or_create_session(user_id)
+        if not session_id:
+            session_id = self.get_or_create_session(user_id)
         turns = self.get_session_history(user_id, session_id, limit=max_turns)
         return [
             {"role": t.role, "content": t.content}
@@ -208,20 +217,30 @@ class UserMemory:
         ]
 
     def list_sessions(self, user_id: str, limit: int = 20) -> list[dict]:
-        """List all sessions for a user with preview info."""
-        with sqlite3.connect(self.db_path) as conn:
+        """List all sessions for a user with preview info. Fixed to retrieve chronological first query."""
+        with self._get_connection() as conn:
             rows = conn.execute("""
-                SELECT session_id,
-                       MIN(timestamp) as started,
-                       MAX(timestamp) as last_msg,
-                       COUNT(*) as msg_count,
-                       MIN(CASE WHEN role='user' THEN content END) as first_query
-                FROM user_conversations
-                WHERE user_id = ?
-                GROUP BY session_id
-                ORDER BY last_msg DESC
+                WITH first_user_messages AS (
+                    SELECT session_id, content,
+                           ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY timestamp ASC) as rn
+                    FROM user_conversations
+                    WHERE user_id = ? AND role = 'user'
+                ),
+                session_aggregates AS (
+                    SELECT session_id,
+                           MIN(timestamp) as started,
+                           MAX(timestamp) as last_msg,
+                           COUNT(*) as msg_count
+                    FROM user_conversations
+                    WHERE user_id = ?
+                    GROUP BY session_id
+                )
+                SELECT sa.session_id, sa.started, sa.last_msg, sa.msg_count, fm.content
+                FROM session_aggregates sa
+                LEFT JOIN first_user_messages fm ON sa.session_id = fm.session_id AND fm.rn = 1
+                ORDER BY sa.last_msg DESC
                 LIMIT ?
-            """, (user_id, limit)).fetchall()
+            """, (user_id, user_id, limit)).fetchall()
 
         return [
             {
@@ -236,7 +255,7 @@ class UserMemory:
 
     def delete_session(self, user_id: str, session_id: str) -> int:
         """Delete all messages in a session. Returns count deleted."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             cursor = conn.execute("""
                 DELETE FROM user_conversations
                 WHERE user_id = ? AND session_id = ?
@@ -246,12 +265,24 @@ class UserMemory:
 
     # ── Session Management ────────────────────────────────────────────────────
 
-    def get_or_create_session(self, user_id: str) -> str:
+    def get_or_create_session(self, user_id: str, session_id: str | None = None) -> str:
         """
-        Get the current active session or create a new one.
+        Get the current active session, verify/create the requested session_id, or create a new one.
         A new session starts if the last message was > SESSION_IDLE_GAP ago.
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
+            # If session_id is provided, check if it exists in the database
+            if session_id:
+                row = conn.execute("""
+                    SELECT session_id FROM user_conversations
+                    WHERE user_id = ? AND session_id = ?
+                    LIMIT 1
+                """, (user_id, session_id)).fetchone()
+                if row:
+                    return session_id
+                # If it doesn't exist yet but was supplied, return it (to be saved on first message)
+                return session_id
+
             row = conn.execute("""
                 SELECT session_id, timestamp
                 FROM user_conversations
@@ -272,7 +303,7 @@ class UserMemory:
 
     def get_profile(self, user_id: str) -> UserProfile:
         """Get or create user profile."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             row = conn.execute("""
                 SELECT user_id, display_name, department, role_context,
                        frequent_topics, preferred_sources, interaction_summary,
@@ -302,7 +333,7 @@ class UserMemory:
 
     def save_profile(self, profile: UserProfile):
         """Upsert a user profile."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             conn.execute("""
                 INSERT OR REPLACE INTO user_profiles
                 (user_id, display_name, department, role_context,
@@ -318,9 +349,21 @@ class UserMemory:
             ))
             conn.commit()
 
+    def update_learned_profile(self, user_id: str, department: str, frequent_topics: list[str], role_context: str):
+        """Surgically update only the learned preferences context fields, preventing queries stats overwrite."""
+        with self._get_connection() as conn:
+            conn.execute("""
+                UPDATE user_profiles SET
+                    department = ?,
+                    frequent_topics = ?,
+                    role_context = ?
+                WHERE user_id = ?
+            """, (department, json.dumps(frequent_topics), role_context, user_id))
+            conn.commit()
+
     def reset_profile(self, user_id: str):
         """Reset a user's learned preferences (keeps conversations)."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             conn.execute("""
                 UPDATE user_profiles SET
                     role_context = '',
@@ -336,7 +379,7 @@ class UserMemory:
 
     def get_topic_frequency(self, user_id: str, limit: int = 10) -> list[dict]:
         """Get most frequently asked topics for a user."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             rows = conn.execute("""
                 SELECT query_intent, COUNT(*) as cnt
                 FROM user_conversations

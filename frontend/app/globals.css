@@ -1,35 +1,35 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,500;1,600;1,700;1,800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --bg: #0b0b0c;
-  --surface: #121214;
-  --surface-hover: #18181b;
-  --border: #222226;
-  --border-focus: #3f3f46;
-  --accent: #6366f1;
-  --text-primary: #e4e4e7;
-  --text-muted: #71717a;
+  --bg: 23 23 23;
+  --surface: 33 33 33;
+  --surface-hover: 44 44 46;
+  --border: 44 44 46;
+  --border-focus: 85 85 85;
+  --accent: 124 58 237;
+  --text-primary: 236 236 236;
+  --text-muted: 180 180 180;
   
-  --graph-node-bg: #18181b;
-  --graph-node-border: #27272a;
+  --graph-node-bg: 33 33 33;
+  --graph-node-border: 55 55 55;
 }
 
 [data-theme='light'] {
-  --bg: #f8fafc;
-  --surface: #ffffff;
-  --surface-hover: #f1f5f9;
-  --border: #e2e8f0;
-  --border-focus: #94a3b8;
-  --accent: #4f46e5;
-  --text-primary: #0f172a;
-  --text-muted: #64748b;
+  --bg: 249 249 249;
+  --surface: 255 255 255;
+  --surface-hover: 244 244 244;
+  --border: 229 229 229;
+  --border-focus: 180 180 180;
+  --accent: 109 40 217;
+  --text-primary: 13 13 13;
+  --text-muted: 103 103 103;
   
-  --graph-node-bg: #f8fafc;
-  --graph-node-border: #cbd5e1;
+  --graph-node-bg: 255 255 255;
+  --graph-node-border: 210 210 210;
 }
 
 * {
@@ -41,9 +41,9 @@ body {
   height: 100%;
   margin: 0;
   padding: 0;
-  background-color: var(--bg);
-  color: var(--text-primary);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: rgb(var(--bg));
+  color: rgb(var(--text-primary));
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -60,16 +60,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg);
+  background: rgb(var(--bg));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: rgb(var(--border));
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--border-focus);
+  background: rgb(var(--border-focus));
 }
 
 /* Selection */
@@ -80,7 +80,7 @@ body {
 
 /* Focus visible outline */
 :focus-visible {
-  outline: 1.5px solid var(--border-focus);
+  outline: 1.5px solid rgb(var(--border-focus));
   outline-offset: 1px;
 }
 
@@ -88,9 +88,9 @@ body {
 .shimmer {
   background: linear-gradient(
     90deg,
-    var(--bg) 25%,
-    var(--surface-hover) 50%,
-    var(--bg) 75%
+    rgb(var(--bg)) 25%,
+    rgb(var(--surface-hover)) 50%,
+    rgb(var(--bg)) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.6s infinite;
@@ -105,7 +105,7 @@ body {
 .cursor-blink::after {
   content: '▊';
   display: inline-block;
-  color: var(--accent);
+  color: rgb(var(--accent));
   animation: blink 1s step-end infinite;
   margin-left: 1px;
   font-size: 0.85em;
@@ -138,22 +138,80 @@ body {
 }
 
 /* Markdown formatting */
+.kairos-prose {
+  line-height: 1.75;
+  font-size: 0.975rem;
+  letter-spacing: -0.01em;
+}
+
 .kairos-prose strong {
-  color: var(--text-primary);
-  font-weight: 600;
+  color: rgb(var(--text-primary));
+  font-weight: 650;
+}
+
+.kairos-prose p {
+  margin-top: 0;
+  margin-bottom: 1.15rem;
+}
+
+.kairos-prose p:last-child {
+  margin-bottom: 0;
 }
 
 .kairos-prose code {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.85em;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  padding: 0.15em 0.3em;
-  border-radius: 4px;
-  color: var(--text-primary);
+  font-size: 0.875em;
+  background: rgb(var(--surface-hover));
+  border: 1px solid rgb(var(--border));
+  padding: 0.2em 0.4em;
+  border-radius: 6px;
+  color: rgb(var(--text-primary));
 }
 
-.kairos-prose {
-  line-height: 1.6;
-  font-size: 0.925rem;
+.kairos-prose h1,
+.kairos-prose h2,
+.kairos-prose h3,
+.kairos-prose h4 {
+  color: rgb(var(--text-primary));
+  font-weight: 600;
+  margin-top: 1.75rem;
+  margin-bottom: 0.85rem;
+  letter-spacing: -0.02em;
+}
+
+.kairos-prose h1 { font-size: 1.5rem; }
+.kairos-prose h2 { font-size: 1.25rem; }
+.kairos-prose h3 { font-size: 1.125rem; }
+.kairos-prose h4 { font-size: 1rem; }
+
+.kairos-prose ul {
+  list-style-type: disc;
+  padding-left: 1.65rem;
+  margin-top: 0;
+  margin-bottom: 1.15rem;
+}
+
+.kairos-prose ol {
+  list-style-type: decimal;
+  padding-left: 1.65rem;
+  margin-top: 0;
+  margin-bottom: 1.15rem;
+}
+
+.kairos-prose li {
+  margin-bottom: 0.5rem;
+}
+
+.kairos-prose li:last-child {
+  margin-bottom: 0;
+}
+
+.kairos-prose blockquote {
+  border-left: 3px solid rgb(var(--accent) / 0.4);
+  padding-left: 1rem;
+  margin-left: 0;
+  margin-right: 0;
+  color: rgb(var(--text-muted));
+  font-style: italic;
+  margin-bottom: 1.15rem;
 }

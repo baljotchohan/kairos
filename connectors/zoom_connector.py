@@ -65,7 +65,7 @@ class ZoomConnector:
         async with httpx.AsyncClient(timeout=30) as client:
             try:
                 resp = await client.get(
-                    f"{self.API_BASE}/accounts/me/recordings",
+                    f"{self.API_BASE}/users/me/recordings",
                     headers={"Authorization": f"Bearer {token}"},
                     params={"from": from_date, "to": to_date, "page_size": 100},
                 )

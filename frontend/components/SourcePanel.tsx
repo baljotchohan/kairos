@@ -80,21 +80,21 @@ function SourceCard({ source }: { source: Source }) {
       href={source.source_url || "#"}
       target="_blank"
       rel="noopener noreferrer"
-      className="group block p-3 rounded-lg bg-[var(--surface)]/30 border border-[var(--border)] hover:border-indigo-500/40 hover:bg-[var(--surface-hover)]/70 transition-all duration-200 animate-[fadeIn_0.3s_ease-out]"
+      className="group block p-3 rounded-lg bg-[rgb(var(--surface))]/30 border border-[rgb(var(--border))] hover:border-indigo-500/40 hover:bg-[rgb(var(--surface-hover))]/70 transition-all duration-200 animate-[fadeIn_0.3s_ease-out] theme-transition"
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <SourceBadge source={source.source} />
         {source.date && (
-          <span className="text-[10px] text-[var(--text-muted)] shrink-0">
+          <span className="text-[10px] text-[rgb(var(--text-muted))] shrink-0">
             {formatDate(source.date)}
           </span>
         )}
       </div>
-      <p className="text-[12px] text-[var(--text-primary)] leading-snug hover:text-[var(--accent)] transition-colors duration-200 line-clamp-3">
+      <p className="text-[12px] text-[rgb(var(--text-primary))] leading-snug hover:text-[rgb(var(--accent))] transition-colors duration-200 line-clamp-3">
         {source.title}
       </p>
       {source.source_url && (
-        <div className="mt-2 flex items-center gap-1 text-[10px] text-[var(--text-muted)] group-hover:text-indigo-400 transition-colors duration-200">
+        <div className="mt-2 flex items-center gap-1 text-[10px] text-[rgb(var(--text-muted))] group-hover:text-indigo-400 transition-colors duration-200">
           <svg
             className="w-3 h-3 shrink-0"
             fill="none"
@@ -118,9 +118,9 @@ function SourceCard({ source }: { source: Source }) {
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center h-full gap-4 px-6 text-center">
-      <div className="w-12 h-12 rounded-full bg-[var(--surface-hover)] border border-[var(--border)] flex items-center justify-center">
+      <div className="w-12 h-12 rounded-full bg-[rgb(var(--surface-hover))] border border-[rgb(var(--border))] flex items-center justify-center">
         <svg
-          className="w-5 h-5 text-[var(--text-muted)]"
+          className="w-5 h-5 text-[rgb(var(--text-muted))]"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -134,7 +134,7 @@ function EmptyState() {
         </svg>
       </div>
       <div>
-        <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+        <p className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">
           Ask a question to see
           <br />
           decision sources here
@@ -146,9 +146,9 @@ function EmptyState() {
 
 export default function SourcePanel({ sources = [] }: SourcePanelProps) {
   return (
-    <div className="flex flex-col h-full bg-[var(--bg)] border-t border-[var(--border)]">
+    <div className="flex flex-col h-full bg-[rgb(var(--bg))] border-t border-[rgb(var(--border))] theme-transition">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between shrink-0 bg-[var(--surface)]">
+      <div className="px-4 py-3 border-b border-[rgb(var(--border))] flex items-center justify-between shrink-0 bg-[rgb(var(--surface))] theme-transition">
         <div className="flex items-center gap-2">
           <svg
             className="w-3.5 h-3.5 text-indigo-400"
@@ -163,10 +163,10 @@ export default function SourcePanel({ sources = [] }: SourcePanelProps) {
               d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"
             />
           </svg>
-          <span className="text-[11px] font-bold text-[var(--text-primary)] tracking-wider uppercase font-mono">Scanned Sources</span>
+          <span className="text-[11px] font-bold text-[rgb(var(--text-primary))] tracking-wider uppercase font-mono">Scanned Sources</span>
         </div>
         {sources.length > 0 && (
-          <span className="text-[9px] font-mono font-bold text-[var(--text-primary)] bg-[var(--surface-hover)] border border-[var(--border)] px-1.5 py-0.5 rounded">
+          <span className="text-[9px] font-mono font-bold text-[rgb(var(--text-primary))] bg-[rgb(var(--surface-hover))] border border-[rgb(var(--border))] px-1.5 py-0.5 rounded">
             {sources.length}
           </span>
         )}

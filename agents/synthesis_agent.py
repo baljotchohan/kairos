@@ -117,10 +117,9 @@ class SynthesisAgent(BaseAgent):
 
         prompt = f"""Source type: {source_type}
 Date: {content_date}
-Content:
----
+<source_content>
 {text[:6000]}
----
+</source_content>
 
 Extract all decisions from the above content."""
 
@@ -137,12 +136,11 @@ Extract all decisions from the above content."""
             )
 
             raw = response.choices[0].message.content.strip()
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
+            import re
+            match = re.search(r"(\[.*\]|\{.*\})", raw, re.DOTALL)
+            raw_json = match.group(1) if match else raw
 
-            decisions_data = json.loads(raw)
+            decisions_data = json.loads(raw_json)
             if not isinstance(decisions_data, list):
                 return []
 
@@ -157,7 +155,7 @@ Extract all decisions from the above content."""
                 continue
 
             node = DecisionNode(
-                id=self.memory.make_id(),
+                id=self.memory.make_id(title=d.get("title"), source_url=d.get("source_url", source_url)),
                 title=d.get("title", ""),
                 summary=d.get("summary", ""),
                 date=d.get("date", content_date or "unknown"),

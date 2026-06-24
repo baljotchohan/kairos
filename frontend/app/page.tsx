@@ -9,6 +9,7 @@ import StreamingText, { ThinkingIndicator } from "@/components/StreamingText";
 import DecisionGraph, { GraphNode } from "@/components/DecisionGraph";
 import { ChatHistoryPanel } from "@/components/ChatHistoryPanel";
 import IntegrationGrid from "@/components/IntegrationGrid";
+import KairosLogo from "@/components/KairosLogo";
 
 type Tab = "chat" | "dashboard" | "decisions" | "integrations" | "agents";
 
@@ -80,8 +81,54 @@ export default function Home() {
 
   const [activeTab, setActiveTab] = useState<Tab>("chat");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isGraphOpen, setIsGraphOpen] = useState(true);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [sidebarWidth, setSidebarWidth] = useState(240);
+  const [historyWidth, setHistoryWidth] = useState(320);
+  const [graphWidth, setGraphWidth] = useState(420);
+  const [sourcesHeight, setSourcesHeight] = useState(200);
+  const [isResizing, setIsResizing] = useState(false);
+
+  const handleResize = (
+    direction: "horizontal" | "vertical",
+    setter: React.Dispatch<React.SetStateAction<number>>,
+    min: number,
+    max: number,
+    invert: boolean = false
+  ) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    
+    let initialSize = 0;
+    setter((prev) => {
+      initialSize = prev;
+      return prev;
+    });
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (direction === "horizontal") {
+        const deltaX = moveEvent.clientX - startX;
+        const newSize = initialSize + (invert ? -deltaX : deltaX);
+        setter(Math.max(min, Math.min(max, newSize)));
+      } else {
+        const deltaY = moveEvent.clientY - startY;
+        const newSize = initialSize + (invert ? -deltaY : deltaY);
+        setter(Math.max(min, Math.min(max, newSize)));
+      }
+    };
+    
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+    
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
 
   const {
     messages,
@@ -141,7 +188,7 @@ export default function Home() {
     const currentTheme = savedTheme || "dark";
     setTheme(currentTheme);
     document.documentElement.setAttribute("data-theme", currentTheme);
-    document.documentElement.className = currentTheme;
+    document.documentElement.className = `${currentTheme} h-full`;
   }, []);
 
   const toggleTheme = () => {
@@ -149,7 +196,7 @@ export default function Home() {
     setTheme(nextTheme);
     localStorage.setItem("kairos-theme", nextTheme);
     document.documentElement.setAttribute("data-theme", nextTheme);
-    document.documentElement.className = nextTheme;
+    document.documentElement.className = `${nextTheme} h-full`;
   };
 
   // Seed default graph on mount
@@ -269,6 +316,8 @@ export default function Home() {
     } else {
       setSimulatedMessages([]);
     }
+    setCurrentGraphNodes([]);
+    setCurrentGraphTitle("");
   };
 
   const triggerSync = (platform: string) => {
@@ -354,12 +403,12 @@ export default function Home() {
   // Auth Unauthenticated Screen rendering
   if (!user) {
     return (
-      <div className="flex h-full w-full bg-[var(--bg)] text-[var(--text-primary)] items-center justify-center p-6 relative">
+      <div className="flex h-full w-full bg-[rgb(var(--bg))] text-[rgb(var(--text-primary))] items-center justify-center p-6 relative">
         {/* Toggle Theme button top right */}
         <div className="absolute top-4 right-4">
           <button
             onClick={toggleTheme}
-            className="p-2 hover:bg-[var(--surface-hover)] border border-[var(--border)] rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all theme-transition animate-[fadeIn_0.3s_ease-out]"
+            className="p-2 hover:bg-[rgb(var(--surface-hover))] border border-[rgb(var(--border))] rounded text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] transition-all theme-transition animate-[fadeIn_0.3s_ease-out]"
             title="Toggle theme"
           >
             {theme === "dark" ? (
@@ -374,18 +423,18 @@ export default function Home() {
           </button>
         </div>
 
-        <div className="w-full max-w-sm p-6 rounded-2xl border border-[var(--border)] bg-[var(--surface)] text-center shadow-lg flex flex-col gap-6 theme-transition animate-[fadeIn_0.2s_ease-out]">
+        <div className="w-full max-w-sm p-6 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--surface))] text-center shadow-lg flex flex-col gap-6 theme-transition animate-[fadeIn_0.2s_ease-out]">
           {/* Logo */}
           <div className="flex flex-col items-center gap-2 mt-4">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-md">
-              <span className="font-bold text-white text-lg">K</span>
+            <div className="w-12 h-12 flex items-center justify-center">
+              <KairosLogo size={42} />
             </div>
-            <h1 className="font-bold text-lg tracking-wider text-[var(--text-primary)] uppercase">KAIROS</h1>
-            <p className="text-[9px] text-[var(--text-muted)] font-mono tracking-widest font-semibold uppercase">Memory OS</p>
+            <h1 className="font-bold text-lg tracking-wider text-[rgb(var(--text-primary))] uppercase">KAIROS</h1>
+            <p className="text-[9px] text-[rgb(var(--text-muted))] font-mono tracking-widest font-semibold uppercase">Memory OS</p>
           </div>
 
           <div className="space-y-1.5">
-            <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            <p className="text-xs text-[rgb(var(--text-muted))] leading-relaxed">
               Every company forgets why it made its decisions. KAIROS never does. Connect to your workspace memory.
             </p>
           </div>
@@ -394,7 +443,7 @@ export default function Home() {
           <div className="flex flex-col gap-2 mt-2 mb-4">
             <button
               onClick={loginWithGoogle}
-              className="w-full py-2.5 px-4 bg-transparent border border-[var(--border)] hover:bg-[var(--surface-hover)] rounded-xl text-xs font-semibold text-[var(--text-primary)] flex items-center justify-center gap-3.5 transition-all theme-transition"
+              className="w-full py-2.5 px-4 bg-transparent border border-[rgb(var(--border))] hover:bg-[rgb(var(--surface-hover))] rounded-xl text-xs font-semibold text-[rgb(var(--text-primary))] flex items-center justify-center gap-3.5 transition-all theme-transition"
             >
               {/* Google Icon */}
               <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -404,16 +453,16 @@ export default function Home() {
             </button>
             <button
               onClick={loginAnonymously}
-              className="w-full py-2.5 px-4 bg-[#1e1e20] hover:bg-zinc-800 border border-[#27272a] rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-2 transition-all"
+              className="w-full py-2.5 px-4 bg-[rgb(var(--text-primary))] hover:opacity-90 border border-[rgb(var(--border))] rounded-xl text-xs font-semibold text-[rgb(var(--bg))] flex items-center justify-center gap-2 transition-all shadow-sm"
             >
-              <svg className="w-4 h-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-4 h-4 text-[rgb(var(--bg))]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
               Continue as Guest
             </button>
           </div>
 
-          <div className="text-[9px] text-[var(--text-muted)] font-mono uppercase tracking-wider">
+          <div className="text-[9px] text-[rgb(var(--text-muted))] font-mono uppercase tracking-wider">
             {isSimulation ? "Running in client-simulation mode" : "Secured by Firebase Auth"}
           </div>
         </div>
@@ -422,257 +471,399 @@ export default function Home() {
   }
 
   return (
-    <div className="flex h-full w-full bg-[var(--bg)] text-[var(--text-primary)] overflow-hidden theme-transition animate-[fadeIn_0.2s_ease-out]">
+    <div className="flex h-full w-full bg-[rgb(var(--bg))] text-[rgb(var(--text-primary))] overflow-hidden theme-transition animate-[fadeIn_0.2s_ease-out]">
       
       {/* 1. LEFT SIDEBAR */}
       <div
-        className={`bg-[var(--surface)] border-r border-[var(--border)] flex flex-col justify-between shrink-0 transition-all duration-300 theme-transition ${
-          isSidebarOpen ? "w-60" : "w-0 -translate-x-full overflow-hidden"
-        }`}
+        className="bg-[rgb(var(--surface))] border-r border-[rgb(var(--border))]/60 flex flex-col justify-between shrink-0 theme-transition relative"
+        style={{
+          width: isSidebarOpen ? `${sidebarWidth}px` : "64px",
+          transition: isResizing ? "none" : "width 0.3s ease, background-color 0.2s ease, border-color 0.2s ease",
+        }}
       >
+        {isSidebarOpen && (
+          <div
+            className="w-1 cursor-col-resize hover:bg-[rgb(var(--accent))]/45 active:bg-[rgb(var(--accent))] transition-colors absolute right-0 top-0 bottom-0 z-50"
+            onMouseDown={handleResize("horizontal", setSidebarWidth, 180, 400)}
+          />
+        )}
         <div className="flex flex-col h-full overflow-hidden">
-          {/* Logo & Close sidebar */}
-          <div className="p-4 border-b border-[var(--border)] flex items-center justify-between theme-transition">
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded bg-indigo-600 flex items-center justify-center shadow">
-                <span className="font-bold text-white text-[10px]">K</span>
+          {/* Logo & Toggle Button */}
+          <div className="p-4 border-b border-[rgb(var(--border))]/40 flex items-center justify-between theme-transition">
+            {isSidebarOpen ? (
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                    <KairosLogo size={22} />
+                  </div>
+                  <span className="font-bold text-sm tracking-wider uppercase text-[rgb(var(--text-primary))] font-mono">KAIROS</span>
+                </div>
+                <button
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="p-1.5 hover:bg-[rgb(var(--surface-hover))]/80 rounded-lg text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] transition-all"
+                  title="Collapse sidebar"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                  </svg>
+                </button>
               </div>
-              <span className="font-bold text-xs tracking-wider uppercase text-[var(--text-primary)] theme-transition">KAIROS</span>
-            </div>
-            <button
-              onClick={() => setIsSidebarOpen(false)}
-              className="p-1 hover:bg-[var(--surface-hover)] rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all theme-transition"
-              title="Close sidebar"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-              </svg>
-            </button>
+            ) : (
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-1 hover:bg-[rgb(var(--surface-hover))]/80 rounded-lg text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] transition-all flex items-center justify-center w-9 h-9 mx-auto"
+                title="Expand sidebar"
+              >
+                <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                  <KairosLogo size={22} />
+                </div>
+              </button>
+            )}
           </div>
 
-          {/* New Chat */}
-          <div className="p-3 border-b border-[var(--border)] theme-transition">
-            <button
-              onClick={handleNewChat}
-              className="w-full py-1.5 px-3 border border-[var(--border)] hover:border-[var(--border-focus)] bg-transparent hover:bg-[var(--surface-hover)] rounded-lg text-xs font-semibold text-[var(--text-primary)] flex items-center justify-center gap-2 transition-all theme-transition"
-            >
-              <svg className="w-3.5 h-3.5 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              New Chat
-            </button>
+          {/* New Chat Button */}
+          <div className="p-3 border-b border-[rgb(var(--border))]/30 flex justify-center">
+            {isSidebarOpen ? (
+              <button
+                onClick={handleNewChat}
+                className="w-full py-2 px-4 border border-[rgb(var(--border))] hover:border-[rgb(var(--border-focus))] bg-transparent hover:bg-[rgb(var(--surface-hover))]/60 rounded-xl text-xs font-semibold text-[rgb(var(--text-primary))] flex items-center justify-center gap-2.5 transition-all"
+              >
+                <svg className="w-4 h-4 text-[rgb(var(--text-muted))]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                New Chat
+              </button>
+            ) : (
+              <button
+                onClick={handleNewChat}
+                className="w-9 h-9 border border-[rgb(var(--border))] hover:border-[rgb(var(--border-focus))] bg-transparent hover:bg-[rgb(var(--surface-hover))]/60 rounded-full text-[rgb(var(--text-primary))] flex items-center justify-center transition-all"
+                title="New Chat"
+              >
+                <svg className="w-4 h-4 text-[rgb(var(--text-muted))]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+            )}
           </div>
 
-          {/* Nav Links */}
-          <div className="px-2 py-1.5 flex flex-col gap-0.5 border-b border-[var(--border)] theme-transition">
+          {/* Navigation Links */}
+          <div className="px-2.5 py-3 flex flex-col gap-1 border-b border-[rgb(var(--border))]/30">
+            {[
+              {
+                id: "chat",
+                label: "Chat Console",
+                icon: (
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                )
+              },
+              {
+                id: "dashboard",
+                label: "Metrics Overview",
+                icon: (
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z" />
+                  </svg>
+                )
+              },
+              {
+                id: "decisions",
+                label: "Decision Index",
+                icon: (
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                )
+              },
+              {
+                id: "integrations",
+                label: "Connectors",
+                icon: (
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                  </svg>
+                )
+              },
+              {
+                id: "agents",
+                label: "AI Agents",
+                icon: (
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                  </svg>
+                )
+              }
+            ].map((link) => {
+              const isActive = activeTab === link.id;
+              return (
+                <button
+                  key={link.id}
+                  onClick={() => {
+                    setActiveTab(link.id as Tab);
+                  }}
+                  className={`relative flex items-center rounded-xl text-xs font-semibold transition-all group ${
+                    isSidebarOpen ? "gap-3 px-3.5 py-2.5 w-full" : "justify-center w-10 h-10 mx-auto"
+                  } ${
+                    isActive
+                      ? "bg-[rgb(var(--surface-hover))] text-[rgb(var(--text-primary))] shadow-sm"
+                      : "text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] hover:bg-[rgb(var(--surface-hover))]/40"
+                  }`}
+                  title={link.label}
+                >
+                  {isActive && (
+                    <span className={`absolute rounded-full bg-[rgb(var(--accent))] shadow-[0_0_8px_rgb(var(--accent))] ${
+                      isSidebarOpen ? "left-1.5 top-3.5 bottom-3.5 w-0.5" : "left-1 top-2.5 bottom-2.5 w-0.5"
+                    }`} />
+                  )}
+                  <div className="shrink-0 transition-transform duration-200 group-hover:scale-105">
+                    {link.icon}
+                  </div>
+                  {isSidebarOpen && link.label}
+                </button>
+              );
+            })}
+ 
+            {/* Conversational Memory Toggle */}
             <button
-              onClick={() => setActiveTab("chat")}
-              className={`flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                activeTab === "chat" ? "bg-[var(--surface-hover)] text-[var(--text-primary)] font-semibold" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]/60"
+              onClick={() => {
+                setActiveTab("chat");
+                setIsHistoryOpen(!isHistoryOpen);
+              }}
+              className={`relative flex items-center rounded-xl text-xs font-semibold transition-all group ${
+                isSidebarOpen ? "gap-3 px-3.5 py-2.5 w-full" : "justify-center w-10 h-10 mx-auto"
+              } ${
+                isHistoryOpen
+                  ? "bg-[rgb(var(--accent))]/10 text-[rgb(var(--accent))] border border-[rgb(var(--accent))]/20 shadow-sm"
+                  : "text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] hover:bg-[rgb(var(--surface-hover))]/40"
               }`}
+              title="Conversational Memory"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-              Chat Console
-            </button>
-            <button
-              onClick={() => setActiveTab("dashboard")}
-              className={`flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                activeTab === "dashboard" ? "bg-[var(--surface-hover)] text-[var(--text-primary)] font-semibold" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]/60"
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z" />
-              </svg>
-              Metrics Overview
-            </button>
-            <button
-              onClick={() => setActiveTab("decisions")}
-              className={`flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                activeTab === "decisions" ? "bg-[var(--surface-hover)] text-[var(--text-primary)] font-semibold" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]/60"
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Decision Index
-            </button>
-            <button
-              onClick={() => setActiveTab("integrations")}
-              className={`flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                activeTab === "integrations" ? "bg-[var(--surface-hover)] text-[var(--text-primary)] font-semibold" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]/60"
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-              </svg>
-              Connectors
-            </button>
-            <button
-              onClick={() => setActiveTab("agents")}
-              className={`flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                activeTab === "agents" ? "bg-[var(--surface-hover)] text-[var(--text-primary)] font-semibold" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]/60"
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-              </svg>
-              AI Agents
+              {isHistoryOpen && (
+                <span className={`absolute rounded-full bg-[rgb(var(--accent))] shadow-[0_0_8px_rgb(var(--accent))] ${
+                  isSidebarOpen ? "left-1.5 top-3.5 bottom-3.5 w-0.5" : "left-1 top-2.5 bottom-2.5 w-0.5"
+                }`} />
+              )}
+              <div className="shrink-0 transition-transform duration-200 group-hover:scale-105">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+              {isSidebarOpen && "Conversational Memory"}
             </button>
           </div>
 
           {/* Learned User Profile Context */}
           {userProfile && (userProfile.department || userProfile.role_context || (userProfile.frequent_topics && userProfile.frequent_topics.length > 0)) && (
-            <div className="mx-3 mt-4 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-[11px] theme-transition">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[9px] font-mono text-indigo-400 font-bold uppercase tracking-wider">
-                  🧠 Learned Profile
-                </span>
-                <button
-                  onClick={resetProfile}
-                  className="text-[9px] font-mono text-rose-400 hover:underline"
-                  title="Reset profile"
-                >
-                  Reset
-                </button>
-              </div>
-              {userProfile.department && (
-                <div className="flex justify-between py-0.5 border-b border-indigo-500/5">
-                  <span className="text-zinc-500">Dept:</span>
-                  <span className="text-[var(--text-primary)] font-semibold">{userProfile.department}</span>
+            isSidebarOpen ? (
+              <div className="mx-3 mt-4 p-3.5 bg-gradient-to-br from-[rgb(var(--accent))]/5 to-[rgb(var(--accent))]/10 border border-[rgb(var(--accent))]/15 rounded-2xl text-[11px] theme-transition shadow-sm shadow-[rgb(var(--accent))]/2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-mono text-[rgb(var(--accent))] font-bold uppercase tracking-wider">
+                    🧠 Learned Profile
+                  </span>
+                  <button
+                    onClick={resetProfile}
+                    className="text-[9px] font-mono text-rose-400 hover:text-rose-300 hover:underline"
+                    title="Reset profile"
+                  >
+                    Reset
+                  </button>
                 </div>
-              )}
-              {userProfile.role_context && (
-                <p className="text-zinc-400 mt-1 italic leading-snug">
-                  "{userProfile.role_context}"
-                </p>
-              )}
-              {userProfile.frequent_topics && userProfile.frequent_topics.length > 0 && (
-                <div className="mt-1.5">
-                  <span className="text-[9px] text-zinc-500 block mb-0.5">Top Topics:</span>
-                  <div className="flex flex-wrap gap-1">
-                    {userProfile.frequent_topics.map((t: string, idx: number) => (
-                      <span key={idx} className="bg-indigo-500/10 text-indigo-300 px-1 rounded-[3px] text-[9px] font-medium">
-                        {t}
-                      </span>
-                    ))}
+                {userProfile.department && (
+                  <div className="flex justify-between py-1 border-b border-[rgb(var(--accent))]/5 text-zinc-400">
+                    <span>Department:</span>
+                    <span className="text-[rgb(var(--text-primary))] font-semibold">{userProfile.department}</span>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+                {userProfile.role_context && (
+                  <p className="text-zinc-400 mt-1.5 italic leading-normal">
+                    "{userProfile.role_context}"
+                  </p>
+                )}
+                {userProfile.frequent_topics && userProfile.frequent_topics.length > 0 && (
+                  <div className="mt-2.5">
+                    <span className="text-[9.5px] text-zinc-500 block mb-1">Top Topics:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {userProfile.frequent_topics.map((t: string, idx: number) => (
+                        <span key={idx} className="bg-[rgb(var(--accent))]/15 text-[rgb(var(--accent))] px-1.5 py-0.5 rounded-[4px] text-[9px] font-semibold">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex justify-center mt-5">
+                <span className="cursor-help text-sm filter grayscale hover:grayscale-0 transition-all p-1 hover:bg-[rgb(var(--surface-hover))]/60 rounded-lg" title={`🧠 Learned Profile:\n${userProfile.role_context || "Context active"}`}>
+                  🧠
+                </span>
+              </div>
+            )
           )}
 
-          {/* Historical Logs List */}
-          <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-1.5">
-            <span className="text-[9px] text-[var(--text-muted)] font-mono tracking-wider font-bold">RECENT INQUIRIES</span>
-            {SIMULATED_RESPONSES.map((resp, i) => (
-              <button
-                key={i}
-                onClick={() => {
-                  setActiveTab("chat");
-                  setInputVal(resp.question);
-                }}
-                className="w-full text-left px-2.5 py-1.5 hover:bg-[var(--surface-hover)] rounded text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] truncate transition-all theme-transition"
-              >
-                {resp.question}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Footer: User Profile details + Light/Dark switch + Connection */}
-        <div className="p-4 border-t border-[var(--border)] bg-[var(--bg)] flex flex-col gap-3 theme-transition">
-          
-          {/* User profile details */}
-          <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]/40 theme-transition">
-            <div className="flex items-center gap-2 overflow-hidden">
-              <div className="w-6 h-6 rounded bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center shrink-0 font-mono font-bold text-[10px]">
-                {user.displayName ? user.displayName.charAt(0) : "G"}
-              </div>
-              <div className="flex flex-col overflow-hidden">
-                <span className="text-[11px] font-bold text-[var(--text-primary)] truncate">
-                  {user.displayName || "Guest User"}
-                </span>
-                <span className="text-[9px] text-[var(--text-muted)] truncate">
-                  {user.email || "Temporary Access"}
-                </span>
+          {/* Recent Inquiries Panel */}
+          {isSidebarOpen && (
+            <div className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-2">
+              <span className="text-[10px] text-[rgb(var(--text-muted))] font-mono tracking-wider font-bold px-2.5">RECENT INQUIRIES</span>
+              <div className="flex flex-col gap-0.5 mt-1">
+                {SIMULATED_RESPONSES.map((resp, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setActiveTab("chat");
+                      setInputVal(resp.question);
+                    }}
+                    className="w-full text-left px-2.5 py-2 hover:bg-[rgb(var(--surface-hover))]/60 rounded-xl text-[11.5px] font-medium text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] truncate transition-all"
+                  >
+                    {resp.question}
+                  </button>
+                ))}
               </div>
             </div>
-            <button
-              onClick={logout}
-              className="p-1 hover:bg-[var(--surface-hover)] border border-[var(--border)] rounded text-[var(--text-muted)] hover:text-rose-400 transition-all theme-transition shrink-0"
-              title="Sign Out"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            </button>
-          </div>
+          )}
+        </div>
 
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] text-[var(--text-muted)] font-mono tracking-wider uppercase font-semibold">THEME</span>
-            <button
-              onClick={toggleTheme}
-              className="p-1 hover:bg-[var(--surface-hover)] border border-[var(--border)] rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all theme-transition"
-              title="Toggle theme"
-            >
-              {theme === "dark" ? (
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+        {/* Footer */}
+        <div className="p-3 border-t border-[rgb(var(--border))]/40 bg-[rgb(var(--surface))]/90 flex flex-col gap-3">
+          {isSidebarOpen ? (
+            <>
+              {/* Profile card */}
+              <div className="flex items-center justify-between pb-2.5 border-b border-[rgb(var(--border))]/40">
+                <div className="flex items-center gap-2.5 overflow-hidden">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center shrink-0 font-bold text-[11px] shadow-sm shadow-indigo-500/10">
+                    {user.displayName ? user.displayName.charAt(0) : "G"}
+                  </div>
+                  <div className="flex flex-col overflow-hidden">
+                    <span className="text-[11.5px] font-semibold text-[rgb(var(--text-primary))] truncate leading-tight">
+                      {user.displayName || "Guest User"}
+                    </span>
+                    <span className="text-[9px] text-[rgb(var(--text-muted))] truncate mt-0.5">
+                      {user.email || "Temporary Access"}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={logout}
+                  className="p-1.5 hover:bg-[rgb(var(--surface-hover))]/80 border border-[rgb(var(--border))]/60 rounded-lg text-[rgb(var(--text-muted))] hover:text-rose-400 transition-all shrink-0"
+                  title="Sign Out"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Theme & Connection status indicators */}
+              <div className="flex items-center justify-between text-[10px] text-[rgb(var(--text-muted))] font-mono">
+                <span>Theme:</span>
+                <button
+                  onClick={toggleTheme}
+                  className="p-1 hover:bg-[rgb(var(--surface-hover))]/80 border border-[rgb(var(--border))]/80 rounded-lg text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] transition-all"
+                  title="Toggle Theme"
+                >
+                  {theme === "dark" ? (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-[rgb(var(--text-muted))] font-mono">
+                <span>Sync Engine:</span>
+                <ConnectionStatus isConnected={isConnected} />
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-3.5">
+              {/* Profile Avatar */}
+              <div 
+                className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-sm"
+                title={`${user.displayName || "Guest User"} (${user.email || "Guest"})`}
+              >
+                {user.displayName ? user.displayName.charAt(0) : "G"}
+              </div>
+
+              {/* Theme Toggle */}
+              <button
+                onClick={toggleTheme}
+                className="p-2 hover:bg-[rgb(var(--surface-hover))]/80 border border-[rgb(var(--border))]/85 rounded-xl text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] transition-all"
+                title="Toggle theme"
+              >
+                {theme === "dark" ? (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                )}
+              </button>
+
+              {/* Status Indicator */}
+              <div title={isConnected ? "Sync Engine: Connected" : "Sync Engine: Offline"}>
+                <span className="relative flex h-2.5 w-2.5">
+                  {isConnected && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+                  )}
+                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isConnected ? "bg-emerald-500" : "bg-red-500"}`} />
+                </span>
+              </div>
+
+              {/* Logout Button */}
+              <button
+                onClick={logout}
+                className="p-2 hover:bg-[rgb(var(--surface-hover))]/80 border border-[rgb(var(--border))]/85 rounded-xl text-[rgb(var(--text-muted))] hover:text-rose-400 transition-all"
+                title="Sign Out"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
-              ) : (
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                </svg>
-              )}
-            </button>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] text-[var(--text-muted)] font-mono tracking-wider uppercase font-semibold">SYNC ENGINE</span>
-            <ConnectionStatus isConnected={isConnected} />
-          </div>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Sidebar toggle button (closed state) */}
-      {!isSidebarOpen && (
-        <button
-          onClick={() => setIsSidebarOpen(true)}
-          className="absolute top-3.5 left-4 z-50 p-1.5 bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all theme-transition"
-          title="Open sidebar"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-      )}
-
       {/* 2. MAIN CONTAINER */}
-      <main className="flex-1 flex flex-col min-w-0 bg-[var(--bg)] relative theme-transition">
+      <main className="flex-1 flex flex-col min-w-0 bg-[rgb(var(--bg))] relative transition-colors duration-300">
         
         {/* Header */}
-        <header className="h-12 border-b border-[var(--border)] flex items-center justify-between px-6 shrink-0 bg-[var(--bg)]/90 z-20 theme-transition">
+        <header className="h-14 border-b border-[rgb(var(--border))]/30 flex items-center justify-between px-6 shrink-0 bg-[rgb(var(--bg))]/70 backdrop-blur-xl z-20">
           <div className="flex items-center gap-3">
-            {!isSidebarOpen && <div className="w-8" />}
-            <h2 className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase">
-              KAIROS // {activeTab}
-            </h2>
+            <div className="flex items-center gap-2 select-none">
+              <span className="text-[10px] font-bold text-[rgb(var(--text-muted))] tracking-wider uppercase font-mono">KAIROS</span>
+              <span className="text-[10px] text-[rgb(var(--text-muted))]/40 font-mono">/</span>
+              <span className="text-[11px] font-bold text-[rgb(var(--text-primary))] bg-[rgb(var(--surface-hover))]/80 border border-[rgb(var(--border))]/50 px-2.5 py-1 rounded-lg uppercase tracking-wider font-mono shadow-sm">
+                {activeTab === "chat" ? "Chat Console" : activeTab === "dashboard" ? "Metrics Overview" : activeTab === "decisions" ? "Decision Index" : activeTab === "integrations" ? "Connectors" : "AI Agents"}
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
             {activeTab === "chat" && (
               <button
                 onClick={() => setIsGraphOpen(!isGraphOpen)}
-                className={`px-2.5 py-1 rounded border text-[9px] font-semibold tracking-wider font-mono transition-all theme-transition ${
-                  isGraphOpen ? "bg-[var(--surface-hover)] border-[var(--border-focus)] text-[var(--text-primary)]" : "bg-transparent border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                className={`px-3 py-1.5 rounded-xl border text-[9.5px] font-bold tracking-wider font-mono transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-sm ${
+                  isGraphOpen
+                    ? "bg-[rgb(var(--surface-hover))] border-[rgb(var(--border-focus))] text-[rgb(var(--text-primary))]"
+                    : "bg-transparent border-[rgb(var(--border))] text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))]"
                 }`}
               >
                 {isGraphOpen ? "HIDE GRAPH" : "SHOW GRAPH"}
               </button>
             )}
-            <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-[var(--surface)] border border-[var(--border)] text-[var(--text-muted)] theme-transition">
-              DEPLOYED COMPILER: OK
+            <span className="flex items-center gap-1.5 text-[9.5px] font-mono px-2.5 py-1 rounded-lg bg-[rgb(var(--surface))]/80 border border-[rgb(var(--border))]/55 text-[rgb(var(--text-muted))] font-bold shadow-sm select-none">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+              OS ENGINE: OK
             </span>
           </div>
         </header>
@@ -681,71 +872,154 @@ export default function Home() {
         <div className="flex-1 overflow-y-auto">
           {/* CHAT CONSOLE */}
           {activeTab === "chat" && (
-            <div className="h-[calc(100vh-3rem)] flex overflow-hidden">
+            <div className="h-[calc(100vh-3.5rem)] flex overflow-hidden">
               
-              {/* Chat History Sidebar */}
-              {isConnected && (
-                <ChatHistoryPanel
-                  sessions={sessions}
-                  activeSessionId={activeSessionId}
-                  onSelectSession={loadSession}
-                  onDeleteSession={deleteSession}
-                />
+              {/* Chat History Panel (Past Sessions) */}
+              {isHistoryOpen && (
+                <div
+                  className="flex h-full shrink-0 relative"
+                  style={{
+                    width: `${historyWidth}px`,
+                    transition: isResizing ? "none" : "width 0.3s ease",
+                  }}
+                >
+                  <div className="flex-1 overflow-hidden h-full">
+                    <ChatHistoryPanel
+                      sessions={sessions}
+                      activeSessionId={activeSessionId}
+                      onSelectSession={loadSession}
+                      onDeleteSession={deleteSession}
+                      onClose={() => setIsHistoryOpen(false)}
+                    />
+                  </div>
+                  {/* Resize Handle */}
+                  <div
+                    className="w-1 cursor-col-resize hover:bg-[rgb(var(--accent))]/45 active:bg-[rgb(var(--accent))] transition-colors absolute right-0 top-0 bottom-0 z-50"
+                    onMouseDown={handleResize("horizontal", setHistoryWidth, 200, 480)}
+                  />
+                </div>
               )}
 
-              {/* Left Column: Chat log */}
-              <div className="flex-1 flex flex-col h-full bg-[var(--bg)] relative min-w-0 theme-transition">
+               {/* Left Column: Chat log */}
+              <div className="flex-1 flex flex-col h-full bg-[rgb(var(--bg))] relative min-w-0">
                 
                 {/* Message list */}
-                <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-6">
-                  <div className="max-w-2xl mx-auto space-y-6">
+                <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-8">
+                  <div className="max-w-4xl mx-auto space-y-8 w-full">
                     
+                    {/* Welcome Empty State Screen */}
                     {chatHistory.length === 0 && (
-                      <div className="flex flex-col items-center justify-center h-full pt-16 text-center max-w-sm mx-auto gap-4">
-                        <div className="w-10 h-10 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] theme-transition">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                          </svg>
-                        </div>
-                        <div>
-                          <h3 className="text-xs font-bold text-[var(--text-primary)] tracking-wider uppercase mb-1 theme-transition">Organizational memory console</h3>
-                          <p className="text-[11px] text-[var(--text-muted)] leading-relaxed theme-transition">
-                            Inquire regarding engineering framework tradeoffs, vendor renewals, or project retrospects.
+                      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center max-w-2xl mx-auto gap-8 px-4 animate-[fadeIn_0.3s_ease-out]">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="w-16 h-16 flex items-center justify-center">
+                            <KairosLogo size={56} />
+                          </div>
+                          <h1 className="text-3xl font-extrabold tracking-tight text-[rgb(var(--text-primary))] mt-2">What do you want to analyze today?</h1>
+                          <p className="text-sm text-[rgb(var(--text-muted))] max-w-md mt-1 leading-relaxed">
+                            KAIROS scans your corporate history across Slack channels, Gmail, G Drive documentation, Zoom meetings, and Jira boards to resolve tech tradeoffs, contract terms, or retrospects.
                           </p>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 w-full max-w-xl">
+                          {[
+                            {
+                              title: "React vs Vue",
+                              desc: "Why do we use React instead of Vue?",
+                              icon: "⚛️",
+                              query: "Why do we use React instead of Vue?"
+                            },
+                            {
+                              title: "Vendor Contract",
+                              desc: "Why are we paying this vendor $2.3M/year?",
+                              icon: "💸",
+                              query: "Why are we paying this vendor $2.3M/year?"
+                            },
+                            {
+                              title: "Mobile Retrospective",
+                              desc: "Has anyone tried building a mobile app before?",
+                              icon: "📱",
+                              query: "Has anyone tried building a mobile app before?"
+                            }
+                          ].map((card, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => {
+                                setInputVal(card.query);
+                                if (isConnected) {
+                                  sendQuestion(card.query);
+                                } else {
+                                  setInputVal("");
+                                  setSimulatedStreaming(true);
+                                  const newMsgList = [...simulatedMessages, { id: Math.random().toString(), role: "user", content: card.query, sources: [] }];
+                                  setSimulatedMessages(newMsgList);
+                                  const textLower = card.query.toLowerCase();
+                                  const match = SIMULATED_RESPONSES.find((resp) =>
+                                    resp.keywords.some((kw) => textLower.includes(kw))
+                                  );
+                                  setTimeout(() => {
+                                    if (match) {
+                                      setSimulatedMessages((prev) => [
+                                        ...prev,
+                                        {
+                                          id: Math.random().toString(),
+                                          role: "assistant",
+                                          content: match.answer,
+                                          sources: match.sources,
+                                        },
+                                      ]);
+                                      setCurrentGraphNodes(match.graph);
+                                      setCurrentGraphTitle(match.question);
+                                    }
+                                    setSimulatedStreaming(false);
+                                  }, 1000);
+                                }
+                              }}
+                              className="text-left p-4 rounded-2xl border border-[rgb(var(--border))]/80 hover:border-[rgb(var(--border-focus))] bg-[rgb(var(--surface))]/10 hover:bg-[rgb(var(--surface-hover))]/20 transition-all flex flex-col gap-2.5 group cursor-pointer shadow-sm"
+                            >
+                              <span className="text-xl">{card.icon}</span>
+                              <div>
+                                <h4 className="text-xs font-bold text-[rgb(var(--text-primary))] group-hover:text-[rgb(var(--accent))] transition-colors">{card.title}</h4>
+                                <p className="text-[11px] text-[rgb(var(--text-muted))] leading-normal mt-1">{card.desc}</p>
+                              </div>
+                            </button>
+                          ))}
                         </div>
                       </div>
                     )}
 
+                    {/* Messages flow */}
                     {chatHistory.map((msg, i) => (
                       <div
                         key={msg.id || i}
-                        className={`flex gap-4 items-start ${msg.role === "user" ? "justify-end" : ""}`}
+                        className={`w-full flex gap-5 items-start ${
+                          msg.role === "user" ? "justify-end py-1" : "py-5 border-b border-[rgb(var(--border))]/30"
+                        }`}
                       >
                         {msg.role === "assistant" && (
-                          <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 font-bold text-white text-[10px]">
-                            K
+                          <div className="w-8 h-8 flex items-center justify-center shrink-0">
+                            <KairosLogo size={28} />
                           </div>
                         )}
 
                         <div
-                          className={`flex-1 overflow-hidden space-y-2 ${
+                          className={`overflow-hidden ${
                             msg.role === "user"
-                              ? "max-w-[80%] bg-[var(--surface)] border border-[var(--border)] px-4 py-2.5 rounded-2xl text-xs text-[var(--text-primary)] theme-transition"
-                              : "text-[var(--text-primary)] theme-transition"
+                              ? "max-w-[75%] bg-[rgb(var(--surface-hover))] px-4 py-3 rounded-2xl text-[14px] leading-relaxed text-[rgb(var(--text-primary))] shadow-sm"
+                              : "flex-1 space-y-4 text-[14.5px] leading-relaxed text-[rgb(var(--text-primary))]"
                           }`}
                         >
                           <StreamingText
                             text={msg.content}
                             isStreaming={msg.isStreaming ?? false}
                             hasWarning={msg.hasWarning}
-                            className="text-xs md:text-sm"
+                            className="kairos-prose"
                           />
 
-                          {/* Assistant context metadata (Intent & Confidence) */}
+                          {/* Assistant Metadata Context */}
                           {msg.role === "assistant" && (
-                            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                            <div className="flex items-center gap-3.5 mt-3 flex-wrap">
                               {msg.intent && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-[10.5px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                                   {msg.intent.intent === "search" && "🔍 Search"}
                                   {msg.intent.intent === "follow_up" && "💬 Follow-up"}
                                   {msg.intent.intent === "comparison" && "⚖️ Comparison"}
@@ -758,9 +1032,9 @@ export default function Home() {
                               )}
 
                               {msg.confidence !== undefined && (
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-[10px] text-zinc-500">Confidence:</span>
-                                  <div className="w-16 h-1 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-zinc-500 font-mono uppercase">Confidence:</span>
+                                  <div className="w-16 h-1.5 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700/50">
                                     <div
                                       className={`h-full rounded-full transition-all duration-300 ${
                                         msg.confidence > 0.8
@@ -772,27 +1046,27 @@ export default function Home() {
                                       style={{ width: `${msg.confidence * 100}%` }}
                                     />
                                   </div>
-                                  <span className="text-[10px] font-mono text-zinc-400">{(msg.confidence * 100).toFixed(0)}%</span>
+                                  <span className="text-[10px] font-mono text-zinc-400 font-bold">{(msg.confidence * 100).toFixed(0)}%</span>
                                 </div>
                               )}
                             </div>
                           )}
 
-                          {/* Live Thinking Step */}
+                          {/* Live Thinking Status Indicator */}
                           {msg.thinkingStep && (
-                            <div className="p-2.5 bg-slate-900/60 border border-slate-800 rounded-xl flex items-center gap-3 animate-pulse text-[11px] text-indigo-400">
+                            <div className="p-3 bg-[rgb(var(--surface))]/40 border border-[rgb(var(--border))]/80 rounded-xl flex items-center gap-3 animate-pulse text-[11.5px] text-indigo-400 max-w-lg mt-3">
                               <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping shrink-0" />
                               <span className="truncate"><strong>[{msg.thinkingStep.agent} thinking]:</strong> {msg.thinkingStep.content}</span>
                             </div>
                           )}
 
-                          {/* Agent traces history */}
+                          {/* Trace block */}
                           {msg.traces && msg.traces.length > 0 && (
-                            <details className="text-[10px] text-zinc-400 bg-zinc-950/40 border border-zinc-800/80 rounded-xl p-2.5 mt-2">
-                              <summary className="cursor-pointer font-semibold text-zinc-300 select-none hover:text-zinc-100 transition-colors">
-                                👀 View Multi-Agent Traces ({msg.traces.length} steps)
+                            <details className="text-[10.5px] text-zinc-400 bg-[rgb(var(--surface))]/30 border border-[rgb(var(--border))]/60 rounded-xl p-3.5 mt-3 transition-all duration-200">
+                              <summary className="cursor-pointer font-bold text-zinc-300 select-none hover:text-zinc-100 transition-colors flex items-center gap-1.5">
+                                <span>👀</span> View Multi-Agent Traces ({msg.traces.length} steps)
                               </summary>
-                              <div className="mt-2.5 space-y-2 font-mono border-l border-zinc-800 pl-2.5 max-h-48 overflow-y-auto">
+                              <div className="mt-3.5 space-y-3 font-mono border-l border-[rgb(var(--border))] pl-3 max-h-48 overflow-y-auto text-[10px] leading-relaxed">
                                 {msg.traces.map((trace: any, idx: number) => (
                                   <div key={idx} className="flex flex-col">
                                     <div className="flex items-center gap-1.5">
@@ -811,9 +1085,9 @@ export default function Home() {
                                         </span>
                                       )}
                                     </div>
-                                    <p className="text-[10px] text-zinc-300 mt-0.5 whitespace-pre-wrap">{trace.content}</p>
+                                    <p className="text-[10.5px] text-zinc-300 mt-1 whitespace-pre-wrap leading-normal">{trace.content}</p>
                                     {trace.duration_ms > 0 && (
-                                      <span className="text-[8px] text-zinc-500">Duration: {trace.duration_ms.toFixed(0)}ms</span>
+                                      <span className="text-[8.5px] text-zinc-500 mt-0.5">Duration: {trace.duration_ms.toFixed(0)}ms</span>
                                     )}
                                   </div>
                                 ))}
@@ -821,16 +1095,18 @@ export default function Home() {
                             </details>
                           )}
 
-                          {/* Sources */}
+                          {/* Sources Citation block */}
                           {msg.sources && msg.sources.length > 0 && (
-                            <div className="flex items-center gap-1.5 flex-wrap pt-3 border-t border-[var(--border)]/60 theme-transition">
+                            <div className="flex items-center gap-2 flex-wrap pt-4 border-t border-[rgb(var(--border))]/40 mt-4">
+                              <span className="text-[10px] font-mono text-[rgb(var(--text-muted))] uppercase tracking-wider block mr-1 font-bold">Sources:</span>
                               {msg.sources.map((src: Source) => (
                                 <span
                                   key={src.id}
-                                  className="inline-flex items-center gap-1 text-[9px] font-mono bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)] px-2 py-0.5 rounded theme-transition"
+                                  className="inline-flex items-center gap-1.5 text-[10px] font-mono bg-[rgb(var(--surface))]/80 text-[rgb(var(--text-primary))] border border-[rgb(var(--border))]/80 px-2.5 py-1 rounded-lg hover:border-[rgb(var(--border-focus))] cursor-help transition-all shadow-sm"
+                                  title={`${src.title}\nDate: ${src.date}\nSource: ${src.source}`}
                                 >
-                                  <span className="text-[8px] text-indigo-400 font-bold">{getSourceIcon(src.source)}</span>
-                                  {(src.title || "").split(":")[0]}
+                                  <span className="text-[9px] text-indigo-400 font-bold">{getSourceIcon(src.source)}</span>
+                                  {src.title.split(":")[0]}
                                 </span>
                               ))}
                             </div>
@@ -839,10 +1115,10 @@ export default function Home() {
                       </div>
                     ))}
 
-                    {isChatStreaming && (
-                      <div className="flex gap-4 items-start">
-                        <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 font-bold text-white text-[10px]">
-                          K
+                    {isChatStreaming && chatHistory[chatHistory.length - 1]?.role !== "assistant" && (
+                      <div className="flex gap-5 items-start py-5 w-full">
+                        <div className="w-8 h-8 flex items-center justify-center shrink-0">
+                          <KairosLogo size={28} />
                         </div>
                         <ThinkingIndicator />
                       </div>
@@ -851,48 +1127,76 @@ export default function Home() {
                   <div ref={chatBottomRef} />
                 </div>
 
-                {/* Processing toast */}
+                {/* Processing Toast Overlay */}
                 {ingestProgress && (
-                  <div className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text-primary)] text-xs font-semibold flex items-center gap-2 shadow-2xl z-20 theme-transition">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
+                  <div className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl bg-[rgb(var(--surface))] border border-[rgb(var(--border))] text-[rgb(var(--text-primary))] text-xs font-semibold flex items-center gap-2.5 shadow-2xl z-20 theme-transition">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-ping" />
                     {ingestProgress}
                   </div>
                 )}
 
-                {/* Text area input bar */}
-                <form onSubmit={handleSend} className="p-6 shrink-0 bg-gradient-to-t from-[var(--bg)] via-[var(--bg)]/90 to-transparent theme-transition">
-                  <div className="max-w-2xl mx-auto relative bg-[var(--surface)] border border-[var(--border)] focus-within:border-[var(--border-focus)] rounded-2xl shadow-lg transition-all p-1.5 theme-transition">
+                {/* Floating Chat Input form */}
+                <form onSubmit={handleSend} className="p-6 shrink-0 bg-gradient-to-t from-[rgb(var(--bg))] via-[rgb(var(--bg))]/90 to-transparent theme-transition">
+                  <div className="max-w-4xl mx-auto relative bg-[rgb(var(--surface))] border border-[rgb(var(--border))] focus-within:border-[rgb(var(--border-focus))] focus-within:ring-2 focus-within:ring-[rgb(var(--accent))]/15 rounded-[26px] shadow-xl transition-all p-2 flex items-center">
                     <input
                       type="text"
                       value={inputVal}
                       onChange={(e) => setInputVal(e.target.value)}
                       disabled={isChatStreaming}
-                      placeholder="Ask KAIROS memory database..."
-                      className="w-full bg-transparent px-4 py-2 text-xs md:text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none disabled:opacity-50 theme-transition"
+                      placeholder="Ask KAIROS organizational memory database..."
+                      className="flex-1 bg-transparent px-5 py-3 text-sm text-[rgb(var(--text-primary))] placeholder-zinc-500 focus:outline-none disabled:opacity-50"
                     />
-                    <div className="flex justify-end pt-1 px-1">
-                      <button
-                        type="submit"
-                        disabled={isChatStreaming || !inputVal.trim()}
-                        className="bg-[var(--surface-hover)] hover:bg-[var(--border)] border border-[var(--border)] text-[var(--text-primary)] rounded-lg p-1.5 flex items-center justify-center transition-all disabled:opacity-30 theme-transition"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l-7 7m-7-7v18" />
-                        </svg>
-                      </button>
-                    </div>
+                    <button
+                      type="submit"
+                      disabled={isChatStreaming || !inputVal.trim()}
+                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shrink-0 shadow ${
+                        inputVal.trim()
+                          ? "bg-[rgb(var(--accent))] text-white hover:opacity-90"
+                          : "bg-[rgb(var(--surface-hover))] text-[rgb(var(--text-muted))] opacity-40 cursor-not-allowed"
+                      }`}
+                    >
+                      <svg className="w-4 h-4 transform rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5m0 0l-7 7m7-7l7 7" />
+                      </svg>
+                    </button>
                   </div>
+                  <p className="text-[10px] text-zinc-500 text-center mt-2.5 font-sans">
+                    KAIROS memory indices can make mistakes. Verify critical facts and historical timestamps.
+                  </p>
                 </form>
               </div>
-
-              {/* Right Column: Obsidian Graph */}
+ 
+              {/* Right Column: Obsidian Graph Panel */}
               {isGraphOpen && (
-                <div className="w-96 border-l border-[var(--border)] flex flex-col h-full bg-[var(--bg)]/40 shrink-0 theme-transition">
-                  <div className="flex-1 relative">
+                <div
+                  className="border-l border-[rgb(var(--border))]/55 flex flex-col h-full bg-[rgb(var(--bg))]/40 shrink-0 relative"
+                  style={{
+                    width: `${graphWidth}px`,
+                    transition: isResizing ? "none" : "width 0.3s ease",
+                  }}
+                >
+                  {/* Left Resize Handle */}
+                  <div
+                    className="w-1 cursor-col-resize hover:bg-[rgb(var(--accent))]/45 active:bg-[rgb(var(--accent))] transition-colors absolute left-0 top-0 bottom-0 z-50"
+                    onMouseDown={handleResize("horizontal", setGraphWidth, 300, 800, true)}
+                  />
+                  <div className="flex-1 relative overflow-hidden">
                     <DecisionGraph nodes={currentGraphNodes} decisionTitle={currentGraphTitle} />
                   </div>
-                  <div className="h-48">
-                    <SourcePanel sources={activeSources} />
+                  <div
+                    className="relative shrink-0"
+                    style={{
+                      height: `${sourcesHeight}px`,
+                    }}
+                  >
+                    {/* Top Height Resize Handle */}
+                    <div
+                      className="h-1 cursor-row-resize hover:bg-[rgb(var(--accent))]/45 active:bg-[rgb(var(--accent))] transition-colors absolute left-0 right-0 top-0 z-50"
+                      onMouseDown={handleResize("vertical", setSourcesHeight, 140, 500, true)}
+                    />
+                    <div className="h-full overflow-hidden">
+                      <SourcePanel sources={activeSources} />
+                    </div>
                   </div>
                 </div>
               )}
@@ -902,63 +1206,63 @@ export default function Home() {
           {/* DASHBOARD & STATS OVERVIEW */}
           {activeTab === "dashboard" && (
             <div className="p-8 max-w-4xl mx-auto flex flex-col gap-6 animate-[fadeIn_0.2s_ease-out]">
-              <div className="border-b border-[var(--border)] pb-4 theme-transition">
-                <h3 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1 theme-transition">Active System Ingest Metrics</h3>
-                <p className="text-xs text-[var(--text-muted)] theme-transition">Monitor memory storage metrics, API credit mappings, and connector status.</p>
+              <div className="border-b border-[rgb(var(--border))]/40 pb-4">
+                <h3 className="text-lg font-bold tracking-tight text-[rgb(var(--text-primary))] mb-0.5">System Ingest Metrics</h3>
+                <p className="text-xs text-[rgb(var(--text-muted))]">Monitor indexing sizes, relations logs, and dynamic app integration statuses.</p>
               </div>
 
-              {/* Metrics */}
+              {/* Metrics cards grid */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {[
-                  { label: "Decisions Extracted", value: displayStats.total_decisions, tag: "records" },
+                  { label: "Decisions Index", value: displayStats.total_decisions, tag: "records" },
                   { label: "Graph Relations", value: displayStats.total_relations, tag: "links" },
                   { label: "Connected APIs", value: displayStats.connected_components, tag: "active" },
-                  { label: "SQLite Index Size", value: "84.2", tag: "MB" },
+                  { label: "Memory DB Size", value: "84.2", tag: "MB" },
                 ].map((stat, idx) => (
-                  <div key={idx} className="p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)]/30 theme-transition">
-                    <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase block mb-1 theme-transition">{stat.label}</span>
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-xl font-bold text-[var(--text-primary)] theme-transition">{stat.value}</span>
-                      <span className="text-[9px] font-mono text-[var(--text-muted)] theme-transition">{stat.tag}</span>
+                  <div key={idx} className="p-5 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/40 backdrop-blur-sm shadow-sm hover:shadow-md transition-all flex flex-col gap-1.5">
+                    <span className="text-[9px] font-mono text-[rgb(var(--text-muted))] uppercase block tracking-wider font-bold">{stat.label}</span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-black text-[rgb(var(--text-primary))]">{stat.value}</span>
+                      <span className="text-[10px] font-mono text-[rgb(var(--text-muted))] font-bold">{stat.tag}</span>
                     </div>
                   </div>
                 ))}
               </div>
 
               {/* Connected APIs */}
-              <div className="space-y-3">
-                <h4 className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider theme-transition">Ingestion Connectors</h4>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+              <div className="space-y-4">
+                <h4 className="text-sm font-bold text-[rgb(var(--text-primary))] tracking-tight">Ingestion Connectors</h4>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-3.5">
                   {[
                     { key: "slack", name: "Slack", details: "Workspace API" },
-                    { key: "gmail", name: "Gmail", details: "OAuth client" },
-                    { key: "drive", name: "G Drive", details: "Folder Scraper" },
-                    { key: "jira", name: "JIRA Cloud", details: "REST client" },
-                    { key: "zoom", name: "Zoom Sync", details: "Whisper API" },
+                    { key: "gmail", name: "Gmail", details: "OAuth Client" },
+                    { key: "drive", name: "G Drive", details: "Specs Scraper" },
+                    { key: "jira", name: "JIRA Cloud", details: "REST Sync" },
+                    { key: "zoom", name: "Zoom Sync", details: "Whisper audio" },
                   ].map((plat) => (
-                    <div key={plat.key} className="p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)]/20 flex flex-col justify-between h-28 theme-transition">
+                    <div key={plat.key} className="p-4 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/30 flex flex-col justify-between h-28 hover:border-[rgb(var(--border-focus))] transition-all">
                       <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase theme-transition">{plat.key}</span>
-                        <span className={`w-1 h-1 rounded-full ${syncStatus[plat.key] === "syncing" ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`} />
+                        <span className="text-[9px] font-mono text-[rgb(var(--text-muted))] uppercase font-bold">{plat.key}</span>
+                        <span className={`w-2 h-2 rounded-full ${syncStatus[plat.key] === "syncing" ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`} />
                       </div>
                       <div>
-                        <span className="text-xs font-bold text-[var(--text-primary)] block theme-transition">{plat.name}</span>
-                        <span className="text-[9px] text-[var(--text-muted)] block theme-transition">{plat.details}</span>
+                        <span className="text-xs font-bold text-[rgb(var(--text-primary))] block">{plat.name}</span>
+                        <span className="text-[9.5px] text-[rgb(var(--text-muted))] block mt-0.5">{plat.details}</span>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Deployed Polish: CLI sync activity logs console */}
-              <div className="space-y-3">
+              {/* logs terminal box */}
+              <div className="space-y-3.5">
                 <div className="flex justify-between items-center">
-                  <h4 className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider theme-transition">Sync Container CLI Logs</h4>
-                  <span className="text-[8px] font-mono bg-zinc-800 text-emerald-400 px-1.5 py-0.5 rounded border border-zinc-700">
-                    CONTAINER: RUNNING
+                  <h4 className="text-sm font-bold text-[rgb(var(--text-primary))] tracking-tight">Ingestion Container Logs</h4>
+                  <span className="text-[9px] font-mono bg-zinc-950 text-emerald-400 px-2 py-0.5 rounded-lg border border-zinc-800 font-bold">
+                    SYSTEM: OK
                   </span>
                 </div>
-                <div className="bg-black rounded-lg border border-zinc-800 p-4 h-36 font-mono text-[10px] text-emerald-500 overflow-y-auto shadow-inner flex flex-col gap-1">
+                <div className="bg-black rounded-2xl border border-zinc-800/80 p-5 h-44 font-mono text-[10px] text-emerald-500 overflow-y-auto shadow-inner flex flex-col gap-1.5">
                   {logs.map((log, index) => (
                     <div key={index} className="whitespace-pre-wrap leading-relaxed">
                       {log}
@@ -973,30 +1277,30 @@ export default function Home() {
           {/* DECISION INDEX EXPLORER */}
           {activeTab === "decisions" && (
             <div className="p-8 max-w-4xl mx-auto flex flex-col gap-6 animate-[fadeIn_0.2s_ease-out]">
-              <div className="border-b border-[var(--border)] pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 theme-transition">
+              <div className="border-b border-[rgb(var(--border))]/40 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                  <h3 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1 theme-transition">Decision Records Ingest</h3>
-                  <p className="text-xs text-[var(--text-muted)] theme-transition font-medium">Export and browse through historically captured corporate decision points.</p>
+                  <h3 className="text-lg font-bold tracking-tight text-[rgb(var(--text-primary))] mb-0.5">Decision Records Index</h3>
+                  <p className="text-xs text-[rgb(var(--text-muted))] font-medium">Export and browse through historically captured corporate decision points.</p>
                 </div>
 
-                <div className="flex gap-2 items-center">
+                <div className="flex gap-2 items-center flex-wrap">
                   <button
                     onClick={exportDecisionIndex}
-                    className="px-2.5 py-1 rounded bg-[var(--surface)] border border-[var(--border)] hover:bg-[var(--surface-hover)] text-[10px] font-mono font-bold tracking-wider text-[var(--text-primary)] flex items-center gap-1.5 transition-all theme-transition"
+                    className="px-3.5 py-1.5 rounded-xl bg-[rgb(var(--surface))] border border-[rgb(var(--border))]/80 hover:bg-[rgb(var(--surface-hover))] text-[10px] font-mono font-bold tracking-wider text-[rgb(var(--text-primary))] flex items-center gap-2 transition-all shadow-sm"
                   >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                     EXPORT JSON
                   </button>
 
-                  <div className="flex gap-1 overflow-x-auto">
+                  <div className="flex gap-1 overflow-x-auto max-w-xs md:max-w-none">
                     {["all", "slack", "email", "drive", "jira", "meeting"].map((src) => (
                       <button
                         key={src}
                         onClick={() => setSelectedSourceFilter(src)}
-                        className={`px-2 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider border transition-all theme-transition ${
-                          selectedSourceFilter === src ? "bg-[var(--surface-hover)] text-[var(--text-primary)] border-[var(--border-focus)]" : "bg-transparent text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-primary)]"
+                        className={`px-2.5 py-1 rounded-lg text-[9.5px] font-mono uppercase tracking-wider border transition-all ${
+                          selectedSourceFilter === src ? "bg-[rgb(var(--surface-hover))] text-[rgb(var(--text-primary))] border-[rgb(var(--border-focus))]" : "bg-transparent text-[rgb(var(--text-muted))] border-[rgb(var(--border))]/80 hover:text-[rgb(var(--text-primary))]"
                         }`}
                       >
                         {src}
@@ -1006,35 +1310,35 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Search */}
+              {/* Search bar */}
               <div className="relative">
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search index database..."
-                  className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg pl-8 pr-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)] placeholder-zinc-500 theme-transition"
+                  className="w-full bg-[rgb(var(--surface))] border border-[rgb(var(--border))]/85 rounded-xl pl-9 pr-4 py-2.5 text-xs text-[rgb(var(--text-primary))] focus:outline-none focus:border-[rgb(var(--border-focus))] placeholder-zinc-500 transition-colors"
                 />
-                <svg className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-4 h-4 text-zinc-500 absolute left-3 top-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
 
-              {/* List */}
-              <div className="flex flex-col gap-3">
+              {/* List cards */}
+              <div className="flex flex-col gap-4">
                 {filteredDecisions.length === 0 ? (
-                  <div className="p-8 text-center border border-dashed border-[var(--border)] rounded-xl text-[var(--text-muted)] text-xs theme-transition">
+                  <div className="p-10 text-center border border-dashed border-[rgb(var(--border))]/80 rounded-2xl text-[rgb(var(--text-muted))] text-xs">
                     No results found matching filters.
                   </div>
                 ) : (
                   filteredDecisions.map((dec) => (
-                    <div key={dec.id} className="p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)]/20 hover:bg-[var(--surface-hover)]/30 transition-all theme-transition">
-                      <div className="flex items-center justify-between text-[10px] text-[var(--text-muted)] mb-2 theme-transition">
-                        <span className="font-mono uppercase">{dec.source} | {dec.date}</span>
-                        <span className="font-mono">{dec.owner}</span>
+                    <div key={dec.id} className="p-5 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/20 hover:bg-[rgb(var(--surface-hover))]/20 transition-all shadow-sm">
+                      <div className="flex items-center justify-between text-[10.5px] text-[rgb(var(--text-muted))] mb-3.5 font-mono">
+                        <span className="uppercase font-bold">{dec.source} | {dec.date}</span>
+                        <span className="font-semibold">{dec.owner}</span>
                       </div>
-                      <h4 className="text-xs md:text-sm font-bold text-[var(--text-primary)] mb-1 theme-transition">{dec.title}</h4>
-                      <p className="text-xs text-[var(--text-muted)] leading-relaxed mb-3 theme-transition">{dec.context}</p>
+                      <h4 className="text-sm font-bold text-[rgb(var(--text-primary))] mb-1.5">{dec.title}</h4>
+                      <p className="text-xs text-[rgb(var(--text-muted))] leading-relaxed mb-4">{dec.context}</p>
                       <button
                         onClick={() => {
                           const match = SIMULATED_RESPONSES.find((r) => r.keywords.some((k) => dec.title.toLowerCase().includes(k)));
@@ -1044,7 +1348,7 @@ export default function Home() {
                             setActiveTab("chat");
                           }
                         }}
-                        className="text-[10px] font-mono font-bold text-[var(--accent)] hover:text-indigo-400 transition-colors"
+                        className="text-[10px] font-mono font-bold text-[rgb(var(--accent))] hover:text-indigo-400 transition-colors tracking-wider"
                       >
                         [INSPECT NETWORK GRAPH]
                       </button>
@@ -1055,48 +1359,48 @@ export default function Home() {
             </div>
           )}
 
-          {/* INTEGRATIONS — OAuth Connect */}
+          {/* INTEGRATIONS OAuth */}
           {activeTab === "integrations" && (
             <div className="p-8 max-w-2xl mx-auto flex flex-col gap-6 animate-[fadeIn_0.2s_ease-out]">
-              <div className="border-b border-[var(--border)] pb-4 theme-transition">
-                <h3 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1 theme-transition">
+              <div className="border-b border-[rgb(var(--border))]/40 pb-4">
+                <h3 className="text-lg font-bold tracking-tight text-[rgb(var(--text-primary))] mb-0.5">
                   Connect Your Apps
                 </h3>
-                <p className="text-xs text-[var(--text-muted)] theme-transition">
-                  One-click OAuth. Authorize once — KAIROS ingests decisions automatically.
+                <p className="text-xs text-[rgb(var(--text-muted))]">
+                  One-click OAuth authentication. Connect platforms to dynamically sync corporate memory.
                 </p>
               </div>
 
               <IntegrationGrid token={token} />
 
-              {/* How-it-works callout */}
-              <div className="p-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5 text-[11px] text-[var(--text-muted)] space-y-1.5">
-                <p className="text-[10px] font-mono text-indigo-400 font-bold uppercase tracking-wider mb-2">How it works</p>
+              {/* How it works card */}
+              <div className="p-5 rounded-2xl border border-indigo-500/15 bg-indigo-500/5 text-[11.5px] text-[rgb(var(--text-muted))] space-y-2">
+                <p className="text-[10px] font-mono text-indigo-400 font-bold uppercase tracking-wider mb-2.5">Workflow Sync Integration</p>
                 {[
-                  "Click Connect → OAuth popup opens",
-                  "Authorize KAIROS in your account",
-                  "Token is saved to your KAIROS profile",
-                  "Agents start ingesting decisions automatically",
+                  "Trigger apps oauth connection flow popup.",
+                  "Approve requested read scopes for the organization workspace.",
+                  "Tokens are encrypted and saved securely inside credentials.",
+                  "KAIROS index agents start scrapes automatically.",
                 ].map((step, i) => (
-                  <div key={i} className="flex gap-2">
-                    <span className="text-indigo-500 font-bold">{i + 1}.</span>
+                  <div key={i} className="flex gap-2.5 leading-relaxed">
+                    <span className="text-[rgb(var(--accent))] font-bold font-mono">{i + 1}.</span>
                     <span>{step}</span>
                   </div>
                 ))}
               </div>
 
-              {/* Data permissions callout */}
-              <div className="p-4 rounded-xl border border-purple-500/20 bg-purple-500/5 text-[11px] text-[var(--text-muted)] space-y-1.5">
-                <p className="text-[10px] font-mono text-purple-400 font-bold uppercase tracking-wider mb-2">Read-only permissions</p>
+              {/* Data permissions card */}
+              <div className="p-5 rounded-2xl border border-purple-500/15 bg-purple-500/5 text-[11.5px] text-[rgb(var(--text-muted))] space-y-2.5">
+                <p className="text-[10px] font-mono text-purple-400 font-bold uppercase tracking-wider mb-2.5">Read-Only Safety Guarantee</p>
                 {[
-                  ["💬 Slack", "Reads messages to find decision threads. Never sends messages."],
-                  ["📧 Gmail", "Reads emails for approvals and escalations. Never reads attachments."],
-                  ["📄 Drive", "Reads shared docs and specs. Never modifies files."],
-                  ["🎯 Jira", "Reads tickets and comments. Never creates or modifies."],
-                  ["📹 Zoom", "Accesses meeting transcripts. Never records or controls meetings."],
+                  ["💬 Slack Integration", "Filters channels for decision threads. Never posts text messages."],
+                  ["📧 Gmail Connector", "Retrieves approval signatures. Never checks external attachments."],
+                  ["📄 G Drive Scrape", "Scans text spec changes. Never edits or deletes folders."],
+                  ["🎯 Jira Boards", "Indices ticket issues and comments. Never executes updates."],
+                  ["📹 Zoom Transcription", "Whisper large transcription indexes. Never accesses live meetings."],
                 ].map(([label, desc]) => (
-                  <div key={label} className="flex gap-2">
-                    <span className="text-purple-300 font-semibold w-36 shrink-0">{label}</span>
+                  <div key={label} className="flex gap-2 leading-relaxed">
+                    <span className="text-purple-300 font-bold w-36 shrink-0">{label}</span>
                     <span>{desc}</span>
                   </div>
                 ))}
@@ -1104,12 +1408,12 @@ export default function Home() {
             </div>
           )}
 
-          {/* AI AGENTS DASHBOARD */}
+          {/* AI AGENTS REGISTRY */}
           {activeTab === "agents" && (
             <div className="p-8 max-w-4xl mx-auto flex flex-col gap-6 animate-[fadeIn_0.2s_ease-out]">
-              <div className="border-b border-[var(--border)] pb-4 theme-transition">
-                <h3 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1 theme-transition">AI Agents Registry</h3>
-                <p className="text-xs text-[var(--text-muted)] theme-transition">Monitor the real-time execution, model allocations, and task metrics of KAIROS parallel agents.</p>
+              <div className="border-b border-[rgb(var(--border))]/40 pb-4">
+                <h3 className="text-lg font-bold tracking-tight text-[rgb(var(--text-primary))] mb-0.5">Agent Registry</h3>
+                <p className="text-xs text-[rgb(var(--text-muted))]">Monitor parallel models execution, processing metrics, and active states.</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1213,85 +1517,85 @@ export default function Home() {
                     ]
                   }
                 ].map((agent) => (
-                  <div key={agent.name} className="p-5 rounded-xl border border-[var(--border)] bg-[var(--surface)]/30 flex flex-col justify-between gap-4 theme-transition hover:border-[var(--border-focus)] transition-all">
+                  <div key={agent.name} className="p-5 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/30 flex flex-col justify-between gap-5 hover:border-[rgb(var(--border-focus))] transition-all shadow-sm">
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <span className="text-sm">{agent.icon}</span>
-                          <span className="text-xs font-bold text-[var(--text-primary)] theme-transition">{agent.label}</span>
+                          <span className="text-xs font-bold text-[rgb(var(--text-primary))]">{agent.label}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <span className={`w-1.5 h-1.5 rounded-full ${agent.status === "processing" ? "bg-amber-500 animate-ping" : "bg-emerald-500"}`} />
-                          <span className="text-[9px] font-mono font-bold tracking-wider uppercase text-[var(--text-muted)] theme-transition">
+                          <span className="text-[9px] font-mono font-bold tracking-wider uppercase text-[rgb(var(--text-muted))]">
                             {agent.status === "processing" ? "SYNCING" : "IDLE"}
                           </span>
                         </div>
                       </div>
-                      <p className="text-[11px] text-[var(--text-muted)] leading-relaxed mb-3 theme-transition">{agent.description}</p>
+                      <p className="text-[11.5px] text-[rgb(var(--text-muted))] leading-relaxed mb-3.5">{agent.description}</p>
                       
                       <div className="space-y-1">
                         <div className="flex justify-between text-[10px] font-mono">
-                          <span className="text-[var(--text-muted)]">Model:</span>
-                          <span className="text-[var(--text-primary)] font-bold">{agent.model}</span>
+                          <span className="text-[rgb(var(--text-muted))]">Model:</span>
+                          <span className="text-[rgb(var(--text-primary))] font-bold">{agent.model}</span>
                         </div>
                         <div className="flex justify-between text-[10px] font-mono">
-                          <span className="text-[var(--text-muted)]">Hardware:</span>
-                          <span className="text-[var(--text-primary)]">{agent.hardware}</span>
+                          <span className="text-[rgb(var(--text-muted))]">Hardware:</span>
+                          <span className="text-[rgb(var(--text-primary))]">{agent.hardware}</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 pt-3 border-t border-[var(--border)]/40 theme-transition">
+                    <div className="grid grid-cols-3 gap-2.5 pt-3.5 border-t border-[rgb(var(--border))]/40">
                       {agent.metrics.map((m, idx) => (
                         <div key={idx} className="text-center">
-                          <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase block">{m.label}</span>
-                          <span className="text-[11px] font-bold text-[var(--text-primary)] font-mono">{m.value}</span>
+                          <span className="text-[9px] font-mono text-[rgb(var(--text-muted))] uppercase block font-bold tracking-wider">{m.label}</span>
+                          <span className="text-[11px] font-bold text-[rgb(var(--text-primary))] font-mono">{m.value}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 ))}
 
-                {/* Synthesis Agent (Full Width Card) */}
-                <div className="col-span-1 md:col-span-2 p-5 rounded-xl border border-[var(--border)] bg-[var(--surface)]/30 flex flex-col md:flex-row justify-between gap-4 theme-transition hover:border-[var(--border-focus)] transition-all">
+                {/* Synthesis Orchestrator full width */}
+                <div className="col-span-1 md:col-span-2 p-5 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/30 flex flex-col md:flex-row justify-between gap-5 hover:border-[rgb(var(--border-focus))] transition-all shadow-sm">
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <span className="text-sm">🧠</span>
-                        <span className="text-xs font-bold text-[var(--text-primary)] theme-transition">Decision Synthesis Agent (Orchestrator)</span>
+                        <span className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase">Decision Synthesis Hub (Orchestrator)</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className={`w-1.5 h-1.5 rounded-full ${isChatStreaming ? "bg-indigo-500 animate-ping" : "bg-emerald-500"}`} />
-                        <span className="text-[9px] font-mono font-bold tracking-wider uppercase text-[var(--text-muted)] theme-transition">
+                        <span className="text-[9px] font-mono font-bold tracking-wider uppercase text-[rgb(var(--text-muted))]">
                           {isChatStreaming ? "QUERYING" : "IDLE"}
                         </span>
                       </div>
                     </div>
-                    <p className="text-[11px] text-[var(--text-muted)] leading-relaxed mb-3 theme-transition">
-                      Acts as the synthesis hub. Performs hybrid semantic-relational search over ChromaDB and SQLite, traverses NetworkX nodes, and generates real-time streaming answer trace citations.
+                    <p className="text-[11.5px] text-[rgb(var(--text-muted))] leading-relaxed mb-3.5">
+                      Acts as the orchestration layer for the multi-agent memory network. Evaluates context variables, queries SQLite graph relational index, runs ChromaDB hybrid semantic search, and compiles real-time citation stream responses.
                     </p>
                     
                     <div className="space-y-1">
                       <div className="flex gap-4 text-[10px] font-mono">
-                        <span className="text-[var(--text-muted)] w-16">Model:</span>
-                        <span className="text-[var(--text-primary)] font-bold">Qwen 2.5 72B Instruct</span>
+                        <span className="text-[rgb(var(--text-muted))] w-16">Model:</span>
+                        <span className="text-[rgb(var(--text-primary))] font-bold">Qwen 2.5 72B Instruct</span>
                       </div>
                       <div className="flex gap-4 text-[10px] font-mono">
-                        <span className="text-[var(--text-muted)] w-16">Hardware:</span>
-                        <span className="text-[var(--text-primary)]">AMD Instinct GPU (Fireworks Cloud)</span>
+                        <span className="text-[rgb(var(--text-muted))] w-16">Hardware:</span>
+                        <span className="text-[rgb(var(--text-primary))]">AMD Instinct GPU (Fireworks Cloud)</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex md:flex-col justify-around gap-2 px-4 md:border-l border-[var(--border)]/40 theme-transition md:w-48 shrink-0">
+                  <div className="flex md:flex-col justify-around gap-2 px-5 md:border-l border-[rgb(var(--border))]/40 md:w-52 shrink-0">
                     {[
-                      { label: "Queries Answered", value: "142" },
-                      { label: "Avg Latency", value: "1.2s" },
-                      { label: "Cache Hit Rate", value: "84.1%" }
+                      { label: "Total Queries", value: "142" },
+                      { label: "Avg Response", value: "1.2s" },
+                      { label: "Chroma Cache Hit", value: "84.1%" }
                     ].map((m, idx) => (
                       <div key={idx} className="text-center md:text-left">
-                        <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase block">{m.label}</span>
-                        <span className="text-[12px] font-bold text-[var(--text-primary)] font-mono">{m.value}</span>
+                        <span className="text-[9px] font-mono text-[rgb(var(--text-muted))] uppercase block font-bold tracking-wider">{m.label}</span>
+                        <span className="text-[12.5px] font-bold text-[rgb(var(--text-primary))] font-mono">{m.value}</span>
                       </div>
                     ))}
                   </div>

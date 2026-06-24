@@ -7,7 +7,6 @@ Returns gracefully empty list when credentials are missing.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
 
 import httpx
 
@@ -36,20 +35,17 @@ class JiraConnector:
     # ── Sync internals ─────────────────────────────────────────────────────────
 
     def _get_issues_sync(self, days_back: int) -> list[dict]:
-        cutoff = (datetime.utcnow() - timedelta(days=days_back)).strftime("%Y-%m-%d")
-
+        # Use relative date syntax — new Jira Cloud requires /rest/api/3/search/jql
         jql_queries = [
-            f'text ~ "decision" AND updated >= "{cutoff}"',
-            f'text ~ "approved" AND updated >= "{cutoff}"',
-            f'text ~ "rejected" AND updated >= "{cutoff}"',
-            f'issuetype in (Epic, Story) AND updated >= "{cutoff}" ORDER BY updated DESC',
+            f'created >= -{days_back}d ORDER BY created DESC',
+            f'updated >= -{days_back}d ORDER BY updated DESC',
         ]
 
         seen: set[str] = set()
         results: list[dict] = []
 
         for jql in jql_queries:
-            issues = self._search_issues(jql, max_results=50)
+            issues = self._search_issues(jql, max_results=100)
             for issue in issues:
                 key = issue.get("key", "")
                 if not key or key in seen:
@@ -87,18 +83,19 @@ class JiraConnector:
 
     def _search_issues(self, jql: str, max_results: int = 100) -> list[dict]:
         try:
-            resp = httpx.get(
-                f"{self._base}/rest/api/3/search",
+            resp = httpx.post(
+                f"{self._base}/rest/api/3/search/jql",
                 auth=self._auth,
-                params={
+                json={
                     "jql": jql,
                     "maxResults": max_results,
-                    "fields": (
-                        "summary,description,assignee,reporter,"
-                        "created,updated,comment,priority,status,issuetype,labels"
-                    ),
+                    "fields": [
+                        "summary", "description", "assignee", "reporter",
+                        "created", "updated", "comment", "priority",
+                        "status", "issuetype", "labels",
+                    ],
                 },
-                headers={"Accept": "application/json"},
+                headers={"Accept": "application/json", "Content-Type": "application/json"},
                 timeout=30,
             )
             resp.raise_for_status()

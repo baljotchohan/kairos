@@ -23,6 +23,138 @@ interface DecisionGraphProps {
   className?: string;
 }
 
+function getNodeIconSVG(node: GraphNode) {
+  const label = (node.label || "").toLowerCase();
+  const type = node.type;
+  const icon = (node.icon || "").toLowerCase();
+  const info = (node.info || "").toLowerCase();
+
+  // 1. React
+  if (label.includes("react") || icon.includes("⚛️")) {
+    return (
+      <svg viewBox="0 0 24 24" className="w-6 h-6 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <ellipse rx="10" ry="4.5" transform="translate(12 12) rotate(0)" />
+        <ellipse rx="10" ry="4.5" transform="translate(12 12) rotate(60)" />
+        <ellipse rx="10" ry="4.5" transform="translate(12 12) rotate(120)" />
+        <circle cx="12" cy="12" r="2" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  // 2. Vue
+  if (label.includes("vue") || icon.includes("💚")) {
+    return (
+      <svg viewBox="0 0 24 24" className="w-6 h-6 transition-transform hover:scale-110" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 22L24 1.5H18.5L12 13L5.5 1.5H0L12 22Z" fill="#41B883" />
+        <path d="M12 13L18.5 1.5H14L12 5L10 1.5H5.5L12 13Z" fill="#35495E" />
+      </svg>
+    );
+  }
+
+  // 3. Slack
+  if (label.includes("slack") || icon.includes("💬") || icon.includes("slack")) {
+    return (
+      <svg viewBox="0 0 24 24" className="w-5 h-5 transition-transform hover:scale-110" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="6" cy="6" r="2" fill="#36C5F0" />
+        <rect x="4" y="9" width="4" height="8" rx="2" fill="#36C5F0" />
+        <circle cx="18" cy="6" r="2" fill="#2EB67D" />
+        <rect x="9" y="4" width="8" height="4" rx="2" fill="#2EB67D" />
+        <circle cx="18" cy="18" r="2" fill="#ECB22E" />
+        <rect x="16" y="7" width="4" height="8" rx="2" fill="#ECB22E" />
+        <circle cx="6" cy="18" r="2" fill="#E01E5A" />
+        <rect x="7" y="16" width="8" height="4" rx="2" fill="#E01E5A" />
+      </svg>
+    );
+  }
+
+  // 4. Google Drive
+  if (label.includes("drive") || label.includes("google drive") || icon.includes("📄") || info.includes("drive") || info.includes("workspace")) {
+    return (
+      <svg viewBox="0 0 100 100" className="w-5 h-5 transition-transform hover:scale-110">
+        <path d="M 33 20 L 2 73.6 L 17 100 L 48 46.4 Z" fill="#FFD043" />
+        <path d="M 48 46.4 L 17 100 L 83 100 L 98 73.6 Z" fill="#1EA758" />
+        <path d="M 33 20 L 48 46.4 L 98 73.6 L 67 20 Z" fill="#167EE6" />
+      </svg>
+    );
+  }
+
+  // 5. Jira
+  if (label.includes("jira") || icon.includes("🔧") || info.includes("jira")) {
+    return (
+      <svg viewBox="0 0 24 24" className="w-5 h-5 transition-transform hover:scale-110" fill="currentColor">
+        <path d="M12.5 13.5l4.5-4.5 4.5 4.5-4.5 4.5z" fill="#0052CC" />
+        <path d="M4.5 13.5l4.5-4.5 4.5 4.5-4.5 4.5z" fill="#0052CC" opacity="0.8" />
+        <path d="M8.5 5.5l4.5-4.5 4.5 4.5-4.5 4.5z" fill="#0052CC" opacity="0.6" />
+      </svg>
+    );
+  }
+
+  // 6. Gmail / Email
+  if (label.includes("gmail") || label.includes("email") || label.includes("mail") || icon.includes("✉️") || icon.includes("envelope")) {
+    return (
+      <svg viewBox="0 0 24 24" className="w-5 h-5 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+        <polyline points="22,6 12,13 2,6" />
+      </svg>
+    );
+  }
+
+  // 7. Calendar / Date
+  if (type === "date" || icon.includes("📅") || label.includes("calendar") || label.includes("date")) {
+    return (
+      <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+      </svg>
+    );
+  }
+
+  // 8. Person
+  if (type === "person" || icon.includes("👤") || icon.includes("👥")) {
+    return (
+      <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
+    );
+  }
+
+  // 9. Outcome
+  if (type === "outcome") {
+    const isSuccess = icon.includes("✅") || icon.includes("success") || label.toLowerCase().includes("scale") || label.toLowerCase().includes("hire") || label.toLowerCase().includes("hiring") || label.toLowerCase().includes("success");
+    const isError = icon.includes("❌") || icon.includes("error") || label.toLowerCase().includes("write-off") || label.toLowerCase().includes("fail") || label.toLowerCase().includes("failed") || label.toLowerCase().includes("terminate");
+
+    if (isSuccess) {
+      return (
+        <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      );
+    }
+    if (isError) {
+      return (
+        <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      );
+    }
+    // Warning by default
+    return (
+      <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+    );
+  }
+
+  // Fallback to text icon or first character
+  return <span className="text-[10px] font-bold select-none">{node.icon || node.label.charAt(0)}</span>;
+}
+
 export default function DecisionGraph({
   nodes,
   decisionTitle,
@@ -240,15 +372,15 @@ export default function DecisionGraph({
     return false;
   };
 
-  // Classy type color coding
+  // Classy type color coding (Glassmorphism inspired translucent styling)
   const getNodeColor = (type: GraphNode["type"]) => {
     switch (type) {
-      case "decision": return "bg-indigo-600 border-indigo-400 text-indigo-100";
-      case "person": return "bg-emerald-600/90 border-emerald-400 text-emerald-100";
-      case "source": return "bg-cyan-600/90 border-cyan-400 text-cyan-100";
-      case "date": return "bg-amber-600/90 border-amber-400 text-amber-100";
-      case "outcome": return "bg-rose-600/90 border-rose-400 text-rose-100";
-      default: return "bg-zinc-600 border-zinc-400 text-zinc-100";
+      case "decision": return "bg-indigo-500/10 border-indigo-500/40 text-indigo-500 dark:text-indigo-400";
+      case "person": return "bg-emerald-500/10 border-emerald-500/40 text-emerald-500 dark:text-emerald-400";
+      case "source": return "bg-cyan-500/10 border-cyan-500/40 text-cyan-500 dark:text-cyan-400";
+      case "date": return "bg-amber-500/10 border-amber-500/40 text-amber-500 dark:text-amber-400";
+      case "outcome": return "bg-rose-500/10 border-rose-500/40 text-rose-500 dark:text-rose-400";
+      default: return "bg-zinc-500/10 border-zinc-500/40 text-zinc-500 dark:text-zinc-400";
     }
   };
 
@@ -257,7 +389,7 @@ export default function DecisionGraph({
   return (
     <div
       ref={containerRef}
-      className={`flex flex-col h-full bg-[var(--bg)] border border-[var(--border)] rounded-xl select-none relative overflow-hidden theme-transition ${className}`}
+      className={`flex flex-col h-full bg-[rgb(var(--bg))] select-none relative overflow-hidden theme-transition ${className}`}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -265,23 +397,23 @@ export default function DecisionGraph({
       onMouseLeave={handleMouseUpOrLeave}
     >
       {/* Top Header Controls */}
-      <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between shrink-0 bg-[var(--surface)] theme-transition z-20">
+      <div className="px-4 py-3 border-b border-[rgb(var(--border))]/40 flex items-center justify-between shrink-0 bg-[rgb(var(--surface))]/90 backdrop-blur-md z-20">
         <div className="flex items-center gap-2">
-          <svg className="w-3.5 h-3.5 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-3.5 h-3.5 text-[rgb(var(--accent))]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
           </svg>
-          <span className="text-[10px] font-bold tracking-wider uppercase text-[var(--text-primary)] font-mono">Memory decision graph</span>
+          <span className="text-[10px] font-bold tracking-wider uppercase text-[rgb(var(--text-primary))]">Memory decision graph</span>
         </div>
         <button
           onClick={resetViewport}
-          className="text-[9px] font-mono px-2 py-0.5 border border-[var(--border)] hover:bg-[var(--surface-hover)] rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all"
+          className="text-[9px] font-mono px-2.5 py-1 border border-[rgb(var(--border))]/80 hover:bg-[rgb(var(--surface-hover))]/80 rounded-lg text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] transition-all shadow-sm"
         >
           RESET
         </button>
       </div>
 
       {/* Physics Graph Area */}
-      <div className="flex-1 relative bg-[var(--bg)] theme-transition min-h-[300px]">
+      <div className="flex-1 relative bg-[rgb(var(--bg))] theme-transition min-h-[300px]">
         {/* Transform Group */}
         <div
           style={{
@@ -309,7 +441,7 @@ export default function DecisionGraph({
                     <path
                       id={pathId}
                       d={`M ${node.x} ${node.y} L ${centerNode.x} ${centerNode.y}`}
-                      stroke={isActive ? "var(--accent)" : "var(--text-muted)"}
+                      stroke={isActive ? "rgb(var(--accent))" : "rgb(var(--text-muted))"}
                       strokeWidth={isActive ? "1.5" : "0.75"}
                       strokeDasharray={node.type === "outcome" ? "3 3" : "none"}
                       fill="none"
@@ -317,7 +449,7 @@ export default function DecisionGraph({
 
                     {/* Classy Flow Particle moving along spring lines */}
                     {!isMasked && (
-                      <circle r="1.5" fill="var(--accent)">
+                      <circle r="1.5" fill="rgb(var(--accent))">
                         <animateMotion dur="2.5s" repeatCount="indefinite">
                           <mpath href={`#${pathId}`} />
                         </animateMotion>
@@ -365,18 +497,16 @@ export default function DecisionGraph({
                   <div
                     className={`flex items-center justify-center rounded-full transition-all border ${
                       isCenter
-                        ? "w-8 h-8 ring-2 ring-indigo-500/20"
-                        : "w-4 h-4"
-                    } ${themeColorClass} shadow-md`}
+                        ? "w-12 h-12 ring-4 ring-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.25)]"
+                        : "w-9 h-9 shadow-sm"
+                    } ${themeColorClass} shadow-md overflow-hidden`}
                   >
-                    <span className="text-[10px] font-bold">
-                      {node.icon || node.label.charAt(0)}
-                    </span>
+                    {getNodeIconSVG(node)}
                   </div>
 
                   {/* Clean Floating Obsidian Tooltip label */}
                   {(isHovered || isSelected) && (
-                    <div className="absolute top-7 bg-[var(--surface)] border border-[var(--border)] text-[9px] font-mono text-[var(--text-primary)] px-2 py-0.5 rounded shadow-lg whitespace-nowrap z-30 theme-transition">
+                    <div className="absolute top-8 bg-[rgb(var(--surface))] border border-[rgb(var(--border))]/80 text-[9.5px] font-mono text-[rgb(var(--text-primary))] px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap z-30 transition-all font-semibold">
                       {node.label}
                     </div>
                   )}
@@ -388,22 +518,22 @@ export default function DecisionGraph({
       </div>
 
       {/* Info Context Drawer */}
-      <div className="p-4 border-t border-[var(--border)] bg-[var(--surface)] text-[11px] leading-relaxed z-20 theme-transition">
+      <div className="p-4 border-t border-[rgb(var(--border))]/40 bg-[rgb(var(--surface))]/90 backdrop-blur-md text-[11.5px] leading-relaxed z-20 theme-transition shadow-lg">
         {activeNodeInfo ? (
-          <div>
-            <span className="font-mono text-[var(--text-muted)] uppercase text-[9px] tracking-wider block mb-0.5">
+          <div className="animate-[fadeIn_0.15s_ease-out]">
+            <span className="font-mono text-[rgb(var(--text-muted))] uppercase text-[9px] tracking-wider block mb-0.5 font-bold">
               {activeNodeInfo.type} Context
             </span>
-            <span className="font-bold text-[var(--text-primary)] block text-xs">{activeNodeInfo.label}</span>
-            <p className="text-[var(--text-muted)] mt-1">{activeNodeInfo.info || "No context mappings present."}</p>
+            <span className="font-bold text-[rgb(var(--text-primary))] block text-xs">{activeNodeInfo.label}</span>
+            <p className="text-[rgb(var(--text-muted))] mt-1 leading-normal">{activeNodeInfo.info || "No context mappings present."}</p>
           </div>
         ) : (
-          <div className="flex items-center justify-between text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-wider">
+          <div className="flex items-center justify-between text-[9.5px] font-mono text-[rgb(var(--text-muted))] uppercase tracking-wider font-semibold">
             <span className="flex items-center gap-1.5">
-              <span className="w-1 h-1 rounded-full bg-indigo-500 animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
               Scroll to zoom • drag empty space to pan
             </span>
-            <span className="text-[8px] border border-[var(--border)] px-1 rounded">
+            <span className="text-[8.5px] border border-[rgb(var(--border))]/80 px-2 py-0.5 rounded-md font-bold">
               ZOOM: {Math.round(zoom * 100)}%
             </span>
           </div>

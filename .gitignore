@@ -226,6 +226,8 @@ firebase-service-account.json
 
 # SQLite databases (regenerated via demo_graph.py)
 *.db
+*.db-shm
+*.db-wal
 
 # ChromaDB vector store (generated, not source)
 chroma_db/

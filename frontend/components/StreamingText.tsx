@@ -55,13 +55,13 @@ export default function StreamingText({
   return (
     <span
       className={`kairos-prose leading-relaxed whitespace-pre-wrap break-words ${
-        hasWarning ? "text-[#f5f5f5]" : "text-[#e5e5e5]"
+        hasWarning ? "text-rose-500 font-medium" : "text-[rgb(var(--text-primary))]"
       } ${className}`}
     >
       {segments.map((seg, i) => {
         if (seg.type === "bold") {
           return (
-            <strong key={i} className="font-semibold text-white">
+            <strong key={i} className="font-semibold text-[rgb(var(--text-primary))]">
               {seg.content}
             </strong>
           );
@@ -70,7 +70,7 @@ export default function StreamingText({
           return (
             <code
               key={i}
-              className="font-mono text-[0.82em] bg-[#1e293b]/50 text-indigo-300 border border-[#334155]/40 px-1.5 py-0.5 rounded"
+              className="font-mono text-[0.85em] bg-[rgb(var(--surface-hover))] text-[rgb(var(--accent))] border border-[rgb(var(--border))]/80 px-1.5 py-0.5 rounded"
             >
               {seg.content}
             </code>

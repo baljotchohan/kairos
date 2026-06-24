@@ -30,7 +30,10 @@ async def query(
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
-    result = await orchestrator.query(req.question)
+    result = await orchestrator.query_with_memory(
+        question=req.question,
+        user_id=current_user.uid
+    )
     
     sources = result.get("sources", [])
     decision_ids = [s.get("id") for s in sources if s.get("id")]

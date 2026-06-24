@@ -52,6 +52,7 @@ async def websocket_endpoint(websocket: WebSocket):
             # ── Query: stream answer token by token ───────────────────────────
             if msg_type == "query":
                 question = data.get("question", "").strip()
+                session_id = data.get("session_id")
                 if not question:
                     await websocket.send_json({"type": "error", "message": "Empty question"})
                     continue
@@ -68,6 +69,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     result = await orchestrator.query_with_memory(
                         question=question,
                         user_id=user_id,
+                        session_id=session_id,
                         stream_callback=stream_cb
                     )
                     
@@ -91,23 +93,35 @@ async def websocket_endpoint(websocket: WebSocket):
                         "user_context": result["user_context"]
                     })
                 except Exception as e:
-                    await websocket.send_json({"type": "error", "message": str(e)})
+                    try:
+                        await websocket.send_json({"type": "error", "message": str(e)})
+                    except Exception:
+                        pass
                     continue
 
             # ── Ingest: trigger ingestion with progress updates ────────────────
             elif msg_type == "ingest":
                 async def progress(msg: str):
-                    await websocket.send_json({"type": "progress", "message": msg})
+                    try:
+                        await websocket.send_json({"type": "progress", "message": msg})
+                    except Exception:
+                        pass
 
                 try:
                     result = await orchestrator.run_ingestion(progress_callback=progress)
-                    await websocket.send_json({
-                        "type": "ingest_done",
-                        "decisions_extracted": result.get("decisions_extracted", 0),
-                        "errors": result.get("errors", []),
-                    })
+                    try:
+                        await websocket.send_json({
+                            "type": "ingest_done",
+                            "decisions_extracted": result.get("decisions_extracted", 0),
+                            "errors": result.get("errors", []),
+                        })
+                    except Exception:
+                        pass
                 except Exception as e:
-                    await websocket.send_json({"type": "error", "message": str(e)})
+                    try:
+                        await websocket.send_json({"type": "error", "message": str(e)})
+                    except Exception:
+                        pass
 
             # ── Stats ─────────────────────────────────────────────────────────
             elif msg_type == "stats":

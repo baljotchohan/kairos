@@ -51,14 +51,27 @@ class MeetingAgent:
 
         try:
             audio_bytes = await connector.download_audio(download_url)
+            if not audio_bytes:
+                print("[MeetingAgent] Audio bytes download was empty — skipping transcription")
+                return ""
+
             import tempfile, os
+            import asyncio
             with tempfile.NamedTemporaryFile(suffix=".m4a", delete=False) as f:
                 f.write(audio_bytes)
                 tmp_path = f.name
-            model = whisper.load_model("base")
-            result = model.transcribe(tmp_path)
-            os.unlink(tmp_path)
-            return result.get("text", "")
+
+            def run_whisper(path: str) -> str:
+                model = whisper.load_model("base")
+                result = model.transcribe(path)
+                return result.get("text", "")
+
+            text = await asyncio.to_thread(run_whisper, tmp_path)
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+            return text
         except Exception as e:
             print(f"[MeetingAgent] transcription failed: {e}")
         return ""

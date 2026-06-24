@@ -4,7 +4,7 @@ KAIROS Orchestrator — Coordinates ingestion and query pipelines.
 Ingestion Flow (LangGraph):
   [Slack Agent]  ──┐
   [Email Agent]  ──┤
-  [Drive Agent]  ──┼──► [Synthesis Agent] ──► [Memory Store]
+  [Drive Agent]  ──┼──► [Jira Connector] ──► [Synthesis Agent] ──► [Memory Store]
   [Meeting Agent]──┘
 
 Query Flow (Multi-Agent System):
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from typing import Callable, TypedDict, Awaitable
 
 from langgraph.graph import StateGraph, END
@@ -33,6 +34,7 @@ class KairosState(TypedDict):
     email_data: list[dict]
     drive_data: list[dict]
     meeting_data: list[dict]
+    jira_data: list[dict]
     decisions_extracted: int
     errors: list[str]
     status: str
@@ -49,6 +51,7 @@ class KairosOrchestrator:
     def __init__(self, memory: KairosMemory):
         self.memory = memory
         self.user_memory = UserMemory(db_path=memory.db_path)
+        self.ingestion_lock = asyncio.Lock()
 
         # Lazy imports to avoid circular dependencies
         from agents.slack_agent import SlackAgent
@@ -59,12 +62,14 @@ class KairosOrchestrator:
         from agents.intent_agent import IntentAgent
         from agents.context_agent import ContextAgent
         from agents.research_agent import ResearchAgent
+        from connectors.jira_connector import JiraConnector
 
-        # Ingestion agents
+        # Ingestion agents & connectors
         self.slack_agent = SlackAgent()
         self.email_agent = EmailAgent()
         self.drive_agent = DriveAgent()
         self.meeting_agent = MeetingAgent()
+        self.jira_connector = JiraConnector()
         self.synthesis_agent = SynthesisAgent(memory=memory)
 
         # Query agents
@@ -83,13 +88,15 @@ class KairosOrchestrator:
         g.add_node("gather_email", self._gather_email)
         g.add_node("gather_drive", self._gather_drive)
         g.add_node("gather_meetings", self._gather_meetings)
+        g.add_node("gather_jira", self._gather_jira)
         g.add_node("synthesize", self._synthesize)
 
         g.set_entry_point("gather_slack")
         g.add_edge("gather_slack", "gather_email")
         g.add_edge("gather_email", "gather_drive")
         g.add_edge("gather_drive", "gather_meetings")
-        g.add_edge("gather_meetings", "synthesize")
+        g.add_edge("gather_meetings", "gather_jira")
+        g.add_edge("gather_jira", "synthesize")
         g.add_edge("synthesize", END)
 
         return g.compile()
@@ -104,17 +111,47 @@ class KairosOrchestrator:
             errs = state.get("errors", []) + [f"Slack: {e}"]
             return {"slack_data": [], "errors": errs}
 
-    async def _gather_email(self, _state: KairosState) -> dict:
-        # Non-Slack sources bypassed — enable when Gmail connector is configured
-        return {"email_data": [], "status": "email_done"}
+    async def _gather_email(self, state: KairosState) -> dict:
+        try:
+            data = await self.email_agent.fetch()
+            return {"email_data": data, "status": "email_done"}
+        except Exception as e:
+            errs = state.get("errors", []) + [f"Gmail: {e}"]
+            return {"email_data": [], "errors": errs}
 
-    async def _gather_drive(self, _state: KairosState) -> dict:
-        # Non-Slack sources bypassed — enable when Drive connector is configured
-        return {"drive_data": [], "status": "drive_done"}
+    async def _gather_drive(self, state: KairosState) -> dict:
+        try:
+            data = await self.drive_agent.fetch()
+            return {"drive_data": data, "status": "drive_done"}
+        except Exception as e:
+            errs = state.get("errors", []) + [f"Drive: {e}"]
+            return {"drive_data": [], "errors": errs}
 
-    async def _gather_meetings(self, _state: KairosState) -> dict:
-        # Non-Slack sources bypassed — enable when Zoom connector is configured
-        return {"meeting_data": [], "status": "meetings_done"}
+    async def _gather_meetings(self, state: KairosState) -> dict:
+        try:
+            data = await self.meeting_agent.fetch()
+            return {"meeting_data": data, "status": "meetings_done"}
+        except Exception as e:
+            errs = state.get("errors", []) + [f"Meetings: {e}"]
+            return {"meeting_data": [], "errors": errs}
+
+    async def _gather_jira(self, state: KairosState) -> dict:
+        try:
+            issues = await self.jira_connector.get_recent_issues(days_back=30)
+            data = []
+            for issue in issues:
+                data.append({
+                    "id": issue["key"],
+                    "title": issue["summary"],
+                    "content": f"Description: {issue['description']}\nComments:\n" + "\n".join(issue["comments"]),
+                    "url": issue["source_url"],
+                    "date": issue["updated"],
+                    "source": f"Jira {issue['key']}",
+                })
+            return {"jira_data": data, "status": "jira_done"}
+        except Exception as e:
+            errs = state.get("errors", []) + [f"Jira: {e}"]
+            return {"jira_data": [], "errors": errs}
 
     async def _synthesize(self, state: KairosState) -> dict:
         all_batches = (
@@ -122,6 +159,7 @@ class KairosOrchestrator:
             + state.get("email_data", [])
             + state.get("drive_data", [])
             + state.get("meeting_data", [])
+            + state.get("jira_data", [])
         )
 
         count = 0
@@ -142,31 +180,34 @@ class KairosOrchestrator:
         self,
         progress_callback: Callable[[str], Awaitable[None]] | None = None
     ) -> dict:
-        """Full ingestion run. Optionally stream progress via callback."""
-        if progress_callback:
-            await progress_callback("🚀 KAIROS ingestion started...")
+        """Full ingestion run. Serialized via Lock to prevent race conditions."""
+        async with self.ingestion_lock:
+            if progress_callback:
+                await progress_callback("🚀 KAIROS ingestion started...")
 
-        initial: KairosState = {
-            "slack_data": [],
-            "email_data": [],
-            "drive_data": [],
-            "meeting_data": [],
-            "decisions_extracted": 0,
-            "errors": [],
-            "status": "starting",
-        }
+            initial: KairosState = {
+                "slack_data": [],
+                "email_data": [],
+                "drive_data": [],
+                "meeting_data": [],
+                "jira_data": [],
+                "decisions_extracted": 0,
+                "errors": [],
+                "status": "starting",
+            }
 
-        result = await self._graph.ainvoke(initial)
+            # Offload graph execution to event loop
+            result = await self._graph.ainvoke(initial)
 
-        if progress_callback:
-            n = result.get("decisions_extracted", 0)
-            errs = result.get("errors", [])
-            await progress_callback(
-                f"✅ Done. {n} decisions extracted."
-                + (f" Errors: {errs}" if errs else "")
-            )
+            if progress_callback:
+                n = result.get("decisions_extracted", 0)
+                errs = result.get("errors", [])
+                await progress_callback(
+                    f"✅ Done. {n} decisions extracted."
+                    + (f" Errors: {errs}" if errs else "")
+                )
 
-        return result
+            return result
 
     # ── User-Aware Query Pipeline ──────────────────────────────────────────────
 
@@ -174,23 +215,29 @@ class KairosOrchestrator:
         self,
         question: str,
         user_id: str,
+        session_id: str | None = None,
         stream_callback: Callable[[dict], Awaitable[None]] | None = None
     ) -> dict:
         """
         Runs the full multi-agent query answering pipeline:
-          1. Retrieve/create conversation session
+          1. Retrieve/create conversation session (bypasses idle resumption on New Chat)
           2. Classify intent (IntentAgent)
           3. Enrich query and resolve references (ContextAgent)
           4. Execute answering agent (ResearchAgent for deep dive, SynthesisAgent for standard summary)
           5. Save conversation turn to UserMemory
         """
-        session_id = self.user_memory.get_or_create_session(user_id)
+        # If session_id is missing, generate a brand new session ID (fixes New Chat bug)
+        if not session_id:
+            session_id = f"session-{uuid.uuid4().hex[:12]}"
+        
+        # Verify/ensure the session exists in SQLite
+        session_id = await asyncio.to_thread(self.user_memory.get_or_create_session, user_id, session_id)
         
         # 1. Intent Classification
         if stream_callback:
             await stream_callback({"type": "thinking", "agent": "intent_agent", "step": "think", "content": "Analyzing query intent..."})
             
-        history = self.user_memory.get_current_session_context(user_id, max_turns=6)
+        history = await asyncio.to_thread(self.user_memory.get_current_session_context, user_id, max_turns=6, session_id=session_id)
         intent = await self.intent_agent.classify(question, conversation_history=history)
         
         if stream_callback:
@@ -264,7 +311,8 @@ class KairosOrchestrator:
 
         # 4. Save to User Memory
         # Store user question
-        self.user_memory.store_message(
+        await asyncio.to_thread(
+            self.user_memory.store_message,
             user_id=user_id,
             session_id=session_id,
             role="user",
@@ -273,7 +321,8 @@ class KairosOrchestrator:
         )
         
         # Store assistant response
-        self.user_memory.store_message(
+        await asyncio.to_thread(
+            self.user_memory.store_message,
             user_id=user_id,
             session_id=session_id,
             role="assistant",
@@ -287,7 +336,7 @@ class KairosOrchestrator:
         )
 
         # Triggers profile preference summary update asynchronously every 5 queries
-        profile = self.user_memory.get_profile(user_id)
+        profile = await asyncio.to_thread(self.user_memory.get_profile, user_id)
         if profile.total_queries > 0 and profile.total_queries % 5 == 0:
             asyncio.create_task(self._trigger_profile_update(user_id))
 
@@ -304,8 +353,7 @@ class KairosOrchestrator:
     async def _trigger_profile_update(self, user_id: str):
         """Asynchronously triggers LLM summary update on user profile context."""
         try:
-            profile = self.user_memory.get_profile(user_id)
-            history = self.user_memory.get_recent_history(user_id, limit=15)
+            history = await asyncio.to_thread(self.user_memory.get_recent_history, user_id, limit=15)
             if not history:
                 return
 
@@ -333,7 +381,7 @@ User History:
             base_url = config.GROQ_BASE_URL if config.GROQ_API_KEY else config.FIREWORKS_BASE_URL
             model = config.GROQ_MODEL if config.GROQ_API_KEY else config.FIREWORKS_MODEL
 
-            # We create an client locally to avoid circular dependencies or reusing wrong configuration
+            # We create a client locally to avoid circular dependencies
             from openai import AsyncOpenAI
             client = AsyncOpenAI(api_key=api_key, base_url=base_url)
             
@@ -351,12 +399,20 @@ User History:
                     raw = raw[4:]
 
             data = json.loads(raw)
-            profile.department = data.get("department", profile.department)
-            profile.frequent_topics = data.get("frequent_topics", profile.frequent_topics)
-            profile.role_context = data.get("role_context", profile.role_context)
             
-            self.user_memory.save_profile(profile)
-            print(f"[Orchestrator] Updated learned profile for user {user_id}")
+            department = data.get("department", "")
+            frequent_topics = data.get("frequent_topics", [])
+            role_context = data.get("role_context", "")
+            
+            # Use surgical target update instead of save_profile to prevent overwriting stats
+            await asyncio.to_thread(
+                self.user_memory.update_learned_profile,
+                user_id=user_id,
+                department=department,
+                frequent_topics=frequent_topics,
+                role_context=role_context
+            )
+            print(f"[Orchestrator] Updated learned profile context for user {user_id}")
         except Exception as e:
             print(f"[Orchestrator] Profile learn error: {e}")
 
@@ -368,7 +424,7 @@ User History:
 
     async def query_stream(self, question: str):
         """Streams using synthesis agent with default anonymous context."""
-        self.user_memory.get_or_create_session("anonymous")
+        await asyncio.to_thread(self.user_memory.get_or_create_session, "anonymous")
         resolved_context = ResolvedContext(
             original_query=question,
             resolved_query=question,

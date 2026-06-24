@@ -14,6 +14,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import firebase_admin
 from firebase_admin import auth
+from config import config
 
 # ── Firebase Admin SDK Initialisation ─────────────────────────────────────────
 
@@ -27,6 +28,9 @@ try:
     firebase_enabled = True
     print("🔥 KAIROS Auth: Firebase Admin SDK initialised successfully.")
 except Exception as e:
+    is_testing = "PYTEST_CURRENT_TEST" in os.environ or os.environ.get("TESTING") == "true" or os.environ.get("TESTING") == "True"
+    if not config.DEBUG and not is_testing:
+        raise RuntimeError(f"Firebase Admin SDK failed to initialize in production mode: {e}")
     print(f"⚠️ KAIROS Auth Warning: Firebase Admin failed to initialise: {e}")
     print("⚠️ KAIROS Auth: Running backend in Simulation Fallback Mode.")
 
@@ -49,6 +53,13 @@ def verify_token(token: str) -> UserProfile:
     """
     # 1. Handle Simulated Fallback Tokens
     if token.startswith("simulated-") or token.startswith("sim-"):
+        is_testing = "PYTEST_CURRENT_TEST" in os.environ or os.environ.get("TESTING") == "true" or os.environ.get("TESTING") == "True"
+        if not config.DEBUG and not is_testing:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Simulated fallback tokens are not allowed in production mode.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         if "google" in token:
             return UserProfile(
                 uid="sim-google-uid-8123",
@@ -68,6 +79,13 @@ def verify_token(token: str) -> UserProfile:
 
     # 2. Check if Firebase is configured
     if not firebase_enabled:
+        is_testing = "PYTEST_CURRENT_TEST" in os.environ or os.environ.get("TESTING") == "true" or os.environ.get("TESTING") == "True"
+        if not config.DEBUG and not is_testing:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Firebase configuration is missing in production mode.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         # If real client token is sent but Firebase backend is unconfigured,
         # fallback to a mock user to prevent blocking development.
         print(f"⚠️ KAIROS Auth: Unconfigured Firebase Admin. Creating mock user for token: {token[:10]}...")
@@ -108,10 +126,9 @@ async def get_current_user(
 ) -> UserProfile:
     """FastAPI Dependency Injection to authenticate routes."""
     if not credentials:
-        # No credentials provided. In fallback simulation, we don't want to block
-        # completely if the developer makes a request. But let's check config.
-        # If Firebase is enabled, we require auth.
-        if firebase_enabled:
+        is_testing = "PYTEST_CURRENT_TEST" in os.environ or os.environ.get("TESTING") == "true" or os.environ.get("TESTING") == "True"
+        # In production or if Firebase is enabled, authentication credentials are required.
+        if firebase_enabled or (not config.DEBUG and not is_testing):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Authentication credentials were not provided.",

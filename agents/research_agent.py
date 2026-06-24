@@ -117,6 +117,8 @@ class ResearchAgent(BaseAgent):
         date_from: str = None,
         date_to: str = None,
     ) -> list[dict]:
+        if not any([topic, person, date_from, date_to]):
+            return []
         nodes = self.memory.structured_search(
             topic=topic, person=person, date_from=date_from, date_to=date_to
         )

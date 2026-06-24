@@ -52,7 +52,6 @@ export default function IntegrationButton({
   const [error, setError] = useState<string | null>(null);
 
   const cfg = SERVICE_CONFIG[service];
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   const handleConnect = async () => {
     setIsLoading(true);
@@ -65,7 +64,7 @@ export default function IntegrationButton({
     }
 
     try {
-      const res = await fetch(`${apiBase}/api/oauth/${service}/start`, {
+      const res = await fetch(`/api/oauth/${service}/start`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -113,7 +112,7 @@ export default function IntegrationButton({
     setError(null);
 
     try {
-      const res = await fetch(`${apiBase}/api/oauth/disconnect/${service}`, {
+      const res = await fetch(`/api/oauth/disconnect/${service}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -137,10 +136,10 @@ export default function IntegrationButton({
 
   return (
     <div
-      className="flex items-center justify-between p-5 rounded-xl border transition-all"
+      className="flex items-center justify-between p-5 rounded-xl border transition-all theme-transition"
       style={{
-        borderColor: isConnected ? "rgba(34,197,94,0.4)" : "var(--border)",
-        background: isConnected ? "rgba(34,197,94,0.04)" : "var(--surface)",
+        borderColor: isConnected ? "rgba(34,197,94,0.4)" : "rgb(var(--border))",
+        background: isConnected ? "rgba(34,197,94,0.04)" : "rgb(var(--surface))",
       }}
     >
       {/* Left: icon + info */}
@@ -154,18 +153,18 @@ export default function IntegrationButton({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-[var(--text-primary)]">{cfg.name}</span>
+            <span className="text-xs font-bold text-[rgb(var(--text-primary))]">{cfg.name}</span>
             {isConnected && (
               <span className="text-[9px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
                 CONNECTED
               </span>
             )}
           </div>
-          <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{cfg.description}</p>
+          <p className="text-[11px] text-[rgb(var(--text-muted))] mt-0.5">{cfg.description}</p>
           {isConnected && serviceName && (
-            <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
+            <p className="text-[10px] text-[rgb(var(--text-muted))] mt-0.5">
               <span className="text-zinc-500">as</span>{" "}
-              <span className="font-semibold text-[var(--text-primary)]">{serviceName}</span>
+              <span className="font-semibold text-[rgb(var(--text-primary))]">{serviceName}</span>
               {formattedDate && (
                 <span className="text-zinc-600 ml-2">· {formattedDate}</span>
               )}

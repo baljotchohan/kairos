@@ -117,13 +117,13 @@ class IntentAgent(BaseAgent):
         self.think(f"Classifying intent for query: \"{question[:80]}...\"")
 
         # Build prompt with conversation context if available
-        prompt = f"User query: {question}"
+        prompt = f"<user_query>{question}</user_query>"
         if conversation_history:
             history_text = "\n".join([
                 f"{msg['role'].upper()}: {msg['content'][:200]}"
                 for msg in conversation_history[-4:]
             ])
-            prompt = f"Recent conversation:\n{history_text}\n\nNew user query: {question}"
+            prompt = f"<conversation_history>\n{history_text}\n</conversation_history>\n\n<user_query>{question}</user_query>"
             self.think("Including conversation history for follow-up detection")
 
         try:
@@ -140,13 +140,11 @@ class IntentAgent(BaseAgent):
 
             raw = response.choices[0].message.content.strip()
 
-            # Strip markdown code blocks if present
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
+            import re
+            match = re.search(r"(\{.*\})", raw, re.DOTALL)
+            raw_json = match.group(1) if match else raw
 
-            data = json.loads(raw)
+            data = json.loads(raw_json)
 
             intent = QueryIntent(
                 intent=data.get("intent", "search"),

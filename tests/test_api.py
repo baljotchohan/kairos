@@ -20,6 +20,11 @@ def client():
         "sources": [{"id": "d1", "title": "AWS Decision", "date": "2021-08-15",
                      "source": "Slack #engineering", "source_url": "https://slack.example.com"}],
     })
+    mock_orchestrator.query_with_memory = AsyncMock(return_value={
+        "answer": "We chose AWS because the team had existing expertise.",
+        "sources": [{"id": "d1", "title": "AWS Decision", "date": "2021-08-15",
+                     "source": "Slack #engineering", "source_url": "https://slack.example.com"}],
+    })
 
     with TestClient(app, raise_server_exceptions=True) as c:
         app.state.memory = mock_memory

@@ -15,6 +15,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import hmac
+import hashlib
+import time
+import os
 from datetime import datetime
 
 import httpx
@@ -26,6 +30,33 @@ from config import config
 
 router = APIRouter(prefix="/oauth", tags=["oauth"])
 
+# Ephemeral key generated at startup for signing OAuth state parameters
+_OAUTH_SIGNING_KEY = os.urandom(32)
+
+def _generate_state_token(uid: str) -> str:
+    """Generates a signed state token containing the user UID and an expiry timestamp."""
+    expires = int(time.time()) + 600  # 10 minutes expiry
+    payload = f"{uid}:{expires}"
+    sig = hmac.new(_OAUTH_SIGNING_KEY, payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}:{sig}"
+
+def _verify_state_token(state: str) -> str | None:
+    """Verifies the signed state token and returns user UID if valid."""
+    try:
+        parts = state.split(":")
+        if len(parts) != 3:
+            return None
+        uid, expires_str, sig = parts
+        expires = int(expires_str)
+        if time.time() > expires:
+            return None  # Token expired
+        payload = f"{uid}:{expires_str}"
+        expected_sig = hmac.new(_OAUTH_SIGNING_KEY, payload.encode(), hashlib.sha256).hexdigest()
+        if hmac.compare_digest(sig, expected_sig):
+            return uid
+    except Exception:
+        pass
+    return None
 
 # ── SQLite token store (piggybacks on kairos.db) ──────────────────────────────
 
@@ -143,8 +174,9 @@ def _callback_url(service: str) -> str:
 
 @router.get("/slack/start")
 async def slack_start(current_user: UserProfile = Depends(get_current_user)):
+    state = _generate_state_token(current_user.uid)
     if not config.SLACK_CLIENT_ID or config.SLACK_CLIENT_ID == "your_client_id":
-        sim_url = f"{_callback_url('slack')}?code=sim-slack-code&state={current_user.uid}"
+        sim_url = f"{_callback_url('slack')}?code=sim-slack-code&state={state}"
         return {"service": "slack", "url": sim_url}
 
     scopes = "channels:history,channels:read,users:read,groups:history,groups:read"
@@ -153,7 +185,7 @@ async def slack_start(current_user: UserProfile = Depends(get_current_user)):
         f"?client_id={config.SLACK_CLIENT_ID}"
         f"&scope={scopes}"
         f"&redirect_uri={_callback_url('slack')}"
-        f"&state={current_user.uid}"
+        f"&state={state}"
     )
     return {"service": "slack", "url": url}
 
@@ -163,15 +195,19 @@ async def slack_callback(code: str = None, state: str = None, error: str = None)
     if error or not code or not state:
         return _popup_error(error or "Missing authorization code")
 
+    verified_uid = _verify_state_token(state)
+    if not verified_uid:
+        return _popup_error("Security Check Failed: Invalid or expired OAuth state parameter.")
+
     if code == "sim-slack-code":
         team_name = "Helios Tech (Simulated)"
-        _store_token(state, "slack", {
+        _store_token(verified_uid, "slack", {
             "bot_token": "sim-slack-token-12345",
             "team_id": "T-SIMULATED",
             "team_name": team_name,
             "service": "slack",
         })
-        print(f"[OAuth] ✅ Simulated Slack connected uid={state} team={team_name}")
+        print(f"[OAuth] ✅ Simulated Slack connected uid={verified_uid} team={team_name}")
         return _popup_success("Slack", f"Connected to {team_name} (Simulation)")
 
     try:
@@ -190,13 +226,13 @@ async def slack_callback(code: str = None, state: str = None, error: str = None)
             return _popup_error(data.get("error", "Slack auth failed"))
 
         team_name = data.get("team_name") or data.get("team", {}).get("name", "Your Workspace")
-        _store_token(state, "slack", {
+        _store_token(verified_uid, "slack", {
             "bot_token": data.get("access_token"),
             "team_id": data.get("team_id"),
             "team_name": team_name,
             "service": "slack",
         })
-        print(f"[OAuth] ✅ Slack connected uid={state} team={team_name}")
+        print(f"[OAuth] ✅ Slack connected uid={verified_uid} team={team_name}")
         return _popup_success("Slack", f"Connected to {team_name}")
 
     except Exception as e:
@@ -208,8 +244,9 @@ async def slack_callback(code: str = None, state: str = None, error: str = None)
 
 @router.get("/gmail/start")
 async def gmail_start(current_user: UserProfile = Depends(get_current_user)):
+    state = _generate_state_token(current_user.uid)
     if not config.GOOGLE_CLIENT_ID or config.GOOGLE_CLIENT_ID == "your_client_id":
-        sim_url = f"{_callback_url('gmail')}?code=sim-gmail-code&state={current_user.uid}"
+        sim_url = f"{_callback_url('gmail')}?code=sim-gmail-code&state={state}"
         return {"service": "gmail", "url": sim_url}
 
     scopes = " ".join([
@@ -224,7 +261,7 @@ async def gmail_start(current_user: UserProfile = Depends(get_current_user)):
         f"&scope={quote(scopes)}"
         f"&redirect_uri={_callback_url('gmail')}"
         "&response_type=code"
-        f"&state={current_user.uid}"
+        f"&state={state}"
         "&prompt=consent"
         "&access_type=offline"
     )
@@ -236,15 +273,19 @@ async def gmail_callback(code: str = None, state: str = None, error: str = None)
     if error or not code or not state:
         return _popup_error(error or "Missing authorization code")
 
+    verified_uid = _verify_state_token(state)
+    if not verified_uid:
+        return _popup_error("Security Check Failed: Invalid or expired OAuth state parameter.")
+
     if code == "sim-gmail-code":
         email = "developer@heliostech.com"
-        _store_token(state, "google", {
+        _store_token(verified_uid, "google", {
             "refresh_token": "sim-google-refresh-token",
             "access_token": "sim-google-access-token",
             "email": email,
             "service": "google",
         })
-        print(f"[OAuth] ✅ Simulated Gmail + Drive connected uid={state} email={email}")
+        print(f"[OAuth] ✅ Simulated Gmail + Drive connected uid={verified_uid} email={email}")
         return _popup_success("Google", f"Gmail & Drive connected as {email} (Simulation)")
 
     try:
@@ -274,13 +315,13 @@ async def gmail_callback(code: str = None, state: str = None, error: str = None)
             except Exception:
                 pass
 
-        _store_token(state, "google", {
+        _store_token(verified_uid, "google", {
             "refresh_token": data.get("refresh_token"),
             "access_token": data.get("access_token"),
             "email": email,
             "service": "google",
         })
-        print(f"[OAuth] ✅ Gmail + Drive connected uid={state} email={email}")
+        print(f"[OAuth] ✅ Gmail + Drive connected uid={verified_uid} email={email}")
         return _popup_success("Google", f"Gmail & Drive connected as {email}")
 
     except Exception as e:
@@ -292,8 +333,13 @@ async def gmail_callback(code: str = None, state: str = None, error: str = None)
 
 @router.get("/jira/start")
 async def jira_start(current_user: UserProfile = Depends(get_current_user)):
+    state = _generate_state_token(current_user.uid)
+    # Jira uses API token (no user OAuth flow) — auto-connect via env
+    if config.JIRA_API_TOKEN and config.JIRA_URL and "atlassian.net" in config.JIRA_URL:
+        sim_url = f"{_callback_url('jira')}?code=sim-jira-code&state={state}"
+        return {"service": "jira", "url": sim_url}
     if not config.JIRA_CLIENT_ID or config.JIRA_CLIENT_ID == "your_client_id":
-        sim_url = f"{_callback_url('jira')}?code=sim-jira-code&state={current_user.uid}"
+        sim_url = f"{_callback_url('jira')}?code=sim-jira-code&state={state}"
         return {"service": "jira", "url": sim_url}
 
     url = (
@@ -302,7 +348,7 @@ async def jira_start(current_user: UserProfile = Depends(get_current_user)):
         "&response_type=code"
         f"&redirect_uri={_callback_url('jira')}"
         "&scope=read%3Ajira-work%20offline_access"
-        f"&state={current_user.uid}"
+        f"&state={state}"
         "&prompt=consent"
     )
     return {"service": "jira", "url": url}
@@ -313,16 +359,20 @@ async def jira_callback(code: str = None, state: str = None, error: str = None):
     if error or not code or not state:
         return _popup_error(error or "Missing authorization code")
 
+    verified_uid = _verify_state_token(state)
+    if not verified_uid:
+        return _popup_error("Security Check Failed: Invalid or expired OAuth state parameter.")
+
     if code == "sim-jira-code":
-        email = "developer@heliostech.com"
-        _store_token(state, "jira", {
-            "access_token": "sim-jira-access-token",
-            "refresh_token": "sim-jira-refresh-token",
-            "email": email,
+        workspace = config.JIRA_URL.replace("https://", "") if config.JIRA_URL else "Jira"
+        _store_token(verified_uid, "jira", {
+            "access_token": config.JIRA_API_TOKEN,
+            "email": config.JIRA_EMAIL,
+            "workspace": workspace,
             "service": "jira",
         })
-        print(f"[OAuth] ✅ Simulated Jira connected uid={state} email={email}")
-        return _popup_success("Jira", f"Connected as {email} (Simulation)")
+        print(f"[OAuth] ✅ Jira connected uid={verified_uid} workspace={workspace}")
+        return _popup_success("Jira", f"Connected to {workspace}")
 
     try:
         async with httpx.AsyncClient() as client:
@@ -350,13 +400,13 @@ async def jira_callback(code: str = None, state: str = None, error: str = None):
             except Exception:
                 pass
 
-        _store_token(state, "jira", {
+        _store_token(verified_uid, "jira", {
             "access_token": data.get("access_token"),
             "refresh_token": data.get("refresh_token"),
             "email": email,
             "service": "jira",
         })
-        print(f"[OAuth] ✅ Jira connected uid={state} email={email}")
+        print(f"[OAuth] ✅ Jira connected uid={verified_uid} email={email}")
         return _popup_success("Jira", f"Connected as {email}")
 
     except Exception as e:
@@ -368,8 +418,13 @@ async def jira_callback(code: str = None, state: str = None, error: str = None):
 
 @router.get("/zoom/start")
 async def zoom_start(current_user: UserProfile = Depends(get_current_user)):
+    state = _generate_state_token(current_user.uid)
+    # Zoom uses Server-to-Server OAuth (no user auth flow) — auto-connect via env
+    if config.ZOOM_CLIENT_ID and config.ZOOM_CLIENT_ID != "your_client_id":
+        sim_url = f"{_callback_url('zoom')}?code=sim-zoom-code&state={state}"
+        return {"service": "zoom", "url": sim_url}
     if not config.ZOOM_CLIENT_ID or config.ZOOM_CLIENT_ID == "your_client_id":
-        sim_url = f"{_callback_url('zoom')}?code=sim-zoom-code&state={current_user.uid}"
+        sim_url = f"{_callback_url('zoom')}?code=sim-zoom-code&state={state}"
         return {"service": "zoom", "url": sim_url}
 
     url = (
@@ -377,7 +432,7 @@ async def zoom_start(current_user: UserProfile = Depends(get_current_user)):
         "?response_type=code"
         f"&client_id={config.ZOOM_CLIENT_ID}"
         f"&redirect_uri={_callback_url('zoom')}"
-        f"&state={current_user.uid}"
+        f"&state={state}"
     )
     return {"service": "zoom", "url": url}
 
@@ -387,14 +442,18 @@ async def zoom_callback(code: str = None, state: str = None, error: str = None):
     if error or not code or not state:
         return _popup_error(error or "Missing authorization code")
 
+    verified_uid = _verify_state_token(state)
+    if not verified_uid:
+        return _popup_error("Security Check Failed: Invalid or expired OAuth state parameter.")
+
     if code == "sim-zoom-code":
-        _store_token(state, "zoom", {
-            "access_token": "sim-zoom-access-token",
-            "refresh_token": "sim-zoom-refresh-token",
+        _store_token(verified_uid, "zoom", {
+            "access_token": config.ZOOM_CLIENT_ID,
+            "account_id": config.ZOOM_ACCOUNT_ID,
             "service": "zoom",
         })
-        print(f"[OAuth] ✅ Simulated Zoom connected uid={state}")
-        return _popup_success("Zoom", "Meeting transcription enabled (Simulation)")
+        print(f"[OAuth] ✅ Zoom connected uid={verified_uid}")
+        return _popup_success("Zoom", "Meeting transcription enabled")
 
     try:
         async with httpx.AsyncClient() as client:
@@ -411,12 +470,12 @@ async def zoom_callback(code: str = None, state: str = None, error: str = None):
         if "error" in data:
             return _popup_error(data["error"])
 
-        _store_token(state, "zoom", {
+        _store_token(verified_uid, "zoom", {
             "access_token": data.get("access_token"),
             "refresh_token": data.get("refresh_token"),
             "service": "zoom",
         })
-        print(f"[OAuth] ✅ Zoom connected uid={state}")
+        print(f"[OAuth] ✅ Zoom connected uid={verified_uid}")
         return _popup_success("Zoom", "Meeting transcription enabled")
 
     except Exception as e:
@@ -428,17 +487,47 @@ async def zoom_callback(code: str = None, state: str = None, error: str = None):
 
 @router.get("/status")
 async def get_status(current_user: UserProfile = Depends(get_current_user)):
-    """Returns connection status for all 4 OAuth services for the current user."""
-    # frontend uses "gmail"; token is stored under "google" (Google OAuth covers Gmail+Drive)
+    """Returns connection status for all 4 OAuth services for the current user.
+    Falls back to env-based credentials when no per-user OAuth token exists."""
+
     frontend_to_storage = {"slack": "slack", "gmail": "google", "jira": "jira", "zoom": "zoom"}
+
+    # Env-based fallback status (real credentials configured server-side)
+    env_status = {
+        "slack": {
+            "connected": bool(config.SLACK_BOT_TOKEN and len(config.SLACK_BOT_TOKEN) > 30 and config.SLACK_BOT_TOKEN != "xoxb-your-token"),
+            "service_name": "Slack Workspace",
+        },
+        "gmail": {
+            "connected": bool(config.GOOGLE_REFRESH_TOKEN),
+            "service_name": "baljotchohan23@gmail.com",
+        },
+        "jira": {
+            "connected": bool(config.JIRA_API_TOKEN and config.JIRA_URL and "atlassian.net" in config.JIRA_URL),
+            "service_name": config.JIRA_URL.replace("https://", "") if config.JIRA_URL else "Jira",
+        },
+        "zoom": {
+            "connected": bool(config.ZOOM_CLIENT_ID and config.ZOOM_ACCOUNT_ID and config.ZOOM_CLIENT_ID != "your_client_id"),
+            "service_name": "Zoom Account",
+        },
+    }
+
     result = {}
     for frontend_key, storage_key in frontend_to_storage.items():
+        # Prefer per-user OAuth token if present
         data = _get_token(current_user.uid, storage_key)
         if data:
             result[frontend_key] = {
                 "connected": True,
                 "connected_at": data.get("connected_at"),
                 "service_name": data.get("team_name") or data.get("email") or frontend_key.title(),
+            }
+        elif env_status[frontend_key]["connected"]:
+            # Fall back to server-side env credentials
+            result[frontend_key] = {
+                "connected": True,
+                "connected_at": None,
+                "service_name": env_status[frontend_key]["service_name"],
             }
         else:
             result[frontend_key] = {"connected": False}

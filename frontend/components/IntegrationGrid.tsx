@@ -30,8 +30,6 @@ export default function IntegrationGrid({ token }: IntegrationGridProps) {
   const [connections, setConnections] = useState<ConnectionsMap>(DEFAULT_STATE);
   const [isFetching, setIsFetching] = useState(true);
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
   const fetchStatus = useCallback(async () => {
     if (!token) {
       setIsFetching(false);
@@ -39,7 +37,7 @@ export default function IntegrationGrid({ token }: IntegrationGridProps) {
     }
 
     try {
-      const res = await fetch(`${apiBase}/api/oauth/status`, {
+      const res = await fetch("/api/oauth/status", {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -52,7 +50,7 @@ export default function IntegrationGrid({ token }: IntegrationGridProps) {
     } finally {
       setIsFetching(false);
     }
-  }, [token, apiBase]);
+  }, [token]);
 
   useEffect(() => {
     fetchStatus();
@@ -64,7 +62,7 @@ export default function IntegrationGrid({ token }: IntegrationGridProps) {
     <div className="space-y-3">
       {/* Progress bar */}
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">
+        <span className="text-[10px] font-mono text-[rgb(var(--text-muted))] uppercase tracking-wider">
           {connectedCount}/{SERVICES.length} connectors active
         </span>
         {isFetching && (

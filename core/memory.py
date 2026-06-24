@@ -15,6 +15,7 @@ from typing import Optional
 
 import chromadb
 from chromadb import Documents, EmbeddingFunction, Embeddings
+
 from openai import OpenAI
 
 from config import config
@@ -307,5 +308,11 @@ class KairosMemory:
             conn.commit()
 
     @staticmethod
-    def make_id() -> str:
+    def make_id(title: str | None = None, source_url: str | None = None) -> str:
+        if title and source_url:
+            import uuid
+            # Deterministic namespace for KAIROS decisions
+            namespace = uuid.UUID("3c8f8d22-1d57-4b77-84a1-f761d4aef822")
+            unique_key = f"{title.strip().lower()}:{source_url.strip().lower()}"
+            return str(uuid.uuid5(namespace, unique_key))
         return str(uuid.uuid4())

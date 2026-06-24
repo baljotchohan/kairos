@@ -9,6 +9,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        bg: "rgb(var(--bg) / <alpha-value>)",
+        surface: "rgb(var(--surface) / <alpha-value>)",
+        "surface-hover": "rgb(var(--surface-hover) / <alpha-value>)",
+        border: "rgb(var(--border) / <alpha-value>)",
+        "border-focus": "rgb(var(--border-focus) / <alpha-value>)",
+        accent: "rgb(var(--accent) / <alpha-value>)",
+        "text-primary": "rgb(var(--text-primary) / <alpha-value>)",
+        "text-muted": "rgb(var(--text-muted) / <alpha-value>)",
+        "graph-node-bg": "rgb(var(--graph-node-bg) / <alpha-value>)",
+        "graph-node-border": "rgb(var(--graph-node-border) / <alpha-value>)",
         kairos: {
           bg: "#080808",
           surface: "#111111",

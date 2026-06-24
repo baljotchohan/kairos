@@ -98,11 +98,17 @@ _ALLOWED_ORIGINS = [
     "http://localhost:3001",
     "http://127.0.0.1:3001",
     config.FRONTEND_URL,
+    # Vercel deployments (all previews + production)
+    "https://kairos-memory-os.vercel.app",
 ]
+
+# Also allow all *.vercel.app and *.hf.space origins via regex
+_ALLOWED_ORIGIN_REGEX = r"https://(.*\.vercel\.app|.*\.hf\.space)"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_ALLOWED_ORIGINS,
+    allow_origin_regex=_ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
