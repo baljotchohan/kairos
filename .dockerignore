@@ -3,12 +3,13 @@
 .env.*
 firebase-service-account.json
 
-# Local dev data — use docker-compose volume mounts instead
+# Local dev data — use docker-compose volume mounts instead.
+# NOTE: do NOT ignore data/ — it is the Python package holding the demo
+# decision dataset (data/demo/helios_tech.py) needed for startup auto-seed.
 chroma_db/
 kairos.db
 demo.db
 obsidian_vault/
-data/
 
 # Python artifacts
 __pycache__/

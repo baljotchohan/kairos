@@ -45,19 +45,20 @@ async def lifespan(app: FastAPI):
     orchestrator = KairosOrchestrator(memory=memory)
     app.state.orchestrator = orchestrator
 
-    # Auto-seed demo data when memory is empty. HF Spaces' free tier wipes
-    # /data on every rebuild/restart, so this guarantees the demo always has
-    # the Helios Tech decision set without a manual seeding step.
-    try:
-        if memory.graph.stats().get("total_decisions", 0) == 0:
-            from data.demo.helios_tech import get_demo_decisions
-            decisions = get_demo_decisions()
-            print(f"🌱 Empty memory — seeding {len(decisions)} Helios Tech demo decisions...")
-            for node in decisions:
-                memory.store(node)
-            print(f"✅ Seeded — {memory.graph.stats()}")
-    except Exception as e:
-        print(f"⚠️  Demo auto-seed skipped: {e}")
+    # Optional demo seed — OFF by default. KAIROS runs on REAL ingested data
+    # from the user's connected accounts (Slack/Gmail/Drive/Jira/Zoom). Set
+    # SEED_DEMO_DATA=true only if you want the Helios Tech sample decisions.
+    if config.SEED_DEMO_DATA:
+        try:
+            if memory.graph.stats().get("total_decisions", 0) == 0:
+                from data.demo.helios_tech import get_demo_decisions
+                decisions = get_demo_decisions()
+                print(f"🌱 SEED_DEMO_DATA=true — seeding {len(decisions)} demo decisions...")
+                for node in decisions:
+                    memory.store(node)
+                print(f"✅ Seeded — {memory.graph.stats()}")
+        except Exception as e:
+            print(f"⚠️  Demo seed skipped: {e}")
 
     print(f"✅ Memory ready — {memory.graph.stats()}")
 

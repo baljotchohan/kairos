@@ -64,6 +64,8 @@ class Config:
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8000")
+    # Demo seed is OFF by default — KAIROS runs on real ingested data.
+    SEED_DEMO_DATA: bool = os.getenv("SEED_DEMO_DATA", "false").lower() == "true"
 
     # ── Ingestion ──────────────────────────────────────────────────────────────
     SLACK_LOOKBACK_DAYS: int = int(os.getenv("SLACK_LOOKBACK_DAYS", "30"))
