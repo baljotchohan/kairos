@@ -72,6 +72,11 @@ class Config:
     EMAIL_LOOKBACK_DAYS: int = int(os.getenv("EMAIL_LOOKBACK_DAYS", "30"))
     INGEST_INTERVAL_MINUTES: int = int(os.getenv("INGEST_INTERVAL_MINUTES", "60"))
     MAX_MESSAGES_PER_CHANNEL: int = int(os.getenv("MAX_MESSAGES_PER_CHANNEL", "500"))
+    # Throttle decision extraction to stay under the LLM provider's token/min
+    # limit (Groq free tier = 6000 TPM). Items beyond the cap are picked up on
+    # the next ingestion cycle (extraction is idempotent).
+    MAX_EXTRACT_PER_CYCLE: int = int(os.getenv("MAX_EXTRACT_PER_CYCLE", "10"))
+    EXTRACT_DELAY_SECONDS: float = float(os.getenv("EXTRACT_DELAY_SECONDS", "3"))
 
 
 config = Config()

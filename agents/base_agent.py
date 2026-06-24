@@ -306,25 +306,47 @@ class BaseAgent(ABC):
         Runs a chat completion with a dynamic fallback from Groq to Fireworks AI.
         If the primary client (e.g. Groq) fails due to capacity/rate limits, it falls back to Fireworks AI.
         """
+        import asyncio
+        import re
         from config import config
         from openai import AsyncOpenAI
-        
-        is_groq = config.GROQ_API_KEY and model == config.GROQ_MODEL
-        
-        try:
-            return await client.chat.completions.create(model=model, messages=messages, stream=stream, **kwargs)
-        except Exception as e:
-            if is_groq and config.FIREWORKS_API_KEY:
-                print(f"[{self.name}] Primary model failed ({e}). Falling back to Fireworks AI...")
+
+        is_groq = bool(config.GROQ_API_KEY) and model == config.GROQ_MODEL
+
+        # Retry the primary model on rate-limit (429), honoring the suggested
+        # wait, before falling back. Groq free tier has a low TPM limit, so
+        # ingestion bursts hit 429 — retrying keeps extraction working.
+        last_err = None
+        for attempt in range(3):
+            try:
+                return await client.chat.completions.create(
+                    model=model, messages=messages, stream=stream, **kwargs
+                )
+            except Exception as e:
+                last_err = e
+                msg = str(e)
+                is_rate_limit = "429" in msg or "rate_limit" in msg or "rate limit" in msg.lower()
+                if is_rate_limit and attempt < 2:
+                    m = re.search(r"try again in ([\d.]+)s", msg)
+                    wait = float(m.group(1)) + 0.5 if m else 8.0
+                    wait = min(wait, 30.0)
+                    print(f"[{self.name}] Rate limited — retrying in {wait:.1f}s (attempt {attempt + 1}/3)")
+                    await asyncio.sleep(wait)
+                    continue
+                break
+
+        # Primary exhausted — try Fireworks only if a real (working) key exists.
+        if is_groq and config.FIREWORKS_API_KEY:
+            try:
+                print(f"[{self.name}] Primary model failed ({last_err}). Trying Fireworks AI...")
                 fw_client = AsyncOpenAI(
                     api_key=config.FIREWORKS_API_KEY,
-                    base_url=config.FIREWORKS_BASE_URL
+                    base_url=config.FIREWORKS_BASE_URL,
                 )
                 return await fw_client.chat.completions.create(
-                    model=config.FIREWORKS_MODEL,
-                    messages=messages,
-                    stream=stream,
-                    **kwargs
+                    model=config.FIREWORKS_MODEL, messages=messages, stream=stream, **kwargs
                 )
-            else:
-                raise
+            except Exception as fw_err:
+                print(f"[{self.name}] Fireworks fallback also failed ({fw_err}).")
+                raise last_err or fw_err
+        raise last_err or RuntimeError("chat completion failed")

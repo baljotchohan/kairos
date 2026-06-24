@@ -169,16 +169,28 @@ class KairosOrchestrator:
             + state.get("jira_data", [])
         )
 
+        # Cap items per cycle to respect the LLM provider's token-per-minute
+        # limit (Groq free tier is 6000 TPM). Extraction is idempotent
+        # (deterministic IDs + INSERT OR REPLACE), so successive cycles keep
+        # processing more of the backlog without duplicating.
+        import asyncio
+        max_per_cycle = config.MAX_EXTRACT_PER_CYCLE
+        batches = all_batches[:max_per_cycle]
+
         count = 0
         errors = list(state.get("errors", []))
 
-        for batch in all_batches:
+        for i, batch in enumerate(batches):
             try:
                 extracted = await self.synthesis_agent.extract_decisions(batch)
                 count += len(extracted)
             except Exception as e:
                 errors.append(f"Synthesis: {e}")
+            # Small spacing between calls to smooth out token-per-minute bursts.
+            if i < len(batches) - 1:
+                await asyncio.sleep(config.EXTRACT_DELAY_SECONDS)
 
+        print(f"[Ingestion] Synthesize complete — {count} decisions from {len(batches)}/{len(all_batches)} items")
         return {"decisions_extracted": count, "errors": errors, "status": "complete"}
 
     # ── Ingestion API ──────────────────────────────────────────────────────────

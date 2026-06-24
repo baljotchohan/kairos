@@ -118,7 +118,7 @@ class SynthesisAgent(BaseAgent):
         prompt = f"""Source type: {source_type}
 Date: {content_date}
 <source_content>
-{text[:6000]}
+{text[:3000]}
 </source_content>
 
 Extract all decisions from the above content."""
@@ -132,7 +132,7 @@ Extract all decisions from the above content."""
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.1,
-                max_tokens=2000,
+                max_tokens=1200,
             )
 
             raw = response.choices[0].message.content.strip()
