@@ -161,13 +161,23 @@ class KairosOrchestrator:
             return {"jira_data": [], "errors": errs}
 
     async def _synthesize(self, state: KairosState) -> dict:
-        all_batches = (
-            state.get("slack_data", [])
-            + state.get("email_data", [])
-            + state.get("drive_data", [])
-            + state.get("meeting_data", [])
-            + state.get("jira_data", [])
-        )
+        # Interleave sources (round-robin) so a capped cycle samples across
+        # Slack/email/drive/meeting/jira instead of burning the whole budget on
+        # the first source (e.g. casual Slack messages) and never reaching the
+        # decision-rich ones (Jira tickets, email approvals).
+        sources = [
+            state.get("jira_data", []),     # tickets/epics — richest in decisions
+            state.get("email_data", []),    # approvals/threads
+            state.get("drive_data", []),    # docs/specs
+            state.get("meeting_data", []),  # transcripts
+            state.get("slack_data", []),    # chat — often casual
+        ]
+        all_batches = []
+        from itertools import zip_longest
+        for group in zip_longest(*sources):
+            for item in group:
+                if item is not None:
+                    all_batches.append(item)
 
         # Cap items per cycle to respect the LLM provider's token-per-minute
         # limit (Groq free tier is 6000 TPM). Extraction is idempotent
