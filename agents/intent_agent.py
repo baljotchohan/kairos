@@ -56,6 +56,7 @@ INTENT_SYSTEM = """You are an intent classifier for KAIROS, a Company Organizati
 Classify the user's query into exactly one intent category and extract key entities.
 
 Intent categories:
+- "greeting": Casual conversation, greetings, small talk, thanks, or meta questions about KAIROS itself ("hi", "hello", "how are you", "who are you", "what can you do", "thanks", "help"). NOT a request to look up a past decision.
 - "search": General lookup of past decisions or organizational knowledge
 - "follow_up": References previous conversation context ("tell me more", "that decision", "it", "what about...")
 - "comparison": Comparing alternatives or options that were considered

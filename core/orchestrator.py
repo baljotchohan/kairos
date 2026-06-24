@@ -77,6 +77,13 @@ class KairosOrchestrator:
         self.context_agent = ContextAgent(user_memory=self.user_memory)
         self.research_agent = ResearchAgent(memory=memory)
 
+        # Lightweight LLM client for conversational (greeting/small-talk) replies
+        from openai import AsyncOpenAI
+        _api_key = config.GROQ_API_KEY or config.FIREWORKS_API_KEY
+        _base_url = config.GROQ_BASE_URL if config.GROQ_API_KEY else config.FIREWORKS_BASE_URL
+        self._chat_model = config.GROQ_MODEL if config.GROQ_API_KEY else config.FIREWORKS_MODEL
+        self._chat_client = AsyncOpenAI(api_key=_api_key, base_url=_base_url)
+
         self._graph = self._build_graph()
 
     # ── Ingestion Graph construction ───────────────────────────────────────────
@@ -265,6 +272,26 @@ class KairosOrchestrator:
         merged_traces.extend(self.intent_agent.get_trace())
         merged_traces.extend(self.context_agent.get_trace())
 
+        # 3a. Greeting / small-talk → reply conversationally, skip memory search
+        if intent.intent == "greeting":
+            answer = await self._conversational_reply(question, history, stream_callback)
+            await asyncio.to_thread(
+                self.user_memory.store_message,
+                user_id=user_id, session_id=session_id,
+                role="user", content=question, query_intent=intent.intent,
+            )
+            await asyncio.to_thread(
+                self.user_memory.store_message,
+                user_id=user_id, session_id=session_id,
+                role="assistant", content=answer, query_intent=intent.intent,
+                metadata={"sources": [], "confidence": 1.0},
+            )
+            return {
+                "answer": answer, "sources": [], "intent": intent.to_dict(),
+                "confidence": 1.0, "traces": [s.to_dict() for s in merged_traces],
+                "session_id": session_id, "user_context": resolved_context.to_dict(),
+            }
+
         # If it is comparison, timeline, person lookup or user asks for a deep dive, run ResearchAgent
         is_research = intent.intent in ("comparison", "timeline", "person_lookup", "what_if")
         
@@ -349,6 +376,55 @@ class KairosOrchestrator:
             "session_id": session_id,
             "user_context": resolved_context.to_dict()
         }
+
+    async def _conversational_reply(
+        self,
+        question: str,
+        history: list,
+        stream_callback=None,
+    ) -> str:
+        """Generate a natural, on-brand reply for greetings / small talk and
+        stream it token-by-token. No memory search — avoids the robotic
+        'no recorded decision' message for casual chat."""
+        system = (
+            "You are KAIROS, a Company Organizational Memory AI. You connect to a "
+            "company's Slack, Gmail, Drive, Jira and Zoom, extract every decision and "
+            "its context, and let people ask why past decisions were made. "
+            "Right now the user is making small talk or greeting you — reply warmly, "
+            "briefly (1-3 sentences), in a confident, friendly tone. Do NOT say you "
+            "have no records. Invite them to ask about a past decision, and give one "
+            "concrete example they could ask (e.g. 'Why did we choose this vendor?')."
+        )
+        msgs = [{"role": "system", "content": system}]
+        for m in (history or [])[-4:]:
+            role = m.get("role", "user")
+            if role in ("user", "assistant"):
+                msgs.append({"role": role, "content": str(m.get("content", ""))[:500]})
+        msgs.append({"role": "user", "content": question})
+
+        answer = ""
+        try:
+            stream = await self._chat_client.chat.completions.create(
+                model=self._chat_model, messages=msgs,
+                temperature=0.6, max_tokens=200, stream=True,
+            )
+            async for chunk in stream:
+                if not chunk.choices:
+                    continue
+                token = chunk.choices[0].delta.content
+                if token:
+                    answer += token
+                    if stream_callback:
+                        await stream_callback({"type": "token", "content": token})
+        except Exception as e:
+            print(f"[Orchestrator] Conversational reply error: {e}")
+            answer = (
+                "Hi! I'm KAIROS — your company's organizational memory. Ask me why a "
+                "past decision was made, e.g. \"Why did we choose this vendor?\""
+            )
+            if stream_callback:
+                await stream_callback({"type": "token", "content": answer})
+        return answer.strip()
 
     async def _trigger_profile_update(self, user_id: str):
         """Asynchronously triggers LLM summary update on user profile context."""
