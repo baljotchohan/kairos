@@ -334,10 +334,7 @@ async def gmail_callback(code: str = None, state: str = None, error: str = None)
 @router.get("/jira/start")
 async def jira_start(current_user: UserProfile = Depends(get_current_user)):
     state = _generate_state_token(current_user.uid)
-    # Jira uses API token (no user OAuth flow) — auto-connect via env
-    if config.JIRA_API_TOKEN and config.JIRA_URL and "atlassian.net" in config.JIRA_URL:
-        sim_url = f"{_callback_url('jira')}?code=sim-jira-code&state={state}"
-        return {"service": "jira", "url": sim_url}
+    # Real OAuth if client credentials are configured
     if not config.JIRA_CLIENT_ID or config.JIRA_CLIENT_ID == "your_client_id":
         sim_url = f"{_callback_url('jira')}?code=sim-jira-code&state={state}"
         return {"service": "jira", "url": sim_url}
@@ -419,6 +416,10 @@ async def jira_callback(code: str = None, state: str = None, error: str = None):
 @router.get("/zoom/start")
 async def zoom_start(current_user: UserProfile = Depends(get_current_user)):
     state = _generate_state_token(current_user.uid)
+    # Server-to-Server OAuth (ZOOM_ACCOUNT_ID set) — auto-connect using account credentials, no redirect needed
+    if config.ZOOM_ACCOUNT_ID and config.ZOOM_CLIENT_ID:
+        sim_url = f"{_callback_url('zoom')}?code=sim-zoom-code&state={state}"
+        return {"service": "zoom", "url": sim_url}
     if not config.ZOOM_CLIENT_ID or config.ZOOM_CLIENT_ID == "your_client_id":
         sim_url = f"{_callback_url('zoom')}?code=sim-zoom-code&state={state}"
         return {"service": "zoom", "url": sim_url}
@@ -484,49 +485,18 @@ async def zoom_callback(code: str = None, state: str = None, error: str = None):
 @router.get("/status")
 async def get_status(current_user: UserProfile = Depends(get_current_user)):
     """Returns connection status for all 4 OAuth services for the current user.
-    Falls back to env-based credentials when no per-user OAuth token exists."""
+    Only shows connected when the user has explicitly connected via OAuth popup."""
 
     frontend_to_storage = {"slack": "slack", "gmail": "google", "jira": "jira", "zoom": "zoom"}
 
-    # Env-based fallback status (real credentials configured server-side)
-    env_status = {
-        "slack": {
-            "connected": bool(config.SLACK_BOT_TOKEN and len(config.SLACK_BOT_TOKEN) > 30 and config.SLACK_BOT_TOKEN != "xoxb-your-token"),
-            "service_name": "Slack Workspace",
-        },
-        "gmail": {
-            "connected": bool(config.GOOGLE_REFRESH_TOKEN),
-            "service_name": "baljotchohan23@gmail.com",
-        },
-        "jira": {
-            "connected": bool(config.JIRA_API_TOKEN and config.JIRA_URL and "atlassian.net" in config.JIRA_URL),
-            "service_name": config.JIRA_URL.replace("https://", "") if config.JIRA_URL else "Jira",
-        },
-        "zoom": {
-            "connected": bool(config.ZOOM_CLIENT_ID and config.ZOOM_ACCOUNT_ID and config.ZOOM_CLIENT_ID != "your_client_id"),
-            "service_name": "Zoom Account",
-        },
-    }
-
     result = {}
     for frontend_key, storage_key in frontend_to_storage.items():
-        # Prefer per-user OAuth token if present
         data = _get_token(current_user.uid, storage_key)
-        if data:
-            if data.get("disconnected"):
-                result[frontend_key] = {"connected": False}
-            else:
-                result[frontend_key] = {
-                    "connected": True,
-                    "connected_at": data.get("connected_at"),
-                    "service_name": data.get("team_name") or data.get("email") or frontend_key.title(),
-                }
-        elif env_status[frontend_key]["connected"]:
-            # Fall back to server-side env credentials
+        if data and not data.get("disconnected"):
             result[frontend_key] = {
                 "connected": True,
-                "connected_at": None,
-                "service_name": env_status[frontend_key]["service_name"],
+                "connected_at": data.get("connected_at"),
+                "service_name": data.get("team_name") or data.get("email") or data.get("workspace") or frontend_key.title(),
             }
         else:
             result[frontend_key] = {"connected": False}
