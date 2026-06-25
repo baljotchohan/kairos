@@ -2,6 +2,9 @@
 Fireworks AI client — all LLM and embedding calls go through here.
 Uses AMD GPU hardware via Fireworks API (OpenAI-compatible endpoint).
 Never import openai directly in agents/connectors — use this client.
+
+Provider priority for text completions: Groq → Gemini → Fireworks
+On 429 (rate limit), automatically falls back to the next provider.
 """
 
 import json
@@ -12,14 +15,19 @@ import httpx
 from config import config
 
 
+def _providers() -> list[tuple[str, str, str]]:
+    """Return (api_key, base_url, model) in priority order, skipping unconfigured."""
+    candidates = [
+        (config.GROQ_API_KEY, config.GROQ_BASE_URL, config.GROQ_MODEL),
+        (config.GEMINI_API_KEY, config.GEMINI_BASE_URL, config.GEMINI_MODEL),
+        (config.FIREWORKS_API_KEY, config.FIREWORKS_BASE_URL, config.FIREWORKS_MODEL),
+    ]
+    return [(k, u, m) for k, u, m in candidates if k]
+
+
 class FireworksClient:
     def __init__(self):
-        # Text completions client configs (Groq -> Fireworks)
-        self.api_key = config.GROQ_API_KEY or config.FIREWORKS_API_KEY
-        self.base_url = config.GROQ_BASE_URL if config.GROQ_API_KEY else config.FIREWORKS_BASE_URL
-        self.model = config.GROQ_MODEL if config.GROQ_API_KEY else config.FIREWORKS_MODEL
-
-        # Embeddings client configs (Gemini -> Fireworks)
+        # Embeddings: Gemini → Fireworks
         self.embed_api_key = config.GEMINI_API_KEY or config.FIREWORKS_API_KEY
         self.embed_base_url = config.GEMINI_BASE_URL if config.GEMINI_API_KEY else config.FIREWORKS_BASE_URL
         self.embed_model = config.GEMINI_EMBED_MODEL if config.GEMINI_API_KEY else config.FIREWORKS_EMBED_MODEL
@@ -32,19 +40,33 @@ class FireworksClient:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
-        async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.post(
-                f"{self.base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json={
-                    "model": self.model,
-                    "messages": messages,
-                    "max_tokens": max_tokens,
-                    "temperature": 0.1,
-                },
-            )
-            response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
+        last_err = None
+        for api_key, base_url, model in _providers():
+            try:
+                async with httpx.AsyncClient(timeout=60) as client:
+                    response = await client.post(
+                        f"{base_url}/chat/completions",
+                        headers={"Authorization": f"Bearer {api_key}"},
+                        json={
+                            "model": model,
+                            "messages": messages,
+                            "max_tokens": max_tokens,
+                            "temperature": 0.1,
+                        },
+                    )
+                    if response.status_code == 429:
+                        print(f"[AI] Rate limited on {base_url} ({model}) — trying next provider")
+                        last_err = f"429 on {model}"
+                        continue
+                    response.raise_for_status()
+                    return response.json()["choices"][0]["message"]["content"]
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    print(f"[AI] Rate limited on {base_url} ({model}) — trying next provider")
+                    last_err = str(e)
+                    continue
+                raise
+        raise RuntimeError(f"All AI providers rate-limited or unavailable. Last error: {last_err}")
 
     async def stream(
         self, prompt: str, system: str = None, max_tokens: int = 2000
@@ -54,13 +76,37 @@ class FireworksClient:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
+        # Find first non-rate-limited provider
+        chosen = None
+        for api_key, base_url, model in _providers():
+            try:
+                async with httpx.AsyncClient(timeout=10) as probe:
+                    r = await probe.post(
+                        f"{base_url}/chat/completions",
+                        headers={"Authorization": f"Bearer {api_key}"},
+                        json={"model": model, "messages": [{"role": "user", "content": "hi"}], "max_tokens": 1},
+                    )
+                    if r.status_code == 429:
+                        print(f"[AI] Rate limited on {base_url} ({model}) — trying next provider")
+                        continue
+                    chosen = (api_key, base_url, model)
+                    break
+            except Exception:
+                chosen = (api_key, base_url, model)
+                break
+
+        if not chosen:
+            yield "Error: all AI providers are currently rate-limited. Please try again in a few minutes."
+            return
+
+        api_key, base_url, model = chosen
         async with httpx.AsyncClient(timeout=120) as client:
             async with client.stream(
                 "POST",
-                f"{self.base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {self.api_key}"},
+                f"{base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
                 json={
-                    "model": self.model,
+                    "model": model,
                     "messages": messages,
                     "max_tokens": max_tokens,
                     "temperature": 0.1,
