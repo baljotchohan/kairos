@@ -17,11 +17,12 @@ export interface AdminStatus {
   connectors: ConnectorStatus[];
 }
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+async function apiFetch<T>(path: string, token?: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
@@ -37,6 +38,6 @@ export async function getHealth(): Promise<HealthResponse> {
   return apiFetch<HealthResponse>("/health");
 }
 
-export async function getAdminStatus(): Promise<AdminStatus> {
-  return apiFetch<AdminStatus>("/api/v1/admin/status");
+export async function getAdminStatus(token?: string): Promise<AdminStatus> {
+  return apiFetch<AdminStatus>("/api/v1/admin/status", token);
 }

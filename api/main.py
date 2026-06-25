@@ -83,18 +83,36 @@ async def lifespan(app: FastAPI):
     print("👋 KAIROS shut down cleanly")
 
 
+def _get_active_user_ids() -> list[str]:
+    """Return all user UIDs that have at least one OAuth token stored."""
+    import sqlite3 as _sqlite3
+    try:
+        with _sqlite3.connect(config.SQLITE_PATH) as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT user_uid FROM oauth_tokens WHERE user_uid IS NOT NULL AND user_uid != ''"
+            ).fetchall()
+            return [r[0] for r in rows]
+    except Exception:
+        return []
+
+
 async def _ingestion_loop():
-    """Run ingestion every INGEST_INTERVAL_MINUTES minutes."""
+    """Run ingestion every INGEST_INTERVAL_MINUTES minutes, once per connected user."""
     interval = config.INGEST_INTERVAL_MINUTES * 60
     # Small initial delay so app is ready before first run
     await asyncio.sleep(10)
 
     while True:
-        try:
-            print(f"[Ingestion] Starting scheduled run...")
-            await orchestrator.run_ingestion()
-        except Exception as e:
-            print(f"[Ingestion] Error: {e}")
+        user_ids = _get_active_user_ids()
+        if not user_ids:
+            print("[Ingestion] No connected users — skipping run.")
+        else:
+            for uid in user_ids:
+                try:
+                    print(f"[Ingestion] Starting run for user {uid}...")
+                    await orchestrator.run_ingestion(user_id=uid)
+                except Exception as e:
+                    print(f"[Ingestion] Error for user {uid}: {e}")
         await asyncio.sleep(interval)
 
 

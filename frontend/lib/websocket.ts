@@ -19,8 +19,14 @@ class KairosWebSocket {
   connect(token?: string): void {
     if (typeof window === "undefined") return;
 
+    const tokenChanged = token && token !== this.token;
     if (token) {
       this.token = token;
+    }
+
+    if (tokenChanged && this.ws) {
+      this.ws.close();
+      this.ws = null;
     }
 
     if (
@@ -81,6 +87,7 @@ class KairosWebSocket {
 
   disconnect(): void {
     this.manuallyDisconnected = true;
+    this.token = undefined;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;

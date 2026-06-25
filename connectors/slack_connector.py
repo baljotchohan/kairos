@@ -21,7 +21,12 @@ class SlackConnector:
     def _get_client(self):
         if self._client is None:
             from slack_sdk.web.async_client import AsyncWebClient
-            token = self._token or config.SLACK_BOT_TOKEN
+            token = self._token
+            if not token:
+                raise ValueError(
+                    "SlackConnector: no per-user token provided. "
+                    "Pass the user's OAuth bot_token when constructing SlackConnector."
+                )
             self._client = AsyncWebClient(token=token)
         return self._client
 
@@ -29,7 +34,7 @@ class SlackConnector:
 
     async def get_channels(self) -> list[dict]:
         """Return all public/private channels the bot can see as {id, name} dicts."""
-        if not (self._token or config.SLACK_BOT_TOKEN):
+        if not self._token:
             return []
 
         client = self._get_client()
@@ -62,7 +67,7 @@ class SlackConnector:
         Fetch messages from a channel going back `days_back` days.
         Returns list of dicts: {ts, text, user, channel_name, permalink}.
         """
-        if not (self._token or config.SLACK_BOT_TOKEN):
+        if not self._token:
             return []
 
         client = self._get_client()
@@ -132,7 +137,7 @@ class SlackConnector:
         self, channel_id: str, thread_ts: str
     ) -> list[dict]:
         """Fetch all replies in a thread. Returns same shape as get_messages()."""
-        if not (self._token or config.SLACK_BOT_TOKEN):
+        if not self._token:
             return []
 
         client = self._get_client()

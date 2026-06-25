@@ -18,7 +18,10 @@ from config import config
 class GmailConnector:
     SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
-    def __init__(self):
+    def __init__(self, refresh_token: str | None = None, client_id: str | None = None, client_secret: str | None = None):
+        self.refresh_token = refresh_token or config.GOOGLE_REFRESH_TOKEN
+        self.client_id = client_id or config.GOOGLE_CLIENT_ID
+        self.client_secret = client_secret or config.GOOGLE_CLIENT_SECRET
         self._service = None
 
     def _build_service(self):
@@ -32,9 +35,9 @@ class GmailConnector:
 
         creds = Credentials(
             token=None,
-            refresh_token=config.GOOGLE_REFRESH_TOKEN,
-            client_id=config.GOOGLE_CLIENT_ID,
-            client_secret=config.GOOGLE_CLIENT_SECRET,
+            refresh_token=self.refresh_token,
+            client_id=self.client_id,
+            client_secret=self.client_secret,
             token_uri="https://oauth2.googleapis.com/token",
             scopes=self.SCOPES,
         )
@@ -53,7 +56,7 @@ class GmailConnector:
         Fetch emails from the last `days_back` days.
         Returns list of dicts: {id, subject, body, from_, to, date, thread_id}.
         """
-        if not config.GOOGLE_REFRESH_TOKEN:
+        if not self.refresh_token:
             return []
 
         loop = asyncio.get_running_loop()

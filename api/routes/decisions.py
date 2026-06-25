@@ -39,7 +39,7 @@ class StoreRequest(BaseModel):
 @router.get("/decisions")
 async def list_decisions(memory=Depends(get_memory), current_user: UserProfile = Depends(get_current_user)):
     """List all decisions in memory."""
-    nodes = memory.graph.all_decisions()
+    nodes = memory.graph.all_decisions(user_id=current_user.uid)
     return {
         "total": len(nodes),
         "decisions": [
@@ -74,13 +74,14 @@ async def search_decisions(
     results = []
 
     if q:
-        semantic = memory.semantic_search(q, n_results=10)
+        semantic = memory.semantic_search(q, n_results=10, user_id=current_user.uid)
         results.extend(semantic)
 
     if topic or person or date_from or date_to:
         structured = memory.structured_search(
             topic=topic, person=person,
-            date_from=date_from, date_to=date_to
+            date_from=date_from, date_to=date_to,
+            user_id=current_user.uid
         )
         # Merge, avoid duplicates
         existing_ids = {n.id for n in results}
@@ -110,11 +111,11 @@ async def search_decisions(
 @router.get("/decisions/{decision_id}")
 async def get_decision(decision_id: str, memory=Depends(get_memory), current_user: UserProfile = Depends(get_current_user)):
     """Get a single decision with all related decisions."""
-    node = memory.graph.get_decision(decision_id)
+    node = memory.graph.get_decision(decision_id, user_id=current_user.uid)
     if not node:
         raise HTTPException(status_code=404, detail="Decision not found")
 
-    related = memory.graph.get_connected(decision_id, depth=2)
+    related = memory.graph.get_connected(decision_id, depth=2, user_id=current_user.uid)
 
     return {
         "id": node.id,
@@ -155,8 +156,9 @@ async def store_decision(body: StoreRequest, memory=Depends(get_memory), current
             "alternatives": body.alternatives,
             "decision_maker": body.decision_maker,
         },
+        user_id=current_user.uid,
     )
-    memory.store(node)
+    memory.store(node, user_id=current_user.uid)
     return {"status": "stored", "id": node.id, "title": node.title}
 
 
@@ -165,12 +167,15 @@ async def store_decision(body: StoreRequest, memory=Depends(get_memory), current
 @router.get("/graph/stats")
 async def graph_stats(memory=Depends(get_memory), current_user: UserProfile = Depends(get_current_user)):
     """Decision graph statistics."""
-    stats = memory.graph.stats()
+    stats = memory.graph.stats(user_id=current_user.uid)
     return stats
 
 
 @router.post("/graph/export/obsidian")
 async def export_obsidian(memory=Depends(get_memory), current_user: UserProfile = Depends(get_current_user)):
     """Export/refresh the Obsidian vault."""
-    memory.rebuild_obsidian()
-    return {"status": "exported", "vault": memory.obsidian_vault}
+    if current_user.is_anonymous:
+        raise HTTPException(status_code=403, detail="Anonymous guests cannot export vaults")
+    memory.rebuild_obsidian(user_id=current_user.uid)
+    vault_folder = f"KAIROS_{current_user.uid}"
+    return {"status": "exported", "vault": f"{memory.obsidian_vault}/{vault_folder}"}

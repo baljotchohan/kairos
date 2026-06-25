@@ -86,15 +86,16 @@ def verify_token(token: str) -> UserProfile:
                 headers={"WWW-Authenticate": "Bearer"},
             )
         if "google" in token:
+            google_id = token.split("sim-google-uid-")[-1] if "sim-google-uid-" in token else (token.split("-")[-1] if "-" in token else "8123")
             return UserProfile(
-                uid="sim-google-uid-8123",
+                uid=f"sim-google-uid-{google_id}",
                 email="baljot@company.com",
                 name="Baljot Chohan",
                 is_anonymous=False
             )
         else:
             # Anonymous Guest
-            guest_id = token.split("-")[-1] if "-" in token else "9999"
+            guest_id = token.split("sim-guest-uid-")[-1] if "sim-guest-uid-" in token else (token.split("-")[-1] if "-" in token else "9999")
             return UserProfile(
                 uid=f"sim-guest-uid-{guest_id}",
                 email=None,
@@ -160,9 +161,11 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
         else:
-            # simulation mode default
+            # simulation mode default - generate unique random ID per request
+            import uuid
+            rand_id = uuid.uuid4().hex[:8]
             return UserProfile(
-                uid="sim-guest-uid-default",
+                uid=f"sim-guest-uid-{rand_id}",
                 email=None,
                 name="Guest User",
                 is_anonymous=True

@@ -70,71 +70,116 @@ class EmailAgent(BaseAgent):
         days = input_data if isinstance(input_data, int) else None
         return await self.run(lookback_days=days)
 
-    async def fetch(self, lookback_days: int = None) -> list[dict]:
+    def _get_google_tokens(self, user_id: str | None = None) -> list[dict]:
+        tokens = []
+        try:
+            import sqlite3
+            import json
+            conn = sqlite3.connect(config.SQLITE_PATH)
+            conn.row_factory = sqlite3.Row
+            if user_id:
+                rows = conn.execute(
+                    "SELECT token_data FROM oauth_tokens WHERE service = 'google' AND user_uid = ?",
+                    (user_id,)
+                ).fetchall()
+            else:
+                rows = conn.execute("SELECT token_data FROM oauth_tokens WHERE service = 'google'").fetchall()
+
+            for r in rows:
+                data = json.loads(r["token_data"])
+                if not data.get("disconnected"):
+                    tokens.append(data)
+            conn.close()
+        except Exception as e:
+            print(f"[EmailAgent] Database error while reading Google tokens: {e}")
+
+        # Fallback to server-side env if no user_id is requested or no tokens found
+        if not tokens and not user_id and config.GOOGLE_REFRESH_TOKEN:
+            tokens = [{
+                "refresh_token": config.GOOGLE_REFRESH_TOKEN,
+                "client_id": config.GOOGLE_CLIENT_ID,
+                "client_secret": config.GOOGLE_CLIENT_SECRET,
+            }]
+        return tokens
+
+    async def fetch(self, lookback_days: int = None, user_id: str | None = None) -> list[dict]:
         """Fetch raw email content from Gmail to pass to the synthesis agent."""
         days = lookback_days or config.EMAIL_LOOKBACK_DAYS
-        if not config.GOOGLE_REFRESH_TOKEN:
-            print("[EmailAgent] No GOOGLE_REFRESH_TOKEN configured — skipping")
+        tokens = self._get_google_tokens(user_id=user_id)
+        if not tokens:
+            print(f"[EmailAgent] No Google tokens configured for user {user_id} — skipping")
             return []
 
         from connectors.gmail_connector import GmailConnector
-        connector = GmailConnector()
-        emails = await connector.get_messages(days_back=days, max_results=200)
-        
         results = []
-        for email_msg in emails:
-            subject = email_msg.get("subject", "")
-            body = email_msg.get("body", "")
-            from_ = email_msg.get("from_", "")
-            to = email_msg.get("to", "")
-            date = email_msg.get("date", "")
-            source_url = email_msg.get("source_url", "")
+        for t in tokens:
+            connector = GmailConnector(
+                refresh_token=t.get("refresh_token"),
+                client_id=t.get("client_id"),
+                client_secret=t.get("client_secret"),
+            )
+            emails = await connector.get_messages(days_back=days, max_results=200)
             
-            full_text = f"Subject: {subject}\nFrom: {from_}\nTo: {to}\n\n{body}"
-            if len(full_text.strip()) < 80:
-                continue
-            
-            text_lower = full_text.lower()
-            decision_signals = [
-                "approved", "rejected", "decided", "decision", "going with",
-                "signed off", "contract", "agreement", "vendor", "budget",
-                "will not be", "moving forward", "we're choosing", "hired",
-                "terminated", "cancelled", "signed", "authorize", "authorised",
-            ]
-            if not any(sig in text_lower for sig in decision_signals):
-                continue
+            for email_msg in emails:
+                subject = email_msg.get("subject", "")
+                body = email_msg.get("body", "")
+                from_ = email_msg.get("from_", "")
+                to = email_msg.get("to", "")
+                date = email_msg.get("date", "")
+                source_url = email_msg.get("source_url", "")
+                
+                full_text = f"Subject: {subject}\nFrom: {from_}\nTo: {to}\n\n{body}"
+                if len(full_text.strip()) < 80:
+                    continue
+                
+                text_lower = full_text.lower()
+                decision_signals = [
+                    "approved", "rejected", "decided", "decision", "going with",
+                    "signed off", "contract", "agreement", "vendor", "budget",
+                    "will not be", "moving forward", "we're choosing", "hired",
+                    "terminated", "cancelled", "signed", "authorize", "authorised",
+                ]
+                if not any(sig in text_lower for sig in decision_signals):
+                    continue
 
-            results.append({
-                "text": full_text,
-                "source": "Email",
-                "source_url": source_url,
-                "date": date,
-            })
+                results.append({
+                    "text": full_text,
+                    "source": "Email",
+                    "source_url": source_url,
+                    "date": date,
+                })
         return results
 
-    async def run(self, lookback_days: int = None) -> list[DecisionNode]:
+    async def run(self, lookback_days: int = None, user_id: str | None = None) -> list[DecisionNode]:
         """
         Fetch emails from Gmail and extract decision nodes via Fireworks AI.
         """
         days = lookback_days or config.EMAIL_LOOKBACK_DAYS
-
-        if not config.GOOGLE_REFRESH_TOKEN:
-            print("[EmailAgent] No GOOGLE_REFRESH_TOKEN configured — skipping")
+        tokens = self._get_google_tokens(user_id=user_id)
+        if not tokens:
+            print(f"[EmailAgent] No Google tokens configured for user {user_id} — skipping")
             return []
 
-        print(f"[EmailAgent] Starting ingestion ({days} days lookback)")
+        print(f"[EmailAgent] Starting ingestion ({days} days lookback) for user {user_id}")
 
         from connectors.gmail_connector import GmailConnector
-        connector = GmailConnector()
-
-        emails = await connector.get_messages(days_back=days, max_results=200)
-        print(f"[EmailAgent] Processing {len(emails)} emails")
-
         decisions: list[DecisionNode] = []
-        for email_msg in emails:
-            extracted = await self._extract_decision(email_msg)
-            if extracted:
-                decisions.append(extracted)
+
+        for t in tokens:
+            connector = GmailConnector(
+                refresh_token=t.get("refresh_token"),
+                client_id=t.get("client_id"),
+                client_secret=t.get("client_secret"),
+            )
+            emails = await connector.get_messages(days_back=days, max_results=200)
+            print(f"[EmailAgent] Processing {len(emails)} emails")
+
+            for email_msg in emails:
+                extracted = await self._extract_decision(email_msg)
+                if extracted:
+                    if user_id:
+                        extracted.user_id = user_id
+                    decisions.append(extracted)
 
         print(f"[EmailAgent] Extracted {len(decisions)} decisions")
         return decisions

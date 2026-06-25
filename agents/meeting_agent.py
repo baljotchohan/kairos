@@ -4,38 +4,78 @@ Meeting Agent — downloads Zoom recordings, transcribes with Whisper, feeds to 
 
 from __future__ import annotations
 
+import json
 from config import config
 
 
 class MeetingAgent:
-    async def fetch(self) -> list[dict]:
-        if not config.ZOOM_CLIENT_ID:
-            print("[MeetingAgent] No ZOOM_CLIENT_ID configured — skipping")
+    def _get_zoom_tokens(self, user_id: str | None = None) -> list[dict]:
+        tokens = []
+        try:
+            import sqlite3
+            conn = sqlite3.connect(config.SQLITE_PATH)
+            conn.row_factory = sqlite3.Row
+            if user_id:
+                rows = conn.execute(
+                    "SELECT token_data FROM oauth_tokens WHERE service = 'zoom' AND user_uid = ?",
+                    (user_id,)
+                ).fetchall()
+            else:
+                rows = conn.execute("SELECT token_data FROM oauth_tokens WHERE service = 'zoom'").fetchall()
+
+            for r in rows:
+                data = json.loads(r["token_data"])
+                if not data.get("disconnected"):
+                    tokens.append(data)
+            conn.close()
+        except Exception as e:
+            print(f"[MeetingAgent] Database error while reading Zoom tokens: {e}")
+
+        # Fallback to server-side env if no user_id is requested or no tokens found
+        if not tokens and not user_id and config.ZOOM_CLIENT_ID:
+            tokens = [{
+                "access_token": None,
+                "refresh_token": None,
+                "client_id": config.ZOOM_CLIENT_ID,
+                "client_secret": config.ZOOM_CLIENT_SECRET,
+            }]
+        return tokens
+
+    async def fetch(self, user_id: str | None = None) -> list[dict]:
+        tokens = self._get_zoom_tokens(user_id=user_id)
+        if not tokens:
+            print(f"[MeetingAgent] No Zoom tokens configured for user {user_id} — skipping")
             return []
 
         from connectors.zoom_connector import ZoomConnector
-        connector = ZoomConnector()
         days_back = getattr(config, "EMAIL_LOOKBACK_DAYS", 30) or 30
-
-        try:
-            recordings = await connector.get_recordings(days_back=days_back)
-        except Exception as e:
-            print(f"[MeetingAgent] get_recordings failed: {e}")
-            return []
-
         results = []
-        for rec in recordings:
-            transcript = await self._transcribe(connector, rec)
-            if transcript:
-                results.append({
-                    "id": rec.get("uuid", rec.get("id", "")),
-                    "title": rec.get("topic", "Zoom Meeting"),
-                    "content": transcript,
-                    "url": rec.get("share_url", ""),
-                    "date": (rec.get("start_time", "") or "")[:10],
-                    "participants": rec.get("participants", []),
-                    "source": "Zoom",
-                })
+
+        for t in tokens:
+            connector = ZoomConnector(
+                access_token=t.get("access_token"),
+                refresh_token=t.get("refresh_token"),
+                client_id=t.get("client_id") or config.ZOOM_CLIENT_ID,
+                client_secret=t.get("client_secret") or config.ZOOM_CLIENT_SECRET,
+            )
+            try:
+                recordings = await connector.get_recordings(days_back=days_back)
+            except Exception as e:
+                print(f"[MeetingAgent] get_recordings failed: {e}")
+                continue
+
+            for rec in recordings:
+                transcript = await self._transcribe(connector, rec)
+                if transcript:
+                    results.append({
+                        "id": rec.get("uuid", rec.get("id", "")),
+                        "title": rec.get("topic", "Zoom Meeting"),
+                        "content": transcript,
+                        "url": rec.get("share_url", ""),
+                        "date": (rec.get("start_time", "") or "")[:10],
+                        "participants": rec.get("participants", []),
+                        "source": "Zoom",
+                    })
         return results
 
     async def _transcribe(self, connector, rec: dict) -> str:

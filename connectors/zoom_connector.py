@@ -20,18 +20,39 @@ class ZoomConnector:
     TOKEN_URL = "https://zoom.us/oauth/token"
     API_BASE = "https://api.zoom.us/v2"
 
-    def __init__(self):
-        self._access_token: Optional[str] = None
+    def __init__(self, access_token: str | None = None, refresh_token: str | None = None, client_id: str | None = None, client_secret: str | None = None):
+        self._access_token = access_token
+        self.refresh_token = refresh_token
+        self.client_id = client_id or config.ZOOM_CLIENT_ID
+        self.client_secret = client_secret or config.ZOOM_CLIENT_SECRET
 
     # ── Auth ───────────────────────────────────────────────────────────────────
 
     async def _get_token(self) -> str:
-        """Obtain a Server-to-Server OAuth2 access token."""
+        """Obtain a Server-to-Server OAuth2 access token or refresh user OAuth token."""
         if self._access_token:
             return self._access_token
 
+        if self.refresh_token:
+            creds = base64.b64encode(
+                f"{self.client_id}:{self.client_secret}".encode()
+            ).decode()
+            async with httpx.AsyncClient(timeout=20) as client:
+                resp = await client.post(
+                    self.TOKEN_URL,
+                    headers={"Authorization": f"Basic {creds}"},
+                    params={
+                        "grant_type": "refresh_token",
+                        "refresh_token": self.refresh_token,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                self._access_token = data["access_token"]
+                return self._access_token
+
         creds = base64.b64encode(
-            f"{config.ZOOM_CLIENT_ID}:{config.ZOOM_CLIENT_SECRET}".encode()
+            f"{self.client_id}:{self.client_secret}".encode()
         ).decode()
 
         async with httpx.AsyncClient(timeout=20) as client:
@@ -52,10 +73,8 @@ class ZoomConnector:
     async def get_recordings(self, days_back: int) -> list[dict]:
         """
         List cloud recordings from the last `days_back` days.
-        Returns list of dicts: {uuid, topic, start_time, host_email,
-                                 download_url, duration}.
         """
-        if not config.ZOOM_ACCOUNT_ID or not config.ZOOM_CLIENT_ID or not config.ZOOM_CLIENT_SECRET:
+        if not self.refresh_token and (not config.ZOOM_ACCOUNT_ID or not self.client_id or not self.client_secret):
             return []
 
         token = await self._get_token()

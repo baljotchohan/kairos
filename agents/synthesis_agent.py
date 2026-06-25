@@ -102,7 +102,7 @@ class SynthesisAgent(BaseAgent):
 
     # ── Decision extraction (for ingestion pipeline) ──────────────────────────
 
-    async def extract_decisions(self, content: dict) -> list[DecisionNode]:
+    async def extract_decisions(self, content: dict, user_id: str | None = None) -> list[DecisionNode]:
         """
         Given a content dict (from any connector), extract decisions using LLM
         and store them in memory. Used in background ingestion.
@@ -170,8 +170,9 @@ Extract all decisions from the above content."""
                     "alternatives": d.get("alternatives", []),
                     "decision_maker": d.get("decision_maker", ""),
                 },
+                user_id=user_id or "",
             )
-            self.memory.store(node)
+            self.memory.store(node, user_id=user_id)
             stored.append(node)
 
         if stored:

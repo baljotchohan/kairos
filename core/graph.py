@@ -30,6 +30,7 @@ class DecisionNode:
     outcome: str
     raw_text: str = ""
     metadata: dict = field(default_factory=dict)
+    user_id: str = ""
 
 
 class DecisionGraph:
@@ -80,21 +81,28 @@ class DecisionGraph:
                     PRIMARY KEY (from_id, to_id, relation_type)
                 )
             """)
+            # Schema Migration: Safely add user_id column if not exists
+            cursor = conn.execute("PRAGMA table_info(decisions)")
+            columns = [info[1] for info in cursor.fetchall()]
+            if "user_id" not in columns:
+                conn.execute("ALTER TABLE decisions ADD COLUMN user_id TEXT NOT NULL DEFAULT ''")
+
             # Create optimization indexes on decisions table to speed up query/timeline filtering
             conn.execute("CREATE INDEX IF NOT EXISTS idx_decisions_date ON decisions(date DESC)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_decisions_source_date ON decisions(source, date DESC)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_decisions_user_id ON decisions(user_id)")
             conn.commit()
 
     def _load_from_db(self):
         with self._lock:
             with self._get_connection() as conn:
-                for row in conn.execute("SELECT * FROM decisions"):
+                for row in conn.execute("SELECT id, title, summary, date, participants, source, source_url, topics, outcome, raw_text, metadata, user_id FROM decisions"):
                     node = DecisionNode(
                         id=row[0], title=row[1], summary=row[2], date=row[3],
                         participants=json.loads(row[4]), source=row[5],
                         source_url=row[6], topics=json.loads(row[7]),
                         outcome=row[8], raw_text=row[9],
-                        metadata=json.loads(row[10]),
+                        metadata=json.loads(row[10]), user_id=row[11] if len(row) > 11 else "",
                     )
                     self.graph.add_node(node.id, data=node)
 
@@ -106,12 +114,13 @@ class DecisionGraph:
     def _save_node(self, node: DecisionNode):
         with self._get_connection() as conn:
             conn.execute("""
-                INSERT OR REPLACE INTO decisions VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                INSERT OR REPLACE INTO decisions (id, title, summary, date, participants, source, source_url, topics, outcome, raw_text, metadata, user_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 node.id, node.title, node.summary, node.date,
                 json.dumps(node.participants), node.source, node.source_url,
                 json.dumps(node.topics), node.outcome, node.raw_text,
-                json.dumps(node.metadata),
+                json.dumps(node.metadata), node.user_id,
             ))
             conn.commit()
 
@@ -125,19 +134,23 @@ class DecisionGraph:
 
     # ── Graph operations ──────────────────────────────────────────────────────
 
-    def add_decision(self, node: DecisionNode, vault_path: str = None):
+    def add_decision(self, node: DecisionNode, vault_path: str = None, user_id: Optional[str] = None):
         """
         Add a decision, auto-link it to existing nodes, and — if vault_path is
         given — immediately write/update only the affected Obsidian notes so the
         vault stays in sync without a full re-export.
         """
+        if user_id and not node.user_id:
+            node.user_id = user_id
+
         with self._lock:
             self.graph.add_node(node.id, data=node)
             self._save_node(node)
             affected = self._auto_link(node)  # IDs of nodes that gained new edges
 
             if vault_path:
-                vault = Path(vault_path)
+                uid_folder = f"KAIROS_{node.user_id}" if node.user_id else "KAIROS_default"
+                vault = Path(vault_path) / uid_folder
                 vault.mkdir(parents=True, exist_ok=True)
                 (vault / "KAIROS").mkdir(exist_ok=True)
                 # Write the new node's note
@@ -146,7 +159,7 @@ class DecisionGraph:
                 for nid in affected:
                     if nid in self.graph:
                         self._write_decision_note(vault, self.graph.nodes[nid]["data"])
-                self._write_index_note(vault)
+                self._write_index_note(vault, user_id=node.user_id)
 
     def add_relation(self, from_id: str, to_id: str, relation: RelationType):
         with self._lock:
@@ -175,58 +188,80 @@ class DecisionGraph:
                 )
                 conn.commit()
 
-    def get_decision(self, decision_id: str) -> Optional[DecisionNode]:
+    def get_decision(self, decision_id: str, user_id: Optional[str] = None) -> Optional[DecisionNode]:
         with self._lock:
             if decision_id not in self.graph:
                 return None
-            return self.graph.nodes[decision_id].get("data")
+            node = self.graph.nodes[decision_id].get("data")
+            if user_id is not None and node and node.user_id != user_id:
+                return None
+            return node
 
-    def get_connected(self, decision_id: str, depth: int = 2) -> list[DecisionNode]:
-        """Return all decisions reachable within `depth` hops."""
+    def get_connected(self, decision_id: str, depth: int = 2, user_id: Optional[str] = None) -> list[DecisionNode]:
+        """Return all decisions reachable within `depth` hops, filtered by user_id."""
         with self._lock:
             if decision_id not in self.graph:
+                return []
+            root_node = self.graph.nodes[decision_id].get("data")
+            if user_id is not None and root_node and root_node.user_id != user_id:
                 return []
             reachable = nx.ego_graph(self.graph, decision_id, radius=depth, undirected=True)
             return [
                 self.graph.nodes[n]["data"]
                 for n in reachable.nodes
                 if n != decision_id and "data" in self.graph.nodes[n]
+                and (user_id is None or self.graph.nodes[n]["data"].user_id == user_id)
             ]
 
-    def search_by_topic(self, topic: str) -> list[DecisionNode]:
+    def search_by_topic(self, topic: str, user_id: Optional[str] = None) -> list[DecisionNode]:
         topic_lower = topic.lower()
         with self._lock:
             return [
                 self.graph.nodes[n]["data"]
                 for n in self.graph.nodes
                 if "data" in self.graph.nodes[n]
+                and (user_id is None or self.graph.nodes[n]["data"].user_id == user_id)
                 and any(topic_lower in t.lower() for t in self.graph.nodes[n]["data"].topics)
             ]
 
-    def search_by_person(self, name: str) -> list[DecisionNode]:
+    def search_by_person(self, name: str, user_id: Optional[str] = None) -> list[DecisionNode]:
         name_lower = name.lower()
         with self._lock:
             return [
                 self.graph.nodes[n]["data"]
                 for n in self.graph.nodes
                 if "data" in self.graph.nodes[n]
+                and (user_id is None or self.graph.nodes[n]["data"].user_id == user_id)
                 and any(name_lower in p.lower() for p in self.graph.nodes[n]["data"].participants)
             ]
 
-    def all_decisions(self) -> list[DecisionNode]:
+    def all_decisions(self, user_id: Optional[str] = None) -> list[DecisionNode]:
         with self._lock:
             return [
                 self.graph.nodes[n]["data"]
                 for n in self.graph.nodes
                 if "data" in self.graph.nodes[n]
+                and (user_id is None or self.graph.nodes[n]["data"].user_id == user_id)
             ]
 
-    def stats(self) -> dict:
+    def stats(self, user_id: Optional[str] = None) -> dict:
         with self._lock:
+            if user_id is None:
+                return {
+                    "total_decisions": self.graph.number_of_nodes(),
+                    "total_relations": self.graph.number_of_edges(),
+                    "connected_components": nx.number_weakly_connected_components(self.graph),
+                }
+            
+            user_nodes = [
+                n for n in self.graph.nodes 
+                if "data" in self.graph.nodes[n] and self.graph.nodes[n]["data"].user_id == user_id
+            ]
+            user_subgraph = self.graph.subgraph(user_nodes)
             return {
-                "total_decisions": self.graph.number_of_nodes(),
-                "total_relations": self.graph.number_of_edges(),
-                "connected_components": nx.number_weakly_connected_components(self.graph),
+                "total_decisions": user_subgraph.number_of_nodes(),
+                "total_relations": user_subgraph.number_of_edges(),
+                "connected_components": nx.number_weakly_connected_components(user_subgraph) if len(user_nodes) > 0 else 0,
             }
 
     # ── Auto-linking ──────────────────────────────────────────────────────────
@@ -261,23 +296,28 @@ class DecisionGraph:
 
     # ── Obsidian export ───────────────────────────────────────────────────────
 
-    def export_to_obsidian(self, vault_path: str = "./obsidian_vault"):
+    def export_to_obsidian(self, vault_path: str = "./obsidian_vault", user_id: Optional[str] = None):
         """
-        Write one .md file per decision to vault_path.
+        Write one .md file per decision to vault_path / KAIROS_{user_id}.
         Obsidian's Graph View will render the [[wikilinks]] as a visual decision web.
-
-        Open the vault_path folder in Obsidian → Graph View → see all decisions connected.
         """
         with self._lock:
-            vault = Path(vault_path)
+            uid_folder = f"KAIROS_{user_id}" if user_id else "KAIROS_default"
+            vault = Path(vault_path) / uid_folder
             vault.mkdir(parents=True, exist_ok=True)
             (vault / "KAIROS").mkdir(exist_ok=True)
 
-            for node_id in self.graph.nodes:
+            user_nodes = [
+                n for n in self.graph.nodes
+                if "data" in self.graph.nodes[n]
+                and (user_id is None or self.graph.nodes[n]["data"].user_id == user_id)
+            ]
+
+            for node_id in user_nodes:
                 node: DecisionNode = self.graph.nodes[node_id]["data"]
                 self._write_decision_note(vault, node)
 
-            self._write_index_note(vault)
+            self._write_index_note(vault, user_id=user_id)
             print(f"[KAIROS] Obsidian vault exported → {vault.resolve()}")
             print(f"         Open this folder in Obsidian and switch to Graph View.")
 
@@ -347,8 +387,8 @@ participants: {json.dumps(node.participants)}
 """
         filepath.write_text(content, encoding="utf-8")
 
-    def _write_index_note(self, vault: Path):
-        nodes = self.all_decisions()
+    def _write_index_note(self, vault: Path, user_id: Optional[str] = None):
+        nodes = self.all_decisions(user_id=user_id)
         lines = [f"# KAIROS — Decision Index\n", f"**Total decisions:** {len(nodes)}\n\n"]
 
         by_topic: dict[str, list[DecisionNode]] = {}

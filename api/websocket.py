@@ -108,7 +108,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         pass
 
                 try:
-                    result = await orchestrator.run_ingestion(progress_callback=progress)
+                    result = await orchestrator.run_ingestion(user_id=user_id, progress_callback=progress)
                     try:
                         await websocket.send_json({
                             "type": "ingest_done",
@@ -128,7 +128,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 memory = websocket.app.state.memory
                 await websocket.send_json({
                     "type": "stats",
-                    "data": memory.graph.stats(),
+                    "data": memory.graph.stats(user_id=user_id),
                 })
 
             else:

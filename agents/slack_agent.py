@@ -82,32 +82,40 @@ class SlackAgent(BaseAgent):
         days = input_data if isinstance(input_data, int) else None
         return await self.run(lookback_days=days)
 
-    def _get_slack_tokens(self) -> list[str]:
+    def _get_slack_tokens(self, user_id: str | None = None) -> list[str]:
         tokens = []
         try:
             import sqlite3
             import json
             conn = sqlite3.connect(config.SQLITE_PATH)
             conn.row_factory = sqlite3.Row
-            rows = conn.execute("SELECT token_data FROM oauth_tokens WHERE service = 'slack'").fetchall()
+            if user_id:
+                rows = conn.execute(
+                    "SELECT token_data FROM oauth_tokens WHERE service = 'slack' AND user_uid = ?",
+                    (user_id,)
+                ).fetchall()
+            else:
+                rows = conn.execute("SELECT token_data FROM oauth_tokens WHERE service = 'slack'").fetchall()
+
             for r in rows:
                 data = json.loads(r["token_data"])
-                if data.get("bot_token"):
+                if data.get("bot_token") and not data.get("disconnected"):
                     tokens.append(data["bot_token"])
             conn.close()
         except Exception as e:
             print(f"[SlackAgent] Database error while reading Slack tokens: {e}")
 
-        if not tokens and config.SLACK_BOT_TOKEN and config.SLACK_BOT_TOKEN != "xoxb-your-token":
+        # Only fall back to global env if no user_id is requested or no tokens at all are found
+        if not tokens and not user_id and config.SLACK_BOT_TOKEN and config.SLACK_BOT_TOKEN != "xoxb-your-token":
             tokens = [config.SLACK_BOT_TOKEN]
         return tokens
 
-    async def fetch(self, lookback_days: int = None) -> list[dict]:
+    async def fetch(self, lookback_days: int = None, user_id: str | None = None) -> list[dict]:
         """Fetch raw message content from Slack to pass to the synthesis agent."""
         days = lookback_days or config.SLACK_LOOKBACK_DAYS
-        tokens = self._get_slack_tokens()
+        tokens = self._get_slack_tokens(user_id=user_id)
         if not tokens:
-            print("[SlackAgent] No Slack tokens configured — skipping")
+            print(f"[SlackAgent] No Slack tokens configured for user {user_id} — skipping")
             return []
 
         from connectors.slack_connector import SlackConnector
@@ -134,18 +142,18 @@ class SlackAgent(BaseAgent):
                 })
         return results
 
-    async def run(self, lookback_days: int = None) -> list[DecisionNode]:
+    async def run(self, lookback_days: int = None, user_id: str | None = None) -> list[DecisionNode]:
         """
         Fetch all Slack messages for the configured lookback window,
         classify each batch via Fireworks AI, and return extracted DecisionNodes.
         """
         days = lookback_days or config.SLACK_LOOKBACK_DAYS
-        tokens = self._get_slack_tokens()
+        tokens = self._get_slack_tokens(user_id=user_id)
         if not tokens:
-            print("[SlackAgent] No Slack tokens configured — skipping")
+            print(f"[SlackAgent] No Slack tokens configured for user {user_id} — skipping")
             return []
 
-        print(f"[SlackAgent] Starting ingestion ({days} days lookback)")
+        print(f"[SlackAgent] Starting ingestion ({days} days lookback) for user {user_id}")
 
         from connectors.slack_connector import SlackConnector
         decisions: list[DecisionNode] = []
@@ -160,6 +168,9 @@ class SlackAgent(BaseAgent):
             for batch_start in range(0, len(all_messages), batch_size):
                 batch = all_messages[batch_start: batch_start + batch_size]
                 extracted = await self._extract_decisions_from_batch(batch)
+                for node in extracted:
+                    if user_id:
+                        node.user_id = user_id
                 decisions.extend(extracted)
 
         print(f"[SlackAgent] Extracted {len(decisions)} decisions")

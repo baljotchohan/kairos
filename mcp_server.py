@@ -22,6 +22,7 @@ Add to Claude Desktop / Cursor MCP config:
 
 from __future__ import annotations
 
+import os
 import uuid
 from typing import Optional
 
@@ -47,6 +48,11 @@ mcp = FastMCP(
 
 memory = KairosMemory()
 
+# MCP_TENANT_ID scopes all reads/writes to a single tenant (user_id).
+# Set this env var to the Firebase UID of the workspace you want this MCP
+# server to access. If unset, falls back to "mcp-system" (isolated namespace).
+MCP_TENANT_ID: str = os.environ.get("MCP_TENANT_ID", "mcp-system")
+
 
 # ── Tool 1: get_context ───────────────────────────────────────────────────────
 
@@ -67,7 +73,7 @@ def get_context(query: str, limit: int = 5) -> str:
         Formatted string of relevant decisions with context, sources, and
         participant information for the AI to use in its answer.
     """
-    results = memory.get_context(query, n_results=limit)
+    results = memory.get_context(query, n_results=limit, user_id=MCP_TENANT_ID)
 
     if not results:
         return (
@@ -156,7 +162,7 @@ def store_context(
         },
     )
 
-    memory.store(node)
+    memory.store(node, user_id=MCP_TENANT_ID)
 
     participants_str = ", ".join(participants) if participants else "Not specified"
     return (
@@ -214,12 +220,14 @@ def search_decisions(
         person=person,
         date_from=date_from,
         date_to=date_to,
+        user_id=MCP_TENANT_ID,
     )
 
     # Secondary filter by project if topic was already set
     if project and topic:
         project_results = memory.structured_search(topic=project, person=person,
-                                                   date_from=date_from, date_to=date_to)
+                                                   date_from=date_from, date_to=date_to,
+                                                   user_id=MCP_TENANT_ID)
         # Merge and deduplicate by ID
         seen = {n.id for n in results}
         for n in project_results:

@@ -419,10 +419,6 @@ async def jira_callback(code: str = None, state: str = None, error: str = None):
 @router.get("/zoom/start")
 async def zoom_start(current_user: UserProfile = Depends(get_current_user)):
     state = _generate_state_token(current_user.uid)
-    # Zoom uses Server-to-Server OAuth (no user auth flow) — auto-connect via env
-    if config.ZOOM_CLIENT_ID and config.ZOOM_CLIENT_ID != "your_client_id":
-        sim_url = f"{_callback_url('zoom')}?code=sim-zoom-code&state={state}"
-        return {"service": "zoom", "url": sim_url}
     if not config.ZOOM_CLIENT_ID or config.ZOOM_CLIENT_ID == "your_client_id":
         sim_url = f"{_callback_url('zoom')}?code=sim-zoom-code&state={state}"
         return {"service": "zoom", "url": sim_url}
@@ -517,11 +513,14 @@ async def get_status(current_user: UserProfile = Depends(get_current_user)):
         # Prefer per-user OAuth token if present
         data = _get_token(current_user.uid, storage_key)
         if data:
-            result[frontend_key] = {
-                "connected": True,
-                "connected_at": data.get("connected_at"),
-                "service_name": data.get("team_name") or data.get("email") or frontend_key.title(),
-            }
+            if data.get("disconnected"):
+                result[frontend_key] = {"connected": False}
+            else:
+                result[frontend_key] = {
+                    "connected": True,
+                    "connected_at": data.get("connected_at"),
+                    "service_name": data.get("team_name") or data.get("email") or frontend_key.title(),
+                }
         elif env_status[frontend_key]["connected"]:
             # Fall back to server-side env credentials
             result[frontend_key] = {
@@ -544,6 +543,7 @@ async def disconnect_service(
         raise HTTPException(400, f"Unknown service: {service}")
     # "gmail" in frontend maps to "google" in token store
     storage_key = "google" if service == "gmail" else service
-    _delete_token(current_user.uid, storage_key)
+    # Mark as disconnected in DB to prevent re-inheriting env fallback
+    _store_token(current_user.uid, storage_key, {"disconnected": True})
     print(f"[OAuth] 🔓 {service} disconnected uid={current_user.uid}")
     return {"status": "disconnected", "service": service}

@@ -182,31 +182,38 @@ export default function Home() {
   const [logs, setLogs] = useState<string[]>([]);
   const logEndRef = useRef<HTMLDivElement>(null);
 
-  // Initialize theme from localStorage
+  const [realDecisions, setRealDecisions] = useState<any[]>([]);
+
+  // Initialize theme from localStorage namespaced by user UID
   useEffect(() => {
-    const savedTheme = localStorage.getItem("kairos-theme") as "dark" | "light" | null;
+    const themeKey = user ? `kairos-theme-${user.uid}` : "kairos-theme-default";
+    const savedTheme = localStorage.getItem(themeKey) as "dark" | "light" | null;
     const currentTheme = savedTheme || "dark";
     setTheme(currentTheme);
     document.documentElement.setAttribute("data-theme", currentTheme);
     document.documentElement.className = `${currentTheme} h-full`;
-  }, []);
+  }, [user]);
 
   const toggleTheme = () => {
     const nextTheme = theme === "dark" ? "light" : "dark";
     setTheme(nextTheme);
-    localStorage.setItem("kairos-theme", nextTheme);
+    const themeKey = user ? `kairos-theme-${user.uid}` : "kairos-theme-default";
+    localStorage.setItem(themeKey, nextTheme);
     document.documentElement.setAttribute("data-theme", nextTheme);
     document.documentElement.className = `${nextTheme} h-full`;
   };
 
-  // Seed default graph on mount
+  // Seed default graph on mount if in simulation mode
   useEffect(() => {
-    setCurrentGraphNodes(SIMULATED_RESPONSES[0].graph);
-    setCurrentGraphTitle(SIMULATED_RESPONSES[0].question);
-  }, []);
+    if (!token) {
+      setCurrentGraphNodes(SIMULATED_RESPONSES[0].graph);
+      setCurrentGraphTitle(SIMULATED_RESPONSES[0].question);
+    }
+  }, [token]);
 
   // Sync log simulation
   useEffect(() => {
+    if (!user) return;
     const logPool = [
       "INFO: [slack] Polling Workspace channels...",
       "INFO: [slack] Found 1 new decision thread in #engineering-core",
@@ -234,7 +241,283 @@ export default function Home() {
     }, 9000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [user]);
+
+  // Handle user logout/switching cleanup
+  useEffect(() => {
+    if (!user) {
+      setSimulatedMessages([]);
+      setSimulatedStats({
+        total_decisions: 0,
+        total_relations: 0,
+        connected_components: 0,
+      });
+      setSyncStatus({
+        slack: "disconnected",
+        gmail: "disconnected",
+        drive: "disconnected",
+        jira: "disconnected",
+        zoom: "disconnected",
+      });
+      setSlackToken("");
+      setGoogleClient("");
+      setJiraUrl("");
+      setZoomKey("");
+      setLogs([]);
+      setCurrentGraphNodes([]);
+      setCurrentGraphTitle("");
+    } else {
+      setSyncStatus({
+        slack: "synced",
+        gmail: "synced",
+        drive: "synced",
+        jira: "synced",
+        zoom: "synced",
+      });
+      setSlackToken("xoxb-8241793264-9182371239-••••••••");
+      setGoogleClient("9182371982-client.apps.googleusercontent.com");
+      setJiraUrl("https://company.atlassian.net");
+      setZoomKey("z_api_key_8123981273");
+    }
+  }, [user]);
+
+  // Fetch real decisions dynamically from database
+  const fetchRealDecisions = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch("/api/decisions", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data && data.decisions) {
+        setRealDecisions(data.decisions.map((d: any) => ({
+          id: d.id,
+          title: d.title,
+          date: d.date,
+          owner: d.participants?.join(", ") || "Unknown",
+          source: d.source || "unknown",
+          context: d.summary || ""
+        })));
+      }
+    } catch (e) {
+      console.error("Error fetching decisions", e);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (token) {
+      fetchRealDecisions();
+    } else {
+      setRealDecisions([]);
+    }
+  }, [token, stats, fetchRealDecisions]);
+
+  // Fetch single decision detail and compile its local star graph
+  const fetchDecisionGraphData = useCallback(async (decisionId: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/decisions/${decisionId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data) {
+        const nodes: GraphNode[] = [];
+        
+        nodes.push({
+          id: data.id,
+          label: data.title,
+          type: "decision",
+          info: data.summary,
+          icon: "💡"
+        });
+
+        if (data.participants) {
+          data.participants.forEach((p: string, idx: number) => {
+            nodes.push({
+              id: `${data.id}-person-${idx}`,
+              label: p,
+              type: "person",
+              info: "Participant",
+              icon: "👤"
+            });
+          });
+        }
+
+        if (data.date) {
+          nodes.push({
+            id: `${data.id}-date`,
+            label: data.date,
+            type: "date",
+            info: "Decision Date",
+            icon: "📅"
+          });
+        }
+
+        if (data.source) {
+          nodes.push({
+            id: `${data.id}-source`,
+            label: data.source.toUpperCase(),
+            type: "source",
+            info: data.source_url || "Ingested Source",
+            icon: getSourceIcon(data.source) === "?" ? "📁" : "🔌"
+          });
+        }
+
+        if (data.outcome) {
+          nodes.push({
+            id: `${data.id}-outcome`,
+            label: data.outcome,
+            type: "outcome",
+            info: "Decision Outcome",
+            icon: "✅"
+          });
+        }
+
+        if (data.related) {
+          data.related.forEach((r: any) => {
+            nodes.push({
+              id: r.id,
+              label: r.title,
+              type: "decision",
+              info: `Related | ${r.date} | ${r.source}`,
+              icon: "🔗"
+            });
+          });
+        }
+
+        setCurrentGraphNodes(nodes);
+        setCurrentGraphTitle(data.title);
+      }
+    } catch (e) {
+      console.error("Error compiling local star graph", e);
+    }
+  }, [token]);
+
+  // Compile combined decision graph from message citations
+  useEffect(() => {
+    if (!token || chatHistory.length === 0) return;
+    const lastMsg = chatHistory[chatHistory.length - 1];
+    if (lastMsg.role !== "assistant" || lastMsg.isStreaming) return;
+    if (!lastMsg.sources || lastMsg.sources.length === 0) return;
+
+    const compileCombinedGraph = async () => {
+      try {
+        const fetchPromises = lastMsg.sources.map(async (src) => {
+          try {
+            const res = await fetch(`/api/decisions/${src.id}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) return await res.json();
+          } catch (e) {
+            console.error(`Failed to fetch decision ${src.id}`, e);
+          }
+          return null;
+        });
+
+        const results = await Promise.all(fetchPromises);
+        const validResults = results.filter(Boolean);
+
+        if (validResults.length === 0) return;
+
+        const nodes: GraphNode[] = [];
+        const seenIds = new Set<string>();
+
+        validResults.forEach((data: any) => {
+          if (!seenIds.has(data.id)) {
+            seenIds.add(data.id);
+            nodes.push({
+              id: data.id,
+              label: data.title,
+              type: "decision",
+              info: data.summary,
+              icon: "💡"
+            });
+          }
+
+          if (data.participants) {
+            data.participants.forEach((p: string, idx: number) => {
+              const pid = `${data.id}-person-${idx}`;
+              if (!seenIds.has(pid)) {
+                seenIds.add(pid);
+                nodes.push({
+                  id: pid,
+                  label: p,
+                  type: "person",
+                  info: "Participant",
+                  icon: "👤"
+                });
+              }
+            });
+          }
+
+          if (data.date) {
+            const did = `${data.id}-date`;
+            if (!seenIds.has(did)) {
+              seenIds.add(did);
+              nodes.push({
+                id: did,
+                label: data.date,
+                type: "date",
+                info: "Decision Date",
+                icon: "📅"
+              });
+            }
+          }
+
+          if (data.source) {
+            const sid = `${data.id}-source`;
+            if (!seenIds.has(sid)) {
+              seenIds.add(sid);
+              nodes.push({
+                id: sid,
+                label: data.source.toUpperCase(),
+                type: "source",
+                info: data.source_url || "Ingested Source",
+                icon: getSourceIcon(data.source) === "?" ? "📁" : "🔌"
+              });
+            }
+          }
+
+          if (data.outcome) {
+            const oid = `${data.id}-outcome`;
+            if (!seenIds.has(oid)) {
+              seenIds.add(oid);
+              nodes.push({
+                id: oid,
+                label: data.outcome,
+                type: "outcome",
+                info: "Decision Outcome",
+                icon: "✅"
+              });
+            }
+          }
+
+          if (data.related) {
+            data.related.forEach((r: any) => {
+              if (!seenIds.has(r.id)) {
+                seenIds.add(r.id);
+                nodes.push({
+                  id: r.id,
+                  label: r.title,
+                  type: "decision",
+                  info: `Related | ${r.date} | ${r.source}`,
+                  icon: "🔗"
+                });
+              }
+            });
+          }
+        });
+
+        setCurrentGraphNodes(nodes);
+        setCurrentGraphTitle(`Combined Query Sources Graph (${validResults.length} decisions)`);
+      } catch (err) {
+        console.error("Error compiling combined graph", err);
+      }
+    };
+
+    void compileCombinedGraph();
+  }, [chatHistory, token]);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -377,7 +660,9 @@ export default function Home() {
     { id: "dec-5", title: "Implement SSO via Okta across all corporate platforms", date: "2023-05-18", owner: "Security Ops Team", source: "email", context: "Mandated SSO compliance before internal security audit. Approved by CEO." }
   ];
 
-  const filteredDecisions = explorerDecisions.filter((d) => {
+  const decisionsToUse = token ? realDecisions : explorerDecisions;
+
+  const filteredDecisions = decisionsToUse.filter((d) => {
     const matchesSearch = d.title.toLowerCase().includes(searchQuery.toLowerCase()) || d.owner.toLowerCase().includes(searchQuery.toLowerCase()) || d.context.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesSource = selectedSourceFilter === "all" || d.source.toLowerCase() === selectedSourceFilter;
     return matchesSearch && matchesSource;
@@ -1102,11 +1387,24 @@ export default function Home() {
                               {msg.sources.map((src: Source) => (
                                 <span
                                   key={src.id}
-                                  className="inline-flex items-center gap-1.5 text-[10px] font-mono bg-[rgb(var(--surface))]/80 text-[rgb(var(--text-primary))] border border-[rgb(var(--border))]/80 px-2.5 py-1 rounded-lg hover:border-[rgb(var(--border-focus))] cursor-help transition-all shadow-sm"
+                                  onClick={async () => {
+                                    if (token) {
+                                      await fetchDecisionGraphData(src.id);
+                                      setIsGraphOpen(true);
+                                    } else {
+                                      const match = SIMULATED_RESPONSES.find((r) => r.keywords.some((k) => src.title.toLowerCase().includes(k)));
+                                      if (match) {
+                                        setCurrentGraphNodes(match.graph);
+                                        setCurrentGraphTitle(match.question);
+                                        setIsGraphOpen(true);
+                                      }
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-1.5 text-[10px] font-mono bg-[rgb(var(--surface))]/80 text-[rgb(var(--text-primary))] border border-[rgb(var(--border))]/80 px-2.5 py-1 rounded-lg hover:border-[rgb(var(--border-focus))] cursor-pointer transition-all shadow-sm"
                                   title={`${src.title}\nDate: ${src.date}\nSource: ${src.source}`}
                                 >
                                   <span className="text-[9px] text-indigo-400 font-bold">{getSourceIcon(src.source)}</span>
-                                  {src.title.split(":")[0]}
+                                  {src.title}
                                 </span>
                               ))}
                             </div>
@@ -1340,12 +1638,18 @@ export default function Home() {
                       <h4 className="text-sm font-bold text-[rgb(var(--text-primary))] mb-1.5">{dec.title}</h4>
                       <p className="text-xs text-[rgb(var(--text-muted))] leading-relaxed mb-4">{dec.context}</p>
                       <button
-                        onClick={() => {
-                          const match = SIMULATED_RESPONSES.find((r) => r.keywords.some((k) => dec.title.toLowerCase().includes(k)));
-                          if (match) {
-                            setCurrentGraphNodes(match.graph);
-                            setCurrentGraphTitle(match.question);
+                        onClick={async () => {
+                          if (token) {
+                            await fetchDecisionGraphData(dec.id);
+                            setIsGraphOpen(true);
                             setActiveTab("chat");
+                          } else {
+                            const match = SIMULATED_RESPONSES.find((r) => r.keywords.some((k) => dec.title.toLowerCase().includes(k)));
+                            if (match) {
+                              setCurrentGraphNodes(match.graph);
+                              setCurrentGraphTitle(match.question);
+                              setActiveTab("chat");
+                            }
                           }
                         }}
                         className="text-[10px] font-mono font-bold text-[rgb(var(--accent))] hover:text-indigo-400 transition-colors tracking-wider"

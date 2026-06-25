@@ -31,6 +31,8 @@ export default function IntegrationGrid({ token }: IntegrationGridProps) {
   const [isFetching, setIsFetching] = useState(true);
 
   const fetchStatus = useCallback(async () => {
+    setConnections(DEFAULT_STATE);
+    setIsFetching(true);
     if (!token) {
       setIsFetching(false);
       return;

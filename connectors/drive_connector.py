@@ -18,7 +18,10 @@ class DriveConnector:
         "https://www.googleapis.com/auth/documents.readonly",
     ]
 
-    def __init__(self):
+    def __init__(self, refresh_token: str | None = None, client_id: str | None = None, client_secret: str | None = None):
+        self.refresh_token = refresh_token or config.GOOGLE_REFRESH_TOKEN
+        self.client_id = client_id or config.GOOGLE_CLIENT_ID
+        self.client_secret = client_secret or config.GOOGLE_CLIENT_SECRET
         self._drive = None
         self._docs = None
 
@@ -33,9 +36,9 @@ class DriveConnector:
 
         creds = Credentials(
             token=None,
-            refresh_token=config.GOOGLE_REFRESH_TOKEN,
-            client_id=config.GOOGLE_CLIENT_ID,
-            client_secret=config.GOOGLE_CLIENT_SECRET,
+            refresh_token=self.refresh_token,
+            client_id=self.client_id,
+            client_secret=self.client_secret,
             token_uri="https://oauth2.googleapis.com/token",
             scopes=self.SCOPES,
         )
@@ -51,7 +54,7 @@ class DriveConnector:
         List recently modified Google Docs.
         Returns list of dicts: {id, name, mimeType, modifiedTime, webViewLink}.
         """
-        if not config.GOOGLE_REFRESH_TOKEN:
+        if not self.refresh_token:
             return []
 
         loop = asyncio.get_running_loop()
@@ -62,7 +65,7 @@ class DriveConnector:
         Export a Drive file and return its plain-text content.
         Handles Google Docs natively; exports other types via Drive export API.
         """
-        if not config.GOOGLE_REFRESH_TOKEN:
+        if not self.refresh_token:
             return ""
 
         loop = asyncio.get_running_loop()

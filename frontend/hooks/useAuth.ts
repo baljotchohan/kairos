@@ -8,7 +8,7 @@ import {
   GoogleAuthProvider,
   signInAnonymously as firebaseSignInAnonymously,
   signOut,
-  onAuthStateChanged,
+  onIdTokenChanged,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
@@ -47,11 +47,13 @@ export function useAuth() {
       return;
     }
 
-    // Live Firebase mode
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    let refreshInterval: ReturnType<typeof setInterval> | null = null;
+
+    // Live Firebase mode with auto-token refresh
+    const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
       setLoading(true);
       if (firebaseUser) {
-        const idToken = await firebaseUser.getIdToken();
+        const idToken = await firebaseUser.getIdToken(true);
         setToken(idToken);
         setUser({
           uid: firebaseUser.uid,
@@ -60,29 +62,47 @@ export function useAuth() {
           photoURL: firebaseUser.photoURL,
           isAnonymous: firebaseUser.isAnonymous,
         });
+
+        if (refreshInterval) clearInterval(refreshInterval);
+        refreshInterval = setInterval(async () => {
+          try {
+            const refreshedToken = await firebaseUser.getIdToken(true);
+            setToken(refreshedToken);
+          } catch (err) {
+            console.error("KAIROS Auth: failed to refresh token in background", err);
+          }
+        }, 50 * 60 * 1000);
       } else {
         setUser(null);
         setToken(null);
+        if (refreshInterval) {
+          clearInterval(refreshInterval);
+          refreshInterval = null;
+        }
       }
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (refreshInterval) clearInterval(refreshInterval);
+    };
   }, []);
 
   const loginWithGoogle = async () => {
     setLoading(true);
     try {
       if (!isConfigured || !auth) {
-        // Mock Google Login
+        // Mock Google Login with dynamic unique UID
+        const mockUid = `sim-google-uid-${Math.floor(100000 + Math.random() * 900000)}`;
         const mockUser: AuthUser = {
-          uid: "sim-google-uid-8123",
+          uid: mockUid,
           email: "baljot@company.com",
           displayName: "Baljot Chohan",
           photoURL: null,
           isAnonymous: false,
         };
-        const mockToken = "simulated-google-jwt-token-99823";
+        const mockToken = `simulated-google-jwt-token-${mockUid}`;
         setUser(mockUser);
         setToken(mockToken);
         localStorage.setItem("kairos-sim-user", JSON.stringify(mockUser));
@@ -120,15 +140,16 @@ export function useAuth() {
     setLoading(true);
     try {
       if (!isConfigured || !auth) {
-        // Mock Anonymous login
+        // Mock Anonymous login with dynamic unique UID
+        const mockUid = `sim-guest-uid-${Math.floor(100000 + Math.random() * 900000)}`;
         const mockUser: AuthUser = {
-          uid: `sim-guest-uid-${Math.floor(1000 + Math.random() * 9000)}`,
+          uid: mockUid,
           email: null,
           displayName: "Guest User",
           photoURL: null,
           isAnonymous: true,
         };
-        const mockToken = "simulated-anonymous-jwt-token-11029";
+        const mockToken = `simulated-anonymous-jwt-token-${mockUid}`;
         setUser(mockUser);
         setToken(mockToken);
         localStorage.setItem("kairos-sim-user", JSON.stringify(mockUser));
@@ -160,8 +181,9 @@ export function useAuth() {
       await signOut(auth);
     } catch (error) {
       console.error("KAIROS Auth: Logout failed", error);
-      setLoading(false);
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 

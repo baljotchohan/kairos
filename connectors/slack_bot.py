@@ -25,6 +25,7 @@ class SlackBot:
         self._bolt_app = None
         self._handler = None
         self._bot_user_id: Optional[str] = None
+        self._workspace_owner_uid: str = "slack-system"
 
     # ── Token helpers ──────────────────────────────────────────────────────────
 
@@ -32,31 +33,37 @@ class SlackBot:
         t = config.SLACK_APP_TOKEN or ""
         return t if (t.startswith("xapp-") and len(t) > 20) else ""
 
-    def _get_bot_token(self) -> str:
+    def _get_bot_token(self) -> tuple[str, str]:
+        """Return (bot_token, user_uid) for the first valid Slack workspace connection."""
         try:
             conn = sqlite3.connect(config.SQLITE_PATH)
             rows = conn.execute(
-                "SELECT token_data FROM oauth_tokens WHERE service = 'slack'"
+                "SELECT token_data, user_uid FROM oauth_tokens WHERE service = 'slack' AND user_uid IS NOT NULL AND user_uid != ''"
             ).fetchall()
             conn.close()
             for row in rows:
                 data = json.loads(row[0])
                 t = data.get("bot_token", "")
-                if t.startswith("xoxb-") and len(t) > 30:
-                    return t
+                uid = row[1]
+                if t.startswith("xoxb-") and len(t) > 30 and uid:
+                    return t, uid
         except Exception:
             pass
+        # Fall back to env token with a system user scope
         t = config.SLACK_BOT_TOKEN or ""
-        return t if (t.startswith("xoxb-") and len(t) > 30) else ""
+        if t.startswith("xoxb-") and len(t) > 30:
+            return t, "slack-system"
+        return "", ""
 
     def is_configured(self) -> bool:
-        return bool(self._get_app_token() and self._get_bot_token())
+        token, _ = self._get_bot_token()
+        return bool(self._get_app_token() and token)
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
     async def start(self):
         app_token = self._get_app_token()
-        bot_token = self._get_bot_token()
+        bot_token, self._workspace_owner_uid = self._get_bot_token()
 
         if not app_token:
             print("[SlackBot] SLACK_APP_TOKEN not set — mention responses disabled.")
@@ -158,7 +165,7 @@ class SlackBot:
     async def _query_kairos(self, question: str) -> tuple[str, list, float]:
         if not self.orchestrator:
             return "KAIROS memory not initialized.", [], 0.0
-        result = await self.orchestrator.query(question)
+        result = await self.orchestrator.query(question, user_id=self._workspace_owner_uid)
         return (
             result.get("answer", "KAIROS has no recorded decision on this topic."),
             result.get("sources", []),

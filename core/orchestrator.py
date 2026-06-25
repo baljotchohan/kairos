@@ -30,6 +30,7 @@ from core.user_memory import UserMemory
 # ── Pipeline State ────────────────────────────────────────────────────────────
 
 class KairosState(TypedDict):
+    user_id: str
     slack_data: list[dict]
     email_data: list[dict]
     drive_data: list[dict]
@@ -112,7 +113,7 @@ class KairosOrchestrator:
 
     async def _gather_slack(self, state: KairosState) -> dict:
         try:
-            data = await self.slack_agent.fetch()
+            data = await self.slack_agent.fetch(user_id=state.get("user_id"))
             return {"slack_data": data, "status": "slack_done"}
         except Exception as e:
             errs = state.get("errors", []) + [f"Slack: {e}"]
@@ -120,7 +121,7 @@ class KairosOrchestrator:
 
     async def _gather_email(self, state: KairosState) -> dict:
         try:
-            data = await self.email_agent.fetch()
+            data = await self.email_agent.fetch(user_id=state.get("user_id"))
             return {"email_data": data, "status": "email_done"}
         except Exception as e:
             errs = state.get("errors", []) + [f"Gmail: {e}"]
@@ -128,7 +129,7 @@ class KairosOrchestrator:
 
     async def _gather_drive(self, state: KairosState) -> dict:
         try:
-            data = await self.drive_agent.fetch()
+            data = await self.drive_agent.fetch(user_id=state.get("user_id"))
             return {"drive_data": data, "status": "drive_done"}
         except Exception as e:
             errs = state.get("errors", []) + [f"Drive: {e}"]
@@ -136,7 +137,7 @@ class KairosOrchestrator:
 
     async def _gather_meetings(self, state: KairosState) -> dict:
         try:
-            data = await self.meeting_agent.fetch()
+            data = await self.meeting_agent.fetch(user_id=state.get("user_id"))
             return {"meeting_data": data, "status": "meetings_done"}
         except Exception as e:
             errs = state.get("errors", []) + [f"Meetings: {e}"]
@@ -189,10 +190,11 @@ class KairosOrchestrator:
 
         count = 0
         errors = list(state.get("errors", []))
+        user_id = state.get("user_id")
 
         for i, batch in enumerate(batches):
             try:
-                extracted = await self.synthesis_agent.extract_decisions(batch)
+                extracted = await self.synthesis_agent.extract_decisions(batch, user_id=user_id)
                 count += len(extracted)
             except Exception as e:
                 errors.append(f"Synthesis: {e}")
@@ -207,6 +209,7 @@ class KairosOrchestrator:
 
     async def run_ingestion(
         self,
+        user_id: str,
         progress_callback: Callable[[str], Awaitable[None]] | None = None
     ) -> dict:
         """Full ingestion run. Serialized via Lock to prevent race conditions."""
@@ -215,6 +218,7 @@ class KairosOrchestrator:
                 await progress_callback("🚀 KAIROS ingestion started...")
 
             initial: KairosState = {
+                "user_id": user_id,
                 "slack_data": [],
                 "email_data": [],
                 "drive_data": [],
@@ -321,7 +325,7 @@ class KairosOrchestrator:
             if stream_callback:
                 await stream_callback({"type": "thinking", "agent": "research_agent", "step": "think", "content": "Running deep multi-step research on KAIROS graph..."})
             
-            result = await self.research_agent.run(resolved_context.resolved_query)
+            result = await self.research_agent.run(resolved_context.resolved_query, user_id=user_id)
             merged_traces.extend(self.research_agent.get_trace())
             
             if stream_callback:
@@ -341,7 +345,7 @@ class KairosOrchestrator:
             if stream_callback:
                 await stream_callback({"type": "thinking", "agent": "synthesis_agent", "step": "think", "content": "Synthesizing response from relevant company memories..."})
             
-            result = await self.synthesis_agent.run(question, resolved_context=resolved_context)
+            result = await self.synthesis_agent.run(question, resolved_context=resolved_context, user_id=user_id)
             merged_traces.extend(self.synthesis_agent.get_trace())
             
             if stream_callback:

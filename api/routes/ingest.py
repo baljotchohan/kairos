@@ -22,5 +22,5 @@ async def ingest(
     current_user: UserProfile = Depends(get_current_user),
 ):
     """Manually trigger a full ingestion run (runs in background)."""
-    background_tasks.add_task(orchestrator.run_ingestion)
+    background_tasks.add_task(orchestrator.run_ingestion, current_user.uid)
     return {"status": "ingestion_started", "message": "Ingestion running in background"}

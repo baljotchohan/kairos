@@ -148,6 +148,13 @@ export function useKairosChat(token: string | null) {
     if (token) {
       fetchSessions();
       fetchUserProfile();
+    } else {
+      setMessages([]);
+      setSessions([]);
+      setUserProfile(null);
+      setStats(null);
+      setIngestProgress(null);
+      setActiveSessionId(undefined);
     }
   }, [token, fetchSessions, fetchUserProfile]);
 

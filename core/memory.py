@@ -108,8 +108,11 @@ class KairosMemory:
 
     # ── Write ─────────────────────────────────────────────────────────────────
 
-    def store(self, node: DecisionNode):
+    def store(self, node: DecisionNode, user_id: Optional[str] = None):
         """Store a decision in all three layers and sync the Obsidian vault."""
+        if user_id:
+            node.user_id = user_id
+
         # 1. ChromaDB (vector search)
         doc_text = f"{node.title}\n{node.summary}\n{node.outcome}\n{' '.join(node.topics)}"
         self.collection.upsert(
@@ -121,6 +124,7 @@ class KairosMemory:
                 "source": node.source,
                 "participants": json.dumps(node.participants),
                 "topics": json.dumps(node.topics),
+                "user_id": node.user_id,
             }],
         )
 
@@ -128,15 +132,20 @@ class KairosMemory:
         self._sqlite_upsert(node)
 
         # 3. Graph + Obsidian — auto-links the node and writes only the changed notes
-        self.graph.add_decision(node, vault_path=self.obsidian_vault)
+        self.graph.add_decision(node, vault_path=self.obsidian_vault, user_id=node.user_id)
 
     # ── Read ──────────────────────────────────────────────────────────────────
 
-    def semantic_search(self, query: str, n_results: int = 5) -> list[DecisionNode]:
+    def semantic_search(self, query: str, n_results: int = 5, user_id: Optional[str] = None) -> list[DecisionNode]:
         """Vector similarity search — best for open-ended NL queries."""
-        results = self.collection.query(query_texts=[query], n_results=n_results)
+        where_filter = {"user_id": user_id} if user_id else None
+        results = self.collection.query(
+            query_texts=[query], 
+            n_results=n_results,
+            where=where_filter
+        )
         ids = results["ids"][0] if results["ids"] else []
-        return [n for i in ids if (n := self.graph.get_decision(i))]
+        return [n for i in ids if (n := self.graph.get_decision(i, user_id=user_id))]
 
     def structured_search(
         self,
@@ -144,6 +153,7 @@ class KairosMemory:
         person: Optional[str] = None,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> list[DecisionNode]:
         """SQL-backed exact / range queries."""
         clauses, params = [], []
@@ -159,20 +169,23 @@ class KairosMemory:
         if date_to:
             clauses.append("date <= ?")
             params.append(date_to)
+        if user_id:
+            clauses.append("user_id = ?")
+            params.append(user_id)
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with sqlite3.connect(self.db_path) as conn:
             rows = conn.execute(f"SELECT id FROM decisions {where}", params).fetchall()
-        return [n for row in rows if (n := self.graph.get_decision(row[0]))]
+        return [n for row in rows if (n := self.graph.get_decision(row[0], user_id=user_id))]
 
-    def hybrid_search(self, query: str, n_results: int = 5) -> list[DecisionNode]:
+    def hybrid_search(self, query: str, n_results: int = 5, user_id: Optional[str] = None) -> list[DecisionNode]:
         """
         Combines semantic (vector) search, keyword SQL search, source filter, and recency boost.
         """
         from datetime import datetime
 
         # 1. Semantic Search
-        semantic_nodes = self.semantic_search(query, n_results=n_results * 2)
+        semantic_nodes = self.semantic_search(query, n_results=n_results * 2, user_id=user_id)
 
         # 2. Keyword + source-aware SQL search
         words = [w.strip(",.?!\"'()").lower() for w in query.split() if len(w) > 3]
@@ -186,18 +199,18 @@ class KairosMemory:
         }
         for kw, src in SOURCE_KEYWORDS.items():
             if kw in query.lower():
-                source_nodes.extend(self._search_by_source(src))
+                source_nodes.extend(self._search_by_source(src, user_id=user_id))
 
         if words:
             for word in words[:4]:
                 if word not in SOURCE_KEYWORDS:
-                    sql_nodes.extend(self.structured_search(topic=word))
-                    sql_nodes.extend(self.structured_search(person=word))
+                    sql_nodes.extend(self.structured_search(topic=word, user_id=user_id))
+                    sql_nodes.extend(self.structured_search(person=word, user_id=user_id))
 
         # 3. Graph neighbors of top semantic results
         graph_nodes = []
         for node in semantic_nodes[:3]:
-            graph_nodes.extend(self.graph.get_connected(node.id, depth=1))
+            graph_nodes.extend(self.graph.get_connected(node.id, depth=1, user_id=user_id))
 
         # 4. Merge, score, and apply recency boost
         all_nodes: dict[str, DecisionNode] = {}
@@ -230,7 +243,7 @@ class KairosMemory:
                 pass
 
             # Graph connectivity boost
-            neighbors = [n.id for n in self.graph.get_connected(node.id, depth=1)]
+            neighbors = [n.id for n in self.graph.get_connected(node.id, depth=1, user_id=user_id)]
             connected = sum(1 for nid2 in neighbors if nid2 in all_nodes)
             score += 0.1 * connected
 
@@ -239,14 +252,18 @@ class KairosMemory:
         sorted_ids = sorted(scores, key=scores.get, reverse=True)
         return [all_nodes[nid] for nid in sorted_ids[:n_results]]
 
-    def _search_by_source(self, source_keyword: str) -> list[DecisionNode]:
+    def _search_by_source(self, source_keyword: str, user_id: Optional[str] = None) -> list[DecisionNode]:
         """Return all decisions whose source contains source_keyword."""
+        query = "SELECT id FROM decisions WHERE source LIKE ?"
+        params = [f"%{source_keyword}%"]
+        if user_id:
+            query += " AND user_id = ?"
+            params.append(user_id)
+        query += " ORDER BY date DESC LIMIT 20"
+
         with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute(
-                "SELECT id FROM decisions WHERE source LIKE ? ORDER BY date DESC LIMIT 20",
-                (f"%{source_keyword}%",),
-            ).fetchall()
-        return [n for row in rows if (n := self.graph.get_decision(row[0]))]
+            rows = conn.execute(query, params).fetchall()
+        return [n for row in rows if (n := self.graph.get_decision(row[0], user_id=user_id))]
 
     def get_user_context(self, user_id: str) -> str:
         """Loads the user profile context and recent history summary from UserMemory."""
@@ -270,9 +287,9 @@ class KairosMemory:
         profile_str = "\n".join(context_parts)
         return f"User Profile Context:\n{profile_str}\n\nRecent History:\n{history_str}"
 
-    def get_context(self, query: str, n_results: int = 5) -> list[dict]:
+    def get_context(self, query: str, n_results: int = 5, user_id: Optional[str] = None) -> list[dict]:
         """MCP tool: returns serialisable list for get_context() MCP call."""
-        nodes = self.semantic_search(query, n_results=n_results)
+        nodes = self.semantic_search(query, n_results=n_results, user_id=user_id)
         return [
             {
                 "id": n.id,
@@ -282,14 +299,14 @@ class KairosMemory:
                 "source": n.source,
                 "participants": n.participants,
                 "outcome": n.outcome,
-                "related": [r.id for r in self.graph.get_connected(n.id, depth=1)],
+                "related": [r.id for r in self.graph.get_connected(n.id, depth=1, user_id=user_id)],
             }
             for n in nodes
         ]
 
-    def rebuild_obsidian(self):
+    def rebuild_obsidian(self, user_id: Optional[str] = None):
         """Full vault rebuild — use after bulk imports or if vault gets out of sync."""
-        self.graph.export_to_obsidian(self.obsidian_vault)
+        self.graph.export_to_obsidian(self.obsidian_vault, user_id=user_id)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -310,19 +327,24 @@ class KairosMemory:
                     metadata TEXT
                 )
             """)
+            # Schema Migration: Safely add user_id column if not exists
+            cursor = conn.execute("PRAGMA table_info(decisions)")
+            columns = [info[1] for info in cursor.fetchall()]
+            if "user_id" not in columns:
+                conn.execute("ALTER TABLE decisions ADD COLUMN user_id TEXT NOT NULL DEFAULT ''")
             conn.commit()
 
     def _sqlite_upsert(self, node: DecisionNode):
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
                 INSERT OR REPLACE INTO decisions
-                (id, title, summary, date, participants, source, source_url, topics, outcome, raw_text, metadata)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                (id, title, summary, date, participants, source, source_url, topics, outcome, raw_text, metadata, user_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 node.id, node.title, node.summary, node.date,
                 json.dumps(node.participants), node.source,
                 node.source_url, json.dumps(node.topics), node.outcome,
-                node.raw_text, json.dumps(node.metadata),
+                node.raw_text, json.dumps(node.metadata), node.user_id,
             ))
             conn.commit()
 
