@@ -170,6 +170,35 @@ class SlackConnector:
             print(f"[SlackConnector] thread_replies error: {e}")
             return []
 
+    async def get_recent_messages(
+        self, limit: int = 20, days_back: int = 14, max_channels: int = 12
+    ) -> list[dict]:
+        """
+        Most recent messages across the workspace's channels, newest first.
+        Lightweight live lookup for "show my recent Slack messages" — bounded by
+        days_back and max_channels so it stays fast.
+        """
+        if not self._token:
+            return []
+
+        channels = await self.get_channels()
+        collected: list[dict] = []
+        for ch in channels[:max_channels]:
+            try:
+                msgs = await self.get_messages(ch["id"], days_back=days_back)
+            except Exception as e:
+                print(f"[SlackConnector] get_recent_messages error ({ch.get('name')}): {e}")
+                continue
+            collected.extend(msgs)
+            if len(collected) >= limit * 5:
+                break
+
+        collected.sort(key=lambda m: float(m.get("ts", "0") or 0), reverse=True)
+        top = collected[:limit]
+        for m in top:
+            m["text"] = await self._resolve_mentions(m.get("text", ""))
+        return top
+
     # ── Helpers ────────────────────────────────────────────────────────────────
 
     async def _resolve_user(self, user_id: str) -> str:
