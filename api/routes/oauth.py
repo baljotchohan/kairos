@@ -237,7 +237,7 @@ async def slack_callback(code: str = None, state: str = None, error: str = None)
 
     except Exception as e:
         print(f"[OAuth] 🔴 Slack callback error: {e}")
-        return _popup_error(str(e))
+        return _popup_error("We couldn't complete the connection. Please try again.")
 
 
 # ── GMAIL + GOOGLE DRIVE (same Google OAuth flow) ─────────────────────────────
@@ -326,7 +326,7 @@ async def gmail_callback(code: str = None, state: str = None, error: str = None)
 
     except Exception as e:
         print(f"[OAuth] 🔴 Gmail callback error: {e}")
-        return _popup_error(str(e))
+        return _popup_error("We couldn't complete the connection. Please try again.")
 
 
 # ── JIRA ──────────────────────────────────────────────────────────────────────
@@ -408,7 +408,7 @@ async def jira_callback(code: str = None, state: str = None, error: str = None):
 
     except Exception as e:
         print(f"[OAuth] 🔴 Jira callback error: {e}")
-        return _popup_error(str(e))
+        return _popup_error("We couldn't complete the connection. Please try again.")
 
 
 # ── ZOOM ──────────────────────────────────────────────────────────────────────
@@ -416,19 +416,35 @@ async def jira_callback(code: str = None, state: str = None, error: str = None):
 @router.get("/zoom/start")
 async def zoom_start(current_user: UserProfile = Depends(get_current_user)):
     state = _generate_state_token(current_user.uid)
-    # Server-to-Server OAuth (ZOOM_ACCOUNT_ID set) — auto-connect using account credentials, no redirect needed
-    if config.ZOOM_ACCOUNT_ID and config.ZOOM_CLIENT_ID:
-        sim_url = f"{_callback_url('zoom')}?code=sim-zoom-code&state={state}"
-        return {"service": "zoom", "url": sim_url}
+
+    # Server-to-Server app (account_credentials grant): there is NO user consent
+    # screen for this grant type, so opening a popup would just flash our own
+    # callback. Connect server-side immediately and tell the frontend it's done
+    # (no `url` → the button skips the popup and refreshes to "Connected").
+    if config.ZOOM_ACCOUNT_ID and config.ZOOM_CLIENT_ID and config.ZOOM_CLIENT_SECRET:
+        _store_token(current_user.uid, "zoom", {
+            "mode": "s2s",
+            "account_id": config.ZOOM_ACCOUNT_ID,
+            "client_id": config.ZOOM_CLIENT_ID,
+            "client_secret": config.ZOOM_CLIENT_SECRET,
+            "service": "zoom",
+        })
+        print(f"[OAuth] ✅ Zoom (S2S) connected uid={current_user.uid}")
+        return {"service": "zoom", "connected": True,
+                "message": "Zoom connected via account credentials."}
+
+    # No real credentials configured → simulated connect (demo mode).
     if not config.ZOOM_CLIENT_ID or config.ZOOM_CLIENT_ID == "your_client_id":
         sim_url = f"{_callback_url('zoom')}?code=sim-zoom-code&state={state}"
         return {"service": "zoom", "url": sim_url}
 
+    # User-managed OAuth app → real Zoom consent popup (redirect_uri URL-encoded).
+    from urllib.parse import quote
     url = (
         "https://zoom.us/oauth/authorize"
         "?response_type=code"
         f"&client_id={config.ZOOM_CLIENT_ID}"
-        f"&redirect_uri={_callback_url('zoom')}"
+        f"&redirect_uri={quote(_callback_url('zoom'), safe='')}"
         f"&state={state}"
     )
     return {"service": "zoom", "url": url}
@@ -445,12 +461,11 @@ async def zoom_callback(code: str = None, state: str = None, error: str = None):
 
     if code == "sim-zoom-code":
         _store_token(verified_uid, "zoom", {
-            "access_token": config.ZOOM_CLIENT_ID,
-            "account_id": config.ZOOM_ACCOUNT_ID,
+            "mode": "sim",
             "service": "zoom",
         })
-        print(f"[OAuth] ✅ Zoom connected uid={verified_uid}")
-        return _popup_success("Zoom", "Meeting transcription enabled")
+        print(f"[OAuth] ✅ Zoom connected (demo) uid={verified_uid}")
+        return _popup_success("Zoom", "Meeting transcription enabled (demo)")
 
     try:
         async with httpx.AsyncClient() as client:
@@ -477,7 +492,7 @@ async def zoom_callback(code: str = None, state: str = None, error: str = None):
 
     except Exception as e:
         print(f"[OAuth] 🔴 Zoom callback error: {e}")
-        return _popup_error(str(e))
+        return _popup_error("We couldn't complete the connection. Please try again.")
 
 
 # ── STATUS + DISCONNECT ───────────────────────────────────────────────────────
