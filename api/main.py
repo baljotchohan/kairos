@@ -11,10 +11,14 @@ Startup:
 from __future__ import annotations
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+log = logging.getLogger(__name__)
 
 from config import config
 from core.memory import KairosMemory
@@ -50,13 +54,19 @@ async def lifespan(app: FastAPI):
     # SEED_DEMO_DATA=true only if you want the Helios Tech sample decisions.
     if config.SEED_DEMO_DATA:
         try:
-            if memory.graph.stats().get("total_decisions", 0) == 0:
+            # Seed Helios Tech sample decisions under a dedicated demo account
+            # (config.DEMO_USER_ID) so they show ONLY for the demo login and never
+            # leak into real users' scoped views. Idempotent on the demo account;
+            # because the Helios nodes use fixed IDs, this also migrates any legacy
+            # user_id="" Helios rows from earlier seeds onto the demo scope.
+            demo_uid = config.DEMO_USER_ID
+            if memory.graph.stats(user_id=demo_uid).get("total_decisions", 0) == 0:
                 from data.demo.helios_tech import get_demo_decisions
                 decisions = get_demo_decisions()
-                print(f"🌱 SEED_DEMO_DATA=true — seeding {len(decisions)} demo decisions...")
+                print(f"🌱 SEED_DEMO_DATA=true — seeding {len(decisions)} demo decisions under '{demo_uid}'...")
                 for node in decisions:
-                    memory.store(node)
-                print(f"✅ Seeded — {memory.graph.stats()}")
+                    memory.store(node, user_id=demo_uid)
+                print(f"✅ Seeded demo account '{demo_uid}' — {memory.graph.stats(user_id=demo_uid)}")
         except Exception as e:
             print(f"⚠️  Demo seed skipped: {e}")
 
@@ -153,6 +163,15 @@ from api.websocket import ws_router
 
 app.include_router(router)
 app.include_router(ws_router)
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    log.error("Unhandled exception on %s %s", request.method, request.url.path, exc_info=exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An unexpected error occurred. Please try again."},
+    )
 
 
 @app.get("/")
