@@ -69,6 +69,16 @@ class UserProfile(BaseModel):
     name: Optional[str] = None
     is_anonymous: bool = False
 
+
+def _map_demo_user(profile: UserProfile) -> UserProfile:
+    """Route the dedicated demo login to the Helios demo data scope so judges see
+    the sample decisions, while every real user keeps their own uid. No-op unless
+    the authenticated email matches config.DEMO_LOGIN_EMAIL."""
+    demo_email = (getattr(config, "DEMO_LOGIN_EMAIL", "") or "").strip().lower()
+    if demo_email and (profile.email or "").strip().lower() == demo_email:
+        profile.uid = config.DEMO_USER_ID
+    return profile
+
 # ── Token Verification Helper ──────────────────────────────────────────────────
 
 def verify_token(token: str) -> UserProfile:
@@ -87,12 +97,12 @@ def verify_token(token: str) -> UserProfile:
             )
         if "google" in token:
             google_id = token.split("sim-google-uid-")[-1] if "sim-google-uid-" in token else (token.split("-")[-1] if "-" in token else "8123")
-            return UserProfile(
+            return _map_demo_user(UserProfile(
                 uid=f"sim-google-uid-{google_id}",
                 email="baljot@company.com",
                 name="Baljot Chohan",
                 is_anonymous=False
-            )
+            ))
         else:
             # Anonymous Guest
             guest_id = token.split("sim-guest-uid-")[-1] if "sim-guest-uid-" in token else (token.split("-")[-1] if "-" in token else "9999")
@@ -130,16 +140,18 @@ def verify_token(token: str) -> UserProfile:
         provider = decoded_token.get("firebase", {}).get("sign_in_provider")
         is_anonymous = (provider == "anonymous")
         
-        return UserProfile(
+        return _map_demo_user(UserProfile(
             uid=decoded_token.get("uid"),
             email=decoded_token.get("email"),
             name=decoded_token.get("name"),
             is_anonymous=is_anonymous
-        )
+        ))
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Firebase token verification failed", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid Firebase Token: {str(e)}",
+            detail="Invalid or expired session. Please sign in again.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
