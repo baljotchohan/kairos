@@ -9,9 +9,12 @@ Receive: stream of tokens, then a final sources message
 from __future__ import annotations
 
 import json
+import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from api.auth import verify_token
+
+log = logging.getLogger(__name__)
 
 ws_router = APIRouter()
 
@@ -29,7 +32,8 @@ async def websocket_endpoint(websocket: WebSocket):
         user_profile = verify_token(token)
     except Exception as e:
         await websocket.accept()
-        await websocket.send_json({"type": "error", "message": f"Authentication failed: {str(e)}"})
+        log.warning("WebSocket auth error", exc_info=True)
+        await websocket.send_json({"type": "error", "message": "Authentication failed. Please sign in again."})
         await websocket.close()
         return
 
@@ -93,8 +97,9 @@ async def websocket_endpoint(websocket: WebSocket):
                         "user_context": result["user_context"]
                     })
                 except Exception as e:
+                    log.error("Query failed for user %s", user_id, exc_info=True)
                     try:
-                        await websocket.send_json({"type": "error", "message": str(e)})
+                        await websocket.send_json({"type": "error", "message": "Something went wrong while processing your question. Please try again."})
                     except Exception:
                         pass
                     continue
@@ -118,8 +123,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     except Exception:
                         pass
                 except Exception as e:
+                    log.error("Ingestion failed for user %s", user_id, exc_info=True)
                     try:
-                        await websocket.send_json({"type": "error", "message": str(e)})
+                        await websocket.send_json({"type": "error", "message": "Ingestion encountered an error. Check your connected sources and try again."})
                     except Exception:
                         pass
 
@@ -140,7 +146,8 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
     except Exception as e:
+        log.error("Unexpected WebSocket error for user %s", user_id if "user_id" in dir() else "unknown", exc_info=True)
         try:
-            await websocket.send_json({"type": "error", "message": str(e)})
+            await websocket.send_json({"type": "error", "message": "An unexpected error occurred. Please refresh and try again."})
         except Exception:
             pass
