@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useKairosChat, Source, KairosStats } from "@/hooks/useKairosChat";
 import { useAuth } from "@/hooks/useAuth";
 import ConnectionStatus from "@/components/ConnectionStatus";
 import SourcePanel from "@/components/SourcePanel";
 import StreamingText, { ThinkingIndicator } from "@/components/StreamingText";
-import DecisionGraph, { GraphNode } from "@/components/DecisionGraph";
+import DecisionGraph, { GraphNode, GraphEdge } from "@/components/DecisionGraph";
 import { ChatHistoryPanel } from "@/components/ChatHistoryPanel";
 import IntegrationGrid from "@/components/IntegrationGrid";
 import KairosLogo from "@/components/KairosLogo";
@@ -66,6 +66,14 @@ const SIMULATED_RESPONSES = [
       { id: "o3", label: "₹40L Write-off", type: "outcome", info: "Resulted in write-down & redirect to web app", icon: "❌" }
     ] as GraphNode[]
   }
+];
+
+const explorerDecisions = [
+  { id: "dec-1", title: "Approve SaaS Vendor Contract Renewal ($2.3M/year)", date: "2019-11-15", owner: "John Smith", source: "drive", context: "Software contract approval for $2.3M/year with unchecked 3-year auto-renewals. Signed by former IT Director." },
+  { id: "dec-2", title: "Choose React over Vue for Core Web Clients", date: "2022-08-06", owner: "Frontend Dev Team", source: "slack", context: "Selected React (4-2 vote) over Vue. Priya Sharma advocated Vue. Decided for larger hiring pool." },
+  { id: "dec-3", title: "Terminate Project Phoenix (Mobile Client Development)", date: "2021-03-10", owner: "Board of Directors", source: "meeting", context: "Discontinued React Native client. Wrote down ₹40 Lakhs due to lack of team mobile development experience." },
+  { id: "dec-4", title: "Migrate analytical pipelines from Redshift to BigQuery", date: "2024-02-12", owner: "Alex Rivera", source: "jira", context: "Data warehousing consolidation. BigQuery chosen due to native integration with streaming pipelines." },
+  { id: "dec-5", title: "Implement SSO via Okta across all corporate platforms", date: "2023-05-18", owner: "Security Ops Team", source: "email", context: "Mandated SSO compliance before internal security audit. Approved by CEO." }
 ];
 
 export default function Home() {
@@ -151,6 +159,7 @@ export default function Home() {
   
   // Simulation coordinate states
   const [currentGraphNodes, setCurrentGraphNodes] = useState<GraphNode[]>([]);
+  const [currentGraphEdges, setCurrentGraphEdges] = useState<GraphEdge[]>([]);
   const [currentGraphTitle, setCurrentGraphTitle] = useState("");
   
   // Custom states for simulated interface
@@ -183,6 +192,138 @@ export default function Home() {
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const [realDecisions, setRealDecisions] = useState<any[]>([]);
+  const [activeSimulationDecisions, setActiveSimulationDecisions] = useState<any[]>([]);
+
+  // Helper to compile a global graph from a list of decisions, deduping participants, sources, dates
+  const compileGlobalGraph = useCallback((decisionsList: any[]) => {
+    const nodes: GraphNode[] = [];
+    const edges: GraphEdge[] = [];
+    const seenNodeIds = new Set<string>();
+    const seenEdgeKeys = new Set<string>();
+
+    const addNode = (node: GraphNode) => {
+      if (!seenNodeIds.has(node.id)) {
+        seenNodeIds.add(node.id);
+        nodes.push(node);
+      }
+    };
+
+    const addEdge = (source: string, target: string) => {
+      const key1 = `${source}->${target}`;
+      const key2 = `${target}->${source}`;
+      if (!seenEdgeKeys.has(key1) && !seenEdgeKeys.has(key2)) {
+        seenEdgeKeys.add(key1);
+        edges.push({ source, target });
+      }
+    };
+
+    decisionsList.forEach((d) => {
+      const decisionId = d.id;
+      
+      let decIcon = "💡";
+      const titleLower = (d.title || "").toLowerCase();
+      if (titleLower.includes("react") || titleLower.includes("vue")) decIcon = "⚛️";
+      else if (titleLower.includes("vendor") || titleLower.includes("contract")) decIcon = "🤝";
+      else if (titleLower.includes("phoenix") || titleLower.includes("mobile")) decIcon = "📱";
+      else if (titleLower.includes("redshift") || titleLower.includes("bigquery")) decIcon = "📊";
+      else if (titleLower.includes("sso") || titleLower.includes("okta")) decIcon = "🔐";
+
+      addNode({
+        id: decisionId,
+        label: d.title || "Untitled Decision",
+        type: "decision",
+        info: d.summary || d.context || "",
+        icon: decIcon
+      });
+
+      let participantsList: string[] = [];
+      if (Array.isArray(d.participants)) {
+        participantsList = d.participants;
+      } else if (typeof d.owner === "string" && d.owner !== "Unknown") {
+        participantsList = d.owner.split(",").map((s: string) => s.trim());
+      }
+
+      participantsList.forEach((p: string) => {
+        if (!p) return;
+        const cleanName = p.trim();
+        const personId = `person-${cleanName.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+        addNode({
+          id: personId,
+          label: cleanName,
+          type: "person",
+          info: "Participant",
+          icon: "👤"
+        });
+        addEdge(decisionId, personId);
+      });
+
+      if (d.date) {
+        const cleanDate = d.date.trim();
+        const dateId = `date-${cleanDate.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+        addNode({
+          id: dateId,
+          label: cleanDate,
+          type: "date",
+          info: "Decision Date",
+          icon: "📅"
+        });
+        addEdge(decisionId, dateId);
+      }
+
+      if (d.source) {
+        const cleanSource = d.source.trim();
+        const sourceId = `source-${cleanSource.toLowerCase()}`;
+        
+        let icon = "🔌";
+        const srcLower = cleanSource.toLowerCase();
+        if (srcLower === "slack") icon = "#";
+        else if (srcLower === "email" || srcLower === "gmail") icon = "@";
+        else if (srcLower === "drive" || srcLower === "google drive") icon = "D";
+        else if (srcLower === "jira") icon = "J";
+        else if (srcLower === "meeting" || srcLower === "zoom") icon = "M";
+
+        addNode({
+          id: sourceId,
+          label: cleanSource.toUpperCase(),
+          type: "source",
+          info: d.source_url || "Ingested Source",
+          icon: icon
+        });
+        addEdge(decisionId, sourceId);
+      }
+
+      if (d.outcome) {
+        const cleanOutcome = d.outcome.trim();
+        const outcomeId = `outcome-${decisionId}`;
+        addNode({
+          id: outcomeId,
+          label: cleanOutcome,
+          type: "outcome",
+          info: "Decision Outcome",
+          icon: "✅"
+        });
+        addEdge(decisionId, outcomeId);
+      }
+    });
+
+    return { nodes, edges };
+  }, []);
+
+  // Synchronize decisions to global graph
+  useEffect(() => {
+    const decisionsToGraph = token ? realDecisions : activeSimulationDecisions;
+    if (decisionsToGraph.length > 0) {
+      const { nodes, edges } = compileGlobalGraph(decisionsToGraph);
+      setCurrentGraphNodes(nodes);
+      setCurrentGraphEdges(edges);
+      setCurrentGraphTitle(token ? "Global Organizational Memory Network" : "Simulated Memory Graph");
+    }
+  }, [token, realDecisions, activeSimulationDecisions, compileGlobalGraph]);
+
+  const displayStats = isConnected && stats ? stats : simulatedStats;
+  const chatHistory = isConnected ? messages : simulatedMessages;
+  const isChatStreaming = isConnected ? isStreaming : simulatedStreaming;
+  const activeSources = chatHistory.length > 0 ? (chatHistory[chatHistory.length - 1]?.sources || []) : [];
 
   // Initialize theme from localStorage namespaced by user UID
   useEffect(() => {
@@ -203,11 +344,12 @@ export default function Home() {
     document.documentElement.className = `${nextTheme} h-full`;
   };
 
-  // Seed default graph on mount if in simulation mode
+  // Seed default decisions on mount if in simulation mode
   useEffect(() => {
     if (!token) {
-      setCurrentGraphNodes(SIMULATED_RESPONSES[0].graph);
-      setCurrentGraphTitle(SIMULATED_RESPONSES[0].question);
+      setActiveSimulationDecisions(explorerDecisions.slice(0, 2));
+    } else {
+      setActiveSimulationDecisions([]);
     }
   }, [token]);
 
@@ -403,7 +545,7 @@ export default function Home() {
 
     const compileCombinedGraph = async () => {
       try {
-        const fetchPromises = lastMsg.sources.map(async (src) => {
+        const fetchPromises = lastMsg.sources.map(async (src: Source) => {
           try {
             const res = await fetch(`/api/decisions/${src.id}`, {
               headers: { Authorization: `Bearer ${token}` }
@@ -561,8 +703,26 @@ export default function Home() {
               sources: match.sources,
             },
           ]);
-          setCurrentGraphNodes(match.graph);
-          setCurrentGraphTitle(match.question);
+
+          let matchedDecId = "";
+          if (textLower.includes("vendor") || textLower.includes("paying") || textLower.includes("2.3")) {
+            matchedDecId = "dec-1";
+          } else if (textLower.includes("react") || textLower.includes("vue") || textLower.includes("framework")) {
+            matchedDecId = "dec-2";
+          } else if (textLower.includes("mobile") || textLower.includes("phoenix") || textLower.includes("app")) {
+            matchedDecId = "dec-3";
+          }
+
+          if (matchedDecId) {
+            const decObj = explorerDecisions.find(d => d.id === matchedDecId);
+            if (decObj) {
+              setActiveSimulationDecisions(prev => {
+                if (prev.some(d => d.id === matchedDecId)) return prev;
+                return [...prev, decObj];
+              });
+            }
+          }
+
           setSimulatedStats((prev) => ({
             ...prev,
             total_decisions: prev.total_decisions + 1,
@@ -571,7 +731,7 @@ export default function Home() {
           setLogs((prev) => [
             ...prev,
             `[${timestamp}] INFO: Query matches decision index for: "${userText.slice(0, 20)}..."`,
-            `[${timestamp}] SUCCESS: Extracted decision graph with ${match.graph.length} nodes.`
+            `[${timestamp}] SUCCESS: Extracted decision graph with updated nodes.`
           ]);
         } else {
           setSimulatedMessages((prev) => [
@@ -598,9 +758,8 @@ export default function Home() {
       clearMessages();
     } else {
       setSimulatedMessages([]);
+      setActiveSimulationDecisions(explorerDecisions.slice(0, 2));
     }
-    setCurrentGraphNodes([]);
-    setCurrentGraphTitle("");
   };
 
   const triggerSync = (platform: string) => {
@@ -624,6 +783,23 @@ export default function Home() {
           total_decisions: prev.total_decisions + count,
           total_relations: prev.total_relations + count * 3,
         }));
+
+        let platformDecId = "";
+        if (platform === "slack") platformDecId = "dec-2";
+        else if (platform === "drive") platformDecId = "dec-1";
+        else if (platform === "jira") platformDecId = "dec-4";
+        else if (platform === "gmail") platformDecId = "dec-5";
+        else if (platform === "zoom") platformDecId = "dec-3";
+
+        if (platformDecId) {
+          const decObj = explorerDecisions.find(d => d.id === platformDecId);
+          if (decObj) {
+            setActiveSimulationDecisions(prev => {
+              if (prev.some(d => d.id === platformDecId)) return prev;
+              return [...prev, decObj];
+            });
+          }
+        }
       }
     }, 1500);
   };
@@ -652,13 +828,7 @@ export default function Home() {
     }
   };
 
-  const explorerDecisions = [
-    { id: "dec-1", title: "Approve SaaS Vendor Contract Renewal ($2.3M/year)", date: "2019-11-15", owner: "John Smith", source: "drive", context: "Software contract approval for $2.3M/year with unchecked 3-year auto-renewals. Signed by former IT Director." },
-    { id: "dec-2", title: "Choose React over Vue for Core Web Clients", date: "2022-08-06", owner: "Frontend Dev Team", source: "slack", context: "Selected React (4-2 vote) over Vue. Priya Sharma advocated Vue. Decided for larger hiring pool." },
-    { id: "dec-3", title: "Terminate Project Phoenix (Mobile Client Development)", date: "2021-03-10", owner: "Board of Directors", source: "meeting", context: "Discontinued React Native client. Wrote down ₹40 Lakhs due to lack of team mobile development experience." },
-    { id: "dec-4", title: "Migrate analytical pipelines from Redshift to BigQuery", date: "2024-02-12", owner: "Alex Rivera", source: "jira", context: "Data warehousing consolidation. BigQuery chosen due to native integration with streaming pipelines." },
-    { id: "dec-5", title: "Implement SSO via Okta across all corporate platforms", date: "2023-05-18", owner: "Security Ops Team", source: "email", context: "Mandated SSO compliance before internal security audit. Approved by CEO." }
-  ];
+
 
   const decisionsToUse = token ? realDecisions : explorerDecisions;
 
@@ -668,10 +838,7 @@ export default function Home() {
     return matchesSearch && matchesSource;
   });
 
-  const displayStats = isConnected && stats ? stats : simulatedStats;
-  const chatHistory = isConnected ? messages : simulatedMessages;
-  const isChatStreaming = isConnected ? isStreaming : simulatedStreaming;
-  const activeSources = chatHistory.length > 0 ? (chatHistory[chatHistory.length - 1]?.sources || []) : [];
+
 
   // Auth Loading state rendering
   if (authLoading) {
@@ -711,10 +878,9 @@ export default function Home() {
         <div className="w-full max-w-sm p-6 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--surface))] text-center shadow-lg flex flex-col gap-6 theme-transition animate-[fadeIn_0.2s_ease-out]">
           {/* Logo */}
           <div className="flex flex-col items-center gap-2 mt-4">
-            <div className="w-12 h-12 flex items-center justify-center">
-              <KairosLogo size={42} />
+            <div className="w-64 h-16 flex items-center justify-center">
+              <KairosLogo size={52} showText />
             </div>
-            <h1 className="font-bold text-lg tracking-wider text-[rgb(var(--text-primary))] uppercase">KAIROS</h1>
             <p className="text-[9px] text-[rgb(var(--text-muted))] font-mono tracking-widest font-semibold uppercase">Memory OS</p>
           </div>
 
@@ -773,37 +939,30 @@ export default function Home() {
           />
         )}
         <div className="flex flex-col h-full overflow-hidden">
-          {/* Logo & Toggle Button */}
-          <div className="p-4 border-b border-[rgb(var(--border))]/40 flex items-center justify-between theme-transition">
-            {isSidebarOpen ? (
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                    <KairosLogo size={22} />
-                  </div>
-                  <span className="font-bold text-sm tracking-wider uppercase text-[rgb(var(--text-primary))] font-mono">KAIROS</span>
-                </div>
-                <button
-                  onClick={() => setIsSidebarOpen(false)}
-                  className="p-1.5 hover:bg-[rgb(var(--surface-hover))]/80 rounded-lg text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] transition-all"
-                  title="Collapse sidebar"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-                  </svg>
-                </button>
+          {/* Logo & Sidebar Controls */}
+          <div className={`p-4 border-b border-[rgb(var(--border))]/40 flex theme-transition ${
+            isSidebarOpen ? "items-center justify-between" : "flex-col items-center gap-3"
+          }`}>
+            <div className="flex items-center gap-2.5 shrink-0">
+              <div className="h-7 flex items-center shrink-0">
+                <KairosLogo size={26} showText={isSidebarOpen} />
               </div>
-            ) : (
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="p-1 hover:bg-[rgb(var(--surface-hover))]/80 rounded-lg text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] transition-all flex items-center justify-center w-9 h-9 mx-auto"
-                title="Expand sidebar"
-              >
-                <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                  <KairosLogo size={22} />
-                </div>
-              </button>
-            )}
+            </div>
+            <button
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-1.5 hover:bg-[rgb(var(--surface-hover))]/80 border border-[rgb(var(--border))]/60 rounded-lg text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] transition-all shrink-0"
+              title={isSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+            >
+              {isSidebarOpen ? (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                </svg>
+              )}
+            </button>
           </div>
 
           {/* New Chat Button */}
@@ -987,23 +1146,29 @@ export default function Home() {
             )
           )}
 
-          {/* Recent Inquiries Panel */}
-          {isSidebarOpen && (
+          {/* Conversational Memory (Session History inline) */}
+          {isSidebarOpen && isHistoryOpen && (
             <div className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-2">
-              <span className="text-[10px] text-[rgb(var(--text-muted))] font-mono tracking-wider font-bold px-2.5">RECENT INQUIRIES</span>
+              <span className="text-[10px] text-[rgb(var(--text-muted))] font-mono tracking-wider font-bold px-2.5">CONVERSATIONAL MEMORY</span>
               <div className="flex flex-col gap-0.5 mt-1">
-                {SIMULATED_RESPONSES.map((resp, i) => (
+                {sessions.length > 0 ? sessions.slice(0, 8).map((session) => (
                   <button
-                    key={i}
+                    key={session.id}
                     onClick={() => {
                       setActiveTab("chat");
-                      setInputVal(resp.question);
+                      loadSession(session.id);
                     }}
-                    className="w-full text-left px-2.5 py-2 hover:bg-[rgb(var(--surface-hover))]/60 rounded-xl text-[11.5px] font-medium text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] truncate transition-all"
+                    className={`w-full text-left px-2.5 py-2 hover:bg-[rgb(var(--surface-hover))]/60 rounded-xl text-[11.5px] font-medium truncate transition-all ${
+                      activeSessionId === session.id
+                        ? "text-[rgb(var(--text-primary))] bg-[rgb(var(--surface-hover))]/40"
+                        : "text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))]"
+                    }`}
                   >
-                    {resp.question}
+                    {session.title || "Untitled Session"}
                   </button>
-                ))}
+                )) : (
+                  <p className="text-[10px] text-[rgb(var(--text-muted))]/60 px-2.5 italic">No sessions yet. Start chatting!</p>
+                )}
               </div>
             </div>
           )}
@@ -1016,9 +1181,13 @@ export default function Home() {
               {/* Profile card */}
               <div className="flex items-center justify-between pb-2.5 border-b border-[rgb(var(--border))]/40">
                 <div className="flex items-center gap-2.5 overflow-hidden">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center shrink-0 font-bold text-[11px] shadow-sm shadow-indigo-500/10">
-                    {user.displayName ? user.displayName.charAt(0) : "G"}
-                  </div>
+                  {user.photoURL ? (
+                    <img src={user.photoURL} alt="" className="w-7 h-7 rounded-full object-cover shrink-0 shadow-sm ring-1 ring-[rgb(var(--border))]/30" />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center shrink-0 font-bold text-[11px] shadow-sm shadow-indigo-500/10">
+                      {user.displayName ? user.displayName.charAt(0) : "G"}
+                    </div>
+                  )}
                   <div className="flex flex-col overflow-hidden">
                     <span className="text-[11.5px] font-semibold text-[rgb(var(--text-primary))] truncate leading-tight">
                       {user.displayName || "Guest User"}
@@ -1066,12 +1235,16 @@ export default function Home() {
           ) : (
             <div className="flex flex-col items-center gap-3.5">
               {/* Profile Avatar */}
-              <div 
-                className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-sm"
-                title={`${user.displayName || "Guest User"} (${user.email || "Guest"})`}
-              >
-                {user.displayName ? user.displayName.charAt(0) : "G"}
-              </div>
+              {user.photoURL ? (
+                <img src={user.photoURL} alt="" className="w-8 h-8 rounded-full object-cover shadow-sm ring-1 ring-[rgb(var(--border))]/30" title={`${user.displayName || "Guest User"} (${user.email || "Guest"})`} />
+              ) : (
+                <div 
+                  className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-sm"
+                  title={`${user.displayName || "Guest User"} (${user.email || "Guest"})`}
+                >
+                  {user.displayName ? user.displayName.charAt(0) : "G"}
+                </div>
+              )}
 
               {/* Theme Toggle */}
               <button
@@ -1119,7 +1292,7 @@ export default function Home() {
       <main className="flex-1 flex flex-col min-w-0 bg-[rgb(var(--bg))] relative transition-colors duration-300">
         
         {/* Header */}
-        <header className="h-14 border-b border-[rgb(var(--border))]/30 flex items-center justify-between px-6 shrink-0 bg-[rgb(var(--bg))]/70 backdrop-blur-xl z-20">
+        <header className="h-14 border-b border-[rgb(var(--border))]/30 flex items-center justify-between px-6 shrink-0 bg-[rgb(var(--surface))]/70 backdrop-blur-xl z-20">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 select-none">
               <span className="text-[10px] font-bold text-[rgb(var(--text-muted))] tracking-wider uppercase font-mono">KAIROS</span>
@@ -1160,30 +1333,7 @@ export default function Home() {
             <div className="h-[calc(100vh-3.5rem)] flex overflow-hidden">
               
               {/* Chat History Panel (Past Sessions) */}
-              {isHistoryOpen && (
-                <div
-                  className="flex h-full shrink-0 relative"
-                  style={{
-                    width: `${historyWidth}px`,
-                    transition: isResizing ? "none" : "width 0.3s ease",
-                  }}
-                >
-                  <div className="flex-1 overflow-hidden h-full">
-                    <ChatHistoryPanel
-                      sessions={sessions}
-                      activeSessionId={activeSessionId}
-                      onSelectSession={loadSession}
-                      onDeleteSession={deleteSession}
-                      onClose={() => setIsHistoryOpen(false)}
-                    />
-                  </div>
-                  {/* Resize Handle */}
-                  <div
-                    className="w-1 cursor-col-resize hover:bg-[rgb(var(--accent))]/45 active:bg-[rgb(var(--accent))] transition-colors absolute right-0 top-0 bottom-0 z-50"
-                    onMouseDown={handleResize("horizontal", setHistoryWidth, 200, 480)}
-                  />
-                </div>
-              )}
+
 
                {/* Left Column: Chat log */}
               <div className="flex-1 flex flex-col h-full bg-[rgb(var(--bg))] relative min-w-0">
@@ -1196,8 +1346,8 @@ export default function Home() {
                     {chatHistory.length === 0 && (
                       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center max-w-2xl mx-auto gap-8 px-4 animate-[fadeIn_0.3s_ease-out]">
                         <div className="flex flex-col items-center gap-3">
-                          <div className="w-16 h-16 flex items-center justify-center">
-                            <KairosLogo size={56} />
+                          <div className="w-20 h-20 flex items-center justify-center">
+                            <KairosLogo size={64} />
                           </div>
                           <h1 className="text-3xl font-extrabold tracking-tight text-[rgb(var(--text-primary))] mt-2">What do you want to analyze today?</h1>
                           <p className="text-sm text-[rgb(var(--text-muted))] max-w-md mt-1 leading-relaxed">
@@ -1252,8 +1402,25 @@ export default function Home() {
                                           sources: match.sources,
                                         },
                                       ]);
-                                      setCurrentGraphNodes(match.graph);
-                                      setCurrentGraphTitle(match.question);
+
+                                      let matchedDecId = "";
+                                      if (textLower.includes("vendor") || textLower.includes("paying") || textLower.includes("2.3")) {
+                                        matchedDecId = "dec-1";
+                                      } else if (textLower.includes("react") || textLower.includes("vue") || textLower.includes("framework")) {
+                                        matchedDecId = "dec-2";
+                                      } else if (textLower.includes("mobile") || textLower.includes("phoenix") || textLower.includes("app")) {
+                                        matchedDecId = "dec-3";
+                                      }
+
+                                      if (matchedDecId) {
+                                        const decObj = explorerDecisions.find(d => d.id === matchedDecId);
+                                        if (decObj) {
+                                          setActiveSimulationDecisions(prev => {
+                                            if (prev.some(d => d.id === matchedDecId)) return prev;
+                                            return [...prev, decObj];
+                                          });
+                                        }
+                                      }
                                     }
                                     setSimulatedStreaming(false);
                                   }, 1000);
@@ -1479,7 +1646,7 @@ export default function Home() {
                     onMouseDown={handleResize("horizontal", setGraphWidth, 300, 800, true)}
                   />
                   <div className="flex-1 relative overflow-hidden">
-                    <DecisionGraph nodes={currentGraphNodes} decisionTitle={currentGraphTitle} />
+                    <DecisionGraph nodes={currentGraphNodes} edges={currentGraphEdges} decisionTitle={currentGraphTitle} />
                   </div>
                   <div
                     className="relative shrink-0"

@@ -41,7 +41,7 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,500;1,600;1,700;1,800&family=JetBrains+Mono:wght@400;500&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Alice&family=JetBrains+Mono:wght@400;500&display=swap"
           rel="stylesheet"
         />
         <meta name="theme-color" content="#171717" />
@@ -49,7 +49,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="KAIROS" />
       </head>
-      <body className="h-full bg-[#080808] text-[#f5f5f5] font-sans antialiased">
+      <body className="h-full bg-[#080808] text-[#f5f5f5] font-serif antialiased">
         {children}
       </body>
     </html>

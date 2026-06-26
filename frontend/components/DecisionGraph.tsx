@@ -10,6 +10,11 @@ export interface GraphNode {
   icon?: string;
 }
 
+export interface GraphEdge {
+  source: string;
+  target: string;
+}
+
 interface PhysicsNode extends GraphNode {
   x: number;
   y: number;
@@ -19,6 +24,7 @@ interface PhysicsNode extends GraphNode {
 
 interface DecisionGraphProps {
   nodes: GraphNode[];
+  edges?: GraphEdge[];
   decisionTitle: string;
   className?: string;
 }
@@ -29,10 +35,10 @@ function getNodeIconSVG(node: GraphNode) {
   const icon = (node.icon || "").toLowerCase();
   const info = (node.info || "").toLowerCase();
 
-  // 1. React
+  // React
   if (label.includes("react") || icon.includes("⚛️")) {
     return (
-      <svg viewBox="0 0 24 24" className="w-6 h-6 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg viewBox="0 0 24 24" className="w-5 h-5 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <ellipse rx="10" ry="4.5" transform="translate(12 12) rotate(0)" />
         <ellipse rx="10" ry="4.5" transform="translate(12 12) rotate(60)" />
         <ellipse rx="10" ry="4.5" transform="translate(12 12) rotate(120)" />
@@ -41,65 +47,78 @@ function getNodeIconSVG(node: GraphNode) {
     );
   }
 
-  // 2. Vue
+  // Vue
   if (label.includes("vue") || icon.includes("💚")) {
     return (
-      <svg viewBox="0 0 24 24" className="w-6 h-6 transition-transform hover:scale-110" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 0 24 24" className="w-5 h-5 transition-transform hover:scale-110" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M12 22L24 1.5H18.5L12 13L5.5 1.5H0L12 22Z" fill="#41B883" />
         <path d="M12 13L18.5 1.5H14L12 5L10 1.5H5.5L12 13Z" fill="#35495E" />
       </svg>
     );
   }
 
-  // 3. Slack
+  // Slack
   if (label.includes("slack") || icon.includes("💬") || icon.includes("slack")) {
     return (
-      <svg viewBox="0 0 24 24" className="w-5 h-5 transition-transform hover:scale-110" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="6" cy="6" r="2" fill="#36C5F0" />
-        <rect x="4" y="9" width="4" height="8" rx="2" fill="#36C5F0" />
-        <circle cx="18" cy="6" r="2" fill="#2EB67D" />
-        <rect x="9" y="4" width="8" height="4" rx="2" fill="#2EB67D" />
-        <circle cx="18" cy="18" r="2" fill="#ECB22E" />
-        <rect x="16" y="7" width="4" height="8" rx="2" fill="#ECB22E" />
-        <circle cx="6" cy="18" r="2" fill="#E01E5A" />
-        <rect x="7" y="16" width="8" height="4" rx="2" fill="#E01E5A" />
+      <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z" fill="#E01E5A"/>
+        <path d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z" fill="#36C5F0"/>
+        <path d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zm-1.27 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.163 0a2.528 2.528 0 0 1 2.523 2.522v6.312z" fill="#2EB67D"/>
+        <path d="M15.163 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.163 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zm0-1.27a2.527 2.527 0 0 1-2.52-2.523 2.527 2.527 0 0 1 2.52-2.52h6.315A2.528 2.528 0 0 1 24 15.163a2.528 2.528 0 0 1-2.522 2.523h-6.315z" fill="#ECB22E"/>
       </svg>
     );
   }
 
-  // 4. Google Drive
+  // Google Drive
   if (label.includes("drive") || label.includes("google drive") || icon.includes("📄") || info.includes("drive") || info.includes("workspace")) {
     return (
-      <svg viewBox="0 0 100 100" className="w-5 h-5 transition-transform hover:scale-110">
-        <path d="M 33 20 L 2 73.6 L 17 100 L 48 46.4 Z" fill="#FFD043" />
-        <path d="M 48 46.4 L 17 100 L 83 100 L 98 73.6 Z" fill="#1EA758" />
-        <path d="M 33 20 L 48 46.4 L 98 73.6 L 67 20 Z" fill="#167EE6" />
+      <svg viewBox="0 0 87.3 78" className="w-4 h-4 transition-transform hover:scale-110">
+        <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066DA"/>
+        <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-20.4 35.3c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00AC47"/>
+        <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.5l5.85 13.95z" fill="#EA4335"/>
+        <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832D"/>
+        <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684FC"/>
+        <path d="m73.4 26.5-10.1-17.5c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 23.5h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#FFBA00"/>
       </svg>
     );
   }
 
-  // 5. Jira
+  // Jira
   if (label.includes("jira") || icon.includes("🔧") || info.includes("jira")) {
     return (
-      <svg viewBox="0 0 24 24" className="w-5 h-5 transition-transform hover:scale-110" fill="currentColor">
-        <path d="M12.5 13.5l4.5-4.5 4.5 4.5-4.5 4.5z" fill="#0052CC" />
-        <path d="M4.5 13.5l4.5-4.5 4.5 4.5-4.5 4.5z" fill="#0052CC" opacity="0.8" />
-        <path d="M8.5 5.5l4.5-4.5 4.5 4.5-4.5 4.5z" fill="#0052CC" opacity="0.6" />
+      <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110">
+        <path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005z" fill="#0052CC"/>
+        <path d="M17.294 5.757H5.723a5.215 5.215 0 0 0 5.215 5.214h2.129v2.058a5.218 5.218 0 0 0 5.215 5.214V6.758a1.001 1.001 0 0 0-1.001-1.001z" fill="#0065FF"/>
+        <path d="M23.013 0H11.455a5.215 5.215 0 0 0-5.215 5.215h2.129v2.057a5.215 5.215 0 0 0 5.215 5.215V1.001A1.001 1.001 0 0 0 12.636 0z" fill="#4C9AFF"/>
       </svg>
     );
   }
 
-  // 6. Gmail / Email
+  // Gmail / Email
   if (label.includes("gmail") || label.includes("email") || label.includes("mail") || icon.includes("✉️") || icon.includes("envelope")) {
     return (
-      <svg viewBox="0 0 24 24" className="w-5 h-5 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-        <polyline points="22,6 12,13 2,6" />
+      <svg viewBox="52 42 88 66" className="w-4 h-4 transition-transform hover:scale-110">
+        <path fill="#4285f4" d="M58 108h14V74L52 59v43c0 3.32 2.69 6 6 6"/>
+        <path fill="#34a853" d="M120 108h14c3.32 0 6-2.69 6-6V59l-20 15"/>
+        <path fill="#fbbc04" d="M120 48v26l20-15v-8c0-7.42-8.47-11.65-14.4-7.2L120 48"/>
+        <path fill="#ea4335" d="M72 74V48l24 18 24-18v26L96 92z"/>
+        <path fill="#c5221f" d="M52 59l20 15V48l-20 11"/>
       </svg>
     );
   }
 
-  // 7. Calendar / Date
+  // Zoom
+  if (label.includes("zoom") || icon.includes("📹") || info.includes("zoom") || info.includes("meeting")) {
+    return (
+      <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none">
+        <rect width="24" height="24" rx="6" fill="#2D8CFF"/>
+        <path d="M4 9.333C4 8.597 4.597 8 5.333 8H13.334C14.07 8 14.667 8.597 14.667 9.333v5.334C14.667 15.403 14.07 16 13.334 16H5.333C4.597 16 4 15.403 4 14.667V9.333z" fill="white"/>
+        <path d="M15.667 10.4L19.333 8.267A.5.5 0 0 1 20 8.7v6.6a.5.5 0 0 1-.667.433L15.667 13.6V10.4z" fill="white"/>
+      </svg>
+    );
+  }
+
+  // Calendar / Date
   if (type === "date" || icon.includes("📅") || label.includes("calendar") || label.includes("date")) {
     return (
       <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -111,7 +130,7 @@ function getNodeIconSVG(node: GraphNode) {
     );
   }
 
-  // 8. Person
+  // Person
   if (type === "person" || icon.includes("👤") || icon.includes("👥")) {
     return (
       <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -121,10 +140,10 @@ function getNodeIconSVG(node: GraphNode) {
     );
   }
 
-  // 9. Outcome
+  // Outcome
   if (type === "outcome") {
-    const isSuccess = icon.includes("✅") || icon.includes("success") || label.toLowerCase().includes("scale") || label.toLowerCase().includes("hire") || label.toLowerCase().includes("hiring") || label.toLowerCase().includes("success");
-    const isError = icon.includes("❌") || icon.includes("error") || label.toLowerCase().includes("write-off") || label.toLowerCase().includes("fail") || label.toLowerCase().includes("failed") || label.toLowerCase().includes("terminate");
+    const isSuccess = icon.includes("✅") || icon.includes("success") || label.toLowerCase().includes("scale") || label.toLowerCase().includes("hire") || label.toLowerCase().includes("success");
+    const isError = icon.includes("❌") || icon.includes("error") || label.toLowerCase().includes("write-off") || label.toLowerCase().includes("fail") || label.toLowerCase().includes("terminate");
 
     if (isSuccess) {
       return (
@@ -151,17 +170,29 @@ function getNodeIconSVG(node: GraphNode) {
     );
   }
 
+  // Decision (default)
+  if (type === "decision") {
+    return (
+      <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+    );
+  }
+
   // Fallback to text icon or first character
   return <span className="text-[10px] font-bold select-none">{node.icon || node.label.charAt(0)}</span>;
 }
 
 export default function DecisionGraph({
   nodes,
+  edges: edgesProp,
   decisionTitle,
   className = "",
 }: DecisionGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   // States
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -173,7 +204,20 @@ export default function DecisionGraph({
   const physicsNodesRef = useRef<PhysicsNode[]>([]);
   const activeDragIdRef = useRef<string | null>(null);
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  // Stable random durations for edge particle animations — computed once per edge set
+  const edgeDurationsRef = useRef<Map<string, number>>(new Map());
   const [renderTrigger, setRenderTrigger] = useState(0);
+
+  // Build edges: if edgesProp provided, use them; otherwise fallback to star topology
+  const computedEdges: GraphEdge[] = React.useMemo(() => {
+    if (edgesProp && edgesProp.length > 0) return edgesProp;
+    // Fallback: star topology from first decision node to all others
+    const center = nodes.find((n) => n.type === "decision") || nodes[0];
+    if (!center) return [];
+    return nodes
+      .filter((n) => n.id !== center.id)
+      .map((n) => ({ source: center.id, target: n.id }));
+  }, [nodes, edgesProp]);
 
   // Synchronize incoming nodes to physics simulator
   useEffect(() => {
@@ -187,31 +231,26 @@ export default function DecisionGraph({
     const cx = width / 2;
     const cy = height / 2;
 
-    const centerNode = nodes.find((n) => n.type === "decision") || nodes[0];
-
-    physicsNodesRef.current = nodes.map((node) => {
+    physicsNodesRef.current = nodes.map((node, idx) => {
       const existing = physicsNodesRef.current.find((n) => n.id === node.id);
       if (existing) {
         return { ...node, x: existing.x, y: existing.y, vx: existing.vx, vy: existing.vy };
       }
 
-      if (node.id === centerNode.id) {
-        return { ...node, x: cx, y: cy, vx: 0, vy: 0 };
-      } else {
-        const angle = Math.random() * 2 * Math.PI;
-        const dist = 80 + Math.random() * 40;
-        return {
-          ...node,
-          x: cx + Math.cos(angle) * dist,
-          y: cy + Math.sin(angle) * dist,
-          vx: 0,
-          vy: 0,
-        };
-      }
+      // New nodes: spread around canvas center
+      const angle = (idx / nodes.length) * 2 * Math.PI + Math.random() * 0.5;
+      const dist = 60 + Math.random() * 80;
+      return {
+        ...node,
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist,
+        vx: 0,
+        vy: 0,
+      };
     });
   }, [nodes]);
 
-  // Main physics loop (Coulomb repulsion + Hooke spring attraction)
+  // Main physics loop (Coulomb repulsion + Hooke spring along edges)
   useEffect(() => {
     let animFrame: number;
 
@@ -227,25 +266,24 @@ export default function DecisionGraph({
       const cx = width / 2;
       const cy = height / 2;
 
-      const repelConstant = 1500;
-      const springConstant = 0.04;
-      const springLength = 110;
-      const centerPull = 0.008;
-      const friction = 0.85;
+      const repelConstant = 2000;
+      const springConstant = 0.035;
+      const springLength = 120;
+      const centerPull = 0.006;
+      const friction = 0.82;
 
-      const centerNode = pNodes.find((n) => n.type === "decision") || pNodes[0];
-
-      // 1. Coulomb repulsion
+      // 1. Coulomb repulsion between ALL nodes
       for (let i = 0; i < pNodes.length; i++) {
         for (let j = i + 1; j < pNodes.length; j++) {
           const n1 = pNodes[i];
           const n2 = pNodes[j];
           const dx = n2.x - n1.x;
           const dy = n2.y - n1.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          // Soften and cap minimum distance to prevent huge repelling force at close range
+          const dist = Math.max(30, Math.sqrt(dx * dx + dy * dy));
 
-          if (dist < 200) {
-            const force = repelConstant / (dist * dist);
+          if (dist < 250) {
+            const force = repelConstant / (dist * dist + 400); // 400 softening factor
             const fx = (dx / dist) * force;
             const fy = (dy / dist) * force;
 
@@ -257,22 +295,25 @@ export default function DecisionGraph({
         }
       }
 
-      // 2. Spring connection attraction
-      pNodes.forEach((node) => {
-        if (node.id === centerNode.id) return;
-        const dx = node.x - centerNode.x;
-        const dy = node.y - centerNode.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      // 2. Spring attraction along edges
+      computedEdges.forEach((edge) => {
+        const srcNode = pNodes.find((n) => n.id === edge.source);
+        const tgtNode = pNodes.find((n) => n.id === edge.target);
+        if (!srcNode || !tgtNode) return;
+
+        const dx = tgtNode.x - srcNode.x;
+        const dy = tgtNode.y - srcNode.y;
+        const dist = Math.max(30, Math.sqrt(dx * dx + dy * dy));
 
         const delta = dist - springLength;
         const force = delta * springConstant;
         const fx = (dx / dist) * force;
         const fy = (dy / dist) * force;
 
-        node.vx -= fx;
-        node.vy -= fy;
-        centerNode.vx += fx;
-        centerNode.vy += fy;
+        srcNode.vx += fx;
+        srcNode.vy += fy;
+        tgtNode.vx -= fx;
+        tgtNode.vy -= fy;
       });
 
       // 3. Gravity center pull
@@ -291,14 +332,31 @@ export default function DecisionGraph({
           return;
         }
 
-        node.x += node.vx;
-        node.y += node.vy;
+        // Apply friction
         node.vx *= friction;
         node.vy *= friction;
 
-        // Keep inside canvas bounds
-        node.x = Math.max(30, Math.min(width - 30, node.x));
-        node.y = Math.max(30, Math.min(height - 30, node.y));
+        // Cap maximum velocity to prevent massive explosions
+        const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
+        const maxSpeed = 8;
+        if (speed > maxSpeed) {
+          node.vx = (node.vx / speed) * maxSpeed;
+          node.vy = (node.vy / speed) * maxSpeed;
+        }
+
+        // Apply a threshold below which velocity is rounded to 0 (prevents shaking)
+        const threshold = 0.05;
+        if (Math.abs(node.vx) > threshold || Math.abs(node.vy) > threshold) {
+          node.x += node.vx;
+          node.y += node.vy;
+        } else {
+          node.vx = 0;
+          node.vy = 0;
+        }
+
+        // Keep inside canvas bounds - disabled for Obsidian-style infinite canvas
+        // node.x = Math.max(40, Math.min(width - 40, node.x));
+        // node.y = Math.max(40, Math.min(height - 40, node.y));
       });
 
       setRenderTrigger((prev) => prev + 1);
@@ -307,14 +365,35 @@ export default function DecisionGraph({
 
     animFrame = requestAnimationFrame(runFrame);
     return () => cancelAnimationFrame(animFrame);
-  }, []);
+  }, [computedEdges]);
 
-  // Mouse wheel Zoom handler
+  // Mouse wheel Zoom handler (Smooth zoom-to-mouse pointer)
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    const zoomFactor = 0.05;
+    if (!containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    const zoomFactor = 0.08;
     const direction = e.deltaY < 0 ? 1 : -1;
-    setZoom((prev) => Math.max(0.4, Math.min(2.0, prev + direction * zoomFactor)));
+
+    setZoom((prevZoom) => {
+      const factor = 1 + direction * zoomFactor;
+      const newZoom = Math.max(0.05, Math.min(15.0, prevZoom * factor));
+
+      setPan((prevPan) => {
+        const dx = mouseX - prevPan.x;
+        const dy = mouseY - prevPan.y;
+        return {
+          x: mouseX - dx * (newZoom / prevZoom),
+          y: mouseY - dy * (newZoom / prevZoom),
+        };
+      });
+
+      return newZoom;
+    });
   };
 
   // Background Drag Pan handler
@@ -334,7 +413,6 @@ export default function DecisionGraph({
       });
     } else if (activeDragIdRef.current && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
-      // Adjust mouse coordinate relative to active zoom and pan
       const mouseX = (e.clientX - rect.left - pan.x) / zoom;
       const mouseY = (e.clientY - rect.top - pan.y) / zoom;
 
@@ -357,30 +435,31 @@ export default function DecisionGraph({
   };
 
   const pNodes = physicsNodesRef.current;
-  const centerNode = pNodes.find((n) => n.type === "decision") || pNodes[0];
-  const satelliteNodes = pNodes.filter((n) => n.id !== centerNode?.id);
 
   // Active hover/selection ID
   const activeFocusId = selectedNodeId || hoveredNodeId;
 
-  // Node connection masking helper (for fade/dimming unconnected links)
+  // Node connection masking helper
   const isNodeConnected = (nodeId: string) => {
     if (!activeFocusId) return true;
     if (nodeId === activeFocusId) return true;
-    if (activeFocusId === centerNode?.id) return true; // center connects to all
-    if (nodeId === centerNode?.id) return true; // center connects to active
-    return false;
+    // Check if nodeId has a direct edge with activeFocusId
+    return computedEdges.some(
+      (e) =>
+        (e.source === activeFocusId && e.target === nodeId) ||
+        (e.target === activeFocusId && e.source === nodeId)
+    );
   };
 
-  // Classy type color coding (Glassmorphism inspired translucent styling)
+  // Classy type color coding
   const getNodeColor = (type: GraphNode["type"]) => {
     switch (type) {
-      case "decision": return "bg-indigo-500/10 border-indigo-500/40 text-indigo-500 dark:text-indigo-400";
-      case "person": return "bg-emerald-500/10 border-emerald-500/40 text-emerald-500 dark:text-emerald-400";
-      case "source": return "bg-cyan-500/10 border-cyan-500/40 text-cyan-500 dark:text-cyan-400";
-      case "date": return "bg-amber-500/10 border-amber-500/40 text-amber-500 dark:text-amber-400";
-      case "outcome": return "bg-rose-500/10 border-rose-500/40 text-rose-500 dark:text-rose-400";
-      default: return "bg-zinc-500/10 border-zinc-500/40 text-zinc-500 dark:text-zinc-400";
+      case "decision": return "bg-indigo-500/20 border-indigo-500/50 text-indigo-400 backdrop-blur-sm";
+      case "person": return "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 backdrop-blur-sm";
+      case "source": return "bg-cyan-500/20 border-cyan-500/50 text-cyan-400 backdrop-blur-sm";
+      case "date": return "bg-amber-500/20 border-amber-500/50 text-amber-400 backdrop-blur-sm";
+      case "outcome": return "bg-rose-500/20 border-rose-500/50 text-rose-400 backdrop-blur-sm";
+      default: return "bg-zinc-500/20 border-zinc-500/50 text-zinc-400 backdrop-blur-sm";
     }
   };
 
@@ -389,155 +468,177 @@ export default function DecisionGraph({
   return (
     <div
       ref={containerRef}
-      className={`flex flex-col h-full bg-[rgb(var(--bg))] select-none relative overflow-hidden theme-transition ${className}`}
+      className={`relative w-full h-full bg-[rgb(var(--bg))] select-none overflow-hidden theme-transition ${className}`}
+      style={{
+        backgroundImage: "radial-gradient(rgba(128, 128, 128, 0.15) 1.2px, transparent 1.2px)",
+        backgroundPosition: `${pan.x}px ${pan.y}px`,
+        backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
+      }}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUpOrLeave}
       onMouseLeave={handleMouseUpOrLeave}
     >
-      {/* Top Header Controls */}
-      <div className="px-4 py-3 border-b border-[rgb(var(--border))]/40 flex items-center justify-between shrink-0 bg-[rgb(var(--surface))]/90 backdrop-blur-md z-20">
-        <div className="flex items-center gap-2">
-          <svg className="w-3.5 h-3.5 text-[rgb(var(--accent))]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-          </svg>
-          <span className="text-[10px] font-bold tracking-wider uppercase text-[rgb(var(--text-primary))]">Memory decision graph</span>
-        </div>
+      {/* 1. FLOATING CONTROL PILL (Top Right) */}
+      <div className="absolute top-3 right-3 flex items-center gap-2 z-20 bg-[rgb(var(--surface))]/70 backdrop-blur-md border border-[rgb(var(--border))]/50 px-2.5 py-1.5 rounded-xl shadow-lg transition-all">
         <button
           onClick={resetViewport}
-          className="text-[9px] font-mono px-2.5 py-1 border border-[rgb(var(--border))]/80 hover:bg-[rgb(var(--surface-hover))]/80 rounded-lg text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] transition-all shadow-sm"
+          className="text-[9px] font-sans font-bold px-2 py-1 hover:bg-[rgb(var(--surface-hover))]/80 rounded-lg text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] transition-all"
         >
           RESET
         </button>
+        <span className="text-[10px] text-[rgb(var(--border))]/70">|</span>
+        <span className="text-[9px] font-mono font-bold text-[rgb(var(--text-muted))] select-none min-w-[32px] text-center">
+          {Math.round(zoom * 100)}%
+        </span>
       </div>
 
-      {/* Physics Graph Area */}
-      <div className="flex-1 relative bg-[rgb(var(--bg))] theme-transition min-h-[300px]">
-        {/* Transform Group */}
-        <div
-          style={{
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-            transformOrigin: "center center",
-          }}
-          className="absolute inset-0 origin-center"
-        >
-          {/* SVG Spring Connectors */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
-            {centerNode &&
-              satelliteNodes.map((node) => {
-                const isHovered = hoveredNodeId === node.id || hoveredNodeId === centerNode.id;
-                const isSelected = selectedNodeId === node.id || selectedNodeId === centerNode.id;
-                const isActive = isHovered || isSelected;
-                const pathId = `path-${node.id}`;
-
-                // Calculate connection opacity based on focus masking
-                const isMasked = activeFocusId !== null && !isNodeConnected(node.id);
-                const strokeOpacity = isMasked ? 0.04 : isActive ? 0.7 : 0.25;
-
-                return (
-                  <g key={node.id} className="transition-opacity duration-300" style={{ opacity: strokeOpacity }}>
-                    {/* SVG Path used for particle animateMotion */}
-                    <path
-                      id={pathId}
-                      d={`M ${node.x} ${node.y} L ${centerNode.x} ${centerNode.y}`}
-                      stroke={isActive ? "rgb(var(--accent))" : "rgb(var(--text-muted))"}
-                      strokeWidth={isActive ? "1.5" : "0.75"}
-                      strokeDasharray={node.type === "outcome" ? "3 3" : "none"}
-                      fill="none"
-                    />
-
-                    {/* Classy Flow Particle moving along spring lines */}
-                    {!isMasked && (
-                      <circle r="1.5" fill="rgb(var(--accent))">
-                        <animateMotion dur="2.5s" repeatCount="indefinite">
-                          <mpath href={`#${pathId}`} />
-                        </animateMotion>
-                      </circle>
-                    )}
-                  </g>
-                );
-              })}
-          </svg>
-
-          {/* Absolute physics nodes */}
-          <div className="absolute inset-0 z-10 pointer-events-none">
-            {pNodes.map((node) => {
-              const isCenter = node.type === "decision";
-              const isHovered = hoveredNodeId === node.id;
-              const isSelected = selectedNodeId === node.id;
-              
-              // Fade out unconnected nodes when another node is hovered/selected
-              const isDimmed = activeFocusId !== null && !isNodeConnected(node.id);
-              const themeColorClass = getNodeColor(node.type);
-
-              return (
-                <div
-                  key={node.id}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-grab active:cursor-grabbing flex items-center justify-center physics-node"
-                  style={{
-                    left: node.x,
-                    top: node.y,
-                    transform: `translate(-50%, -50%) scale(${isHovered || isSelected ? 1.15 : 1})`,
-                    opacity: isDimmed ? 0.2 : 1,
-                    transition: "opacity 0.3s ease",
-                  }}
-                  onMouseDown={(e) => {
-                    e.stopPropagation();
-                    activeDragIdRef.current = node.id;
-                  }}
-                  onMouseEnter={() => setHoveredNodeId(node.id)}
-                  onMouseLeave={() => setHoveredNodeId(null)}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedNodeId(selectedNodeId === node.id ? null : node.id);
-                  }}
-                >
-                  {/* Clean dot badge */}
-                  <div
-                    className={`flex items-center justify-center rounded-full transition-all border ${
-                      isCenter
-                        ? "w-12 h-12 ring-4 ring-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.25)]"
-                        : "w-9 h-9 shadow-sm"
-                    } ${themeColorClass} shadow-md overflow-hidden`}
-                  >
-                    {getNodeIconSVG(node)}
-                  </div>
-
-                  {/* Clean Floating Obsidian Tooltip label */}
-                  {(isHovered || isSelected) && (
-                    <div className="absolute top-8 bg-[rgb(var(--surface))] border border-[rgb(var(--border))]/80 text-[9.5px] font-mono text-[rgb(var(--text-primary))] px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap z-30 transition-all font-semibold">
-                      {node.label}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Info Context Drawer */}
-      <div className="p-4 border-t border-[rgb(var(--border))]/40 bg-[rgb(var(--surface))]/90 backdrop-blur-md text-[11.5px] leading-relaxed z-20 theme-transition shadow-lg">
+      {/* 2. FLOATING CONTEXT CARD (Bottom Left) */}
+      <div className="absolute bottom-3 left-3 right-3 md:right-auto md:max-w-[280px] z-20 bg-[rgb(var(--surface))]/80 backdrop-blur-md border border-[rgb(var(--border))]/50 p-3 rounded-2xl shadow-xl transition-all duration-300 pointer-events-auto">
         {activeNodeInfo ? (
           <div className="animate-[fadeIn_0.15s_ease-out]">
-            <span className="font-mono text-[rgb(var(--text-muted))] uppercase text-[9px] tracking-wider block mb-0.5 font-bold">
-              {activeNodeInfo.type} Context
-            </span>
-            <span className="font-bold text-[rgb(var(--text-primary))] block text-xs">{activeNodeInfo.label}</span>
-            <p className="text-[rgb(var(--text-muted))] mt-1 leading-normal">{activeNodeInfo.info || "No context mappings present."}</p>
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                activeNodeInfo.type === "decision" ? "bg-indigo-500" :
+                activeNodeInfo.type === "person" ? "bg-emerald-500" :
+                activeNodeInfo.type === "source" ? "bg-cyan-500" :
+                activeNodeInfo.type === "date" ? "bg-amber-500" : "bg-rose-500"
+              }`} />
+              <span className="font-mono text-[rgb(var(--text-muted))] uppercase text-[8px] tracking-wider font-bold">
+                {activeNodeInfo.type} Context
+              </span>
+            </div>
+            <span className="font-bold text-[rgb(var(--text-primary))] block text-xs leading-snug">{activeNodeInfo.label}</span>
+            <p className="text-[rgb(var(--text-muted))] mt-1 leading-normal text-[10px]">{activeNodeInfo.info || "No context mappings present."}</p>
           </div>
         ) : (
-          <div className="flex items-center justify-between text-[9.5px] font-mono text-[rgb(var(--text-muted))] uppercase tracking-wider font-semibold">
-            <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-              Scroll to zoom • drag empty space to pan
+          <div className="flex items-center gap-2 text-[9px] font-sans text-[rgb(var(--text-muted))] font-medium select-none">
+            <span className="relative flex h-1.5 w-1.5 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-60" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500" />
             </span>
-            <span className="text-[8.5px] border border-[rgb(var(--border))]/80 px-2 py-0.5 rounded-md font-bold">
-              ZOOM: {Math.round(zoom * 100)}%
-            </span>
+            <span>Scroll to zoom · drag canvas · click nodes</span>
           </div>
         )}
+      </div>
+
+      {/* 3. GRAPH CANVAS AREA */}
+      <div
+        style={{
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          transformOrigin: "0 0",
+        }}
+        className="absolute inset-0 origin-top-left pointer-events-none"
+      >
+        {/* SVG Edge Connectors */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
+          {computedEdges.map((edge, edgeIdx) => {
+            const srcNode = pNodes.find((n) => n.id === edge.source);
+            const tgtNode = pNodes.find((n) => n.id === edge.target);
+            if (!srcNode || !tgtNode) return null;
+
+            const isSourceHovered = hoveredNodeId === edge.source;
+            const isTargetHovered = hoveredNodeId === edge.target;
+            const isSourceSelected = selectedNodeId === edge.source;
+            const isTargetSelected = selectedNodeId === edge.target;
+
+            const isActive = isSourceHovered || isTargetHovered || isSourceSelected || isTargetSelected;
+            const pathId = `edge-${edgeIdx}`;
+
+            const isMasked = activeFocusId !== null && !isNodeConnected(edge.source) && !isNodeConnected(edge.target);
+            const strokeOpacity = isMasked ? 0.03 : isActive ? 0.8 : 0.25;
+
+            return (
+              <g key={pathId} className="transition-opacity duration-300" style={{ opacity: strokeOpacity }}>
+                <path
+                  id={pathId}
+                  d={`M ${srcNode.x} ${srcNode.y} L ${tgtNode.x} ${tgtNode.y}`}
+                  stroke={isActive ? "rgb(var(--accent))" : "rgb(var(--text-muted))"}
+                  strokeWidth={isActive ? "1.5" : "0.75"}
+                  fill="none"
+                />
+                {/* Flow Particle */}
+                {!isMasked && (
+                  <circle r="1.5" fill="rgb(var(--accent))">
+                    <animateMotion
+                      dur={`${(() => {
+                        if (!edgeDurationsRef.current.has(pathId)) {
+                          edgeDurationsRef.current.set(pathId, 2.5 + Math.random() * 1.5);
+                        }
+                        return edgeDurationsRef.current.get(pathId);
+                      })()}s`}
+                      repeatCount="indefinite"
+                    >
+                      <mpath href={`#${pathId}`} />
+                    </animateMotion>
+                  </circle>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* Physics Nodes */}
+        <div className="absolute inset-0 z-10 pointer-events-none">
+          {pNodes.map((node) => {
+            const isCenter = node.type === "decision";
+            const isHovered = hoveredNodeId === node.id;
+            const isSelected = selectedNodeId === node.id;
+
+            const isDimmed = activeFocusId !== null && !isNodeConnected(node.id);
+            const themeColorClass = getNodeColor(node.type);
+
+            return (
+              <div
+                key={node.id}
+                className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-grab active:cursor-grabbing flex flex-col items-center justify-center physics-node group"
+                style={{
+                  left: node.x,
+                  top: node.y,
+                  transform: `translate(-50%, -50%) scale(${isHovered || isSelected ? 1.12 : 1})`,
+                  opacity: isDimmed ? 0.15 : 1,
+                  transition: "opacity 0.3s ease, transform 0.2s ease",
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  activeDragIdRef.current = node.id;
+                }}
+                onMouseEnter={() => setHoveredNodeId(node.id)}
+                onMouseLeave={() => setHoveredNodeId(null)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedNodeId(selectedNodeId === node.id ? null : node.id);
+                }}
+              >
+                {/* Node circle */}
+                <div
+                  className={`flex items-center justify-center rounded-full transition-all border ${
+                    isCenter
+                      ? "w-9 h-9 ring-4 ring-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.35)]"
+                      : "w-6 h-6 shadow-md"
+                  } ${themeColorClass} border-[rgb(var(--border))]/30 overflow-hidden`}
+                >
+                  {getNodeIconSVG(node)}
+                </div>
+
+                {/* Obsidian-style Canvas Label (Permanently visible) */}
+                <div
+                  className={`mt-1.5 text-[8.5px] font-sans font-medium tracking-wide whitespace-nowrap select-none transition-all ${
+                    isHovered || isSelected
+                      ? "text-[rgb(var(--text-primary))] font-bold scale-105"
+                      : "text-[rgb(var(--text-muted))]/80"
+                  }`}
+                  style={{
+                    textShadow: isHovered || isSelected ? "0 1px 4px rgba(0,0,0,0.5)" : "none",
+                  }}
+                >
+                  {node.label}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

@@ -5,42 +5,49 @@ import React, { useId } from "react";
 interface KairosLogoProps {
   className?: string;
   size?: number | string;
+  showText?: boolean;
 }
 
-export default function KairosLogo({ className = "", size = "100%" }: KairosLogoProps) {
+export default function KairosLogo({ className = "", size = "100%", showText = false }: KairosLogoProps) {
   const uid = useId().replace(/:/g, "");
 
-  // Node positions carefully mapped to the reference "K" image:
-  // Left vertical stem: top (28,14) → middle/junction (28,50) → bottom (28,86)
-  // Junction connects right to hub (50,50)
-  // Upper arm: hub (50,50) → mid-upper (66,32) → top-right (82,14)
-  // Lower arm: hub (50,50) → mid-lower (66,68) → bottom-right (82,86)
+  // Node positions for the "K" constellation matching icon.svg exactly:
   const nodes = [
-    { cx: 28, cy: 14 },  // stem top
-    { cx: 28, cy: 50 },  // stem middle (junction)
-    { cx: 28, cy: 86 },  // stem bottom
-    { cx: 50, cy: 50 },  // hub center
-    { cx: 66, cy: 32 },  // upper arm mid
-    { cx: 82, cy: 14 },  // upper arm tip
-    { cx: 66, cy: 68 },  // lower arm mid
-    { cx: 82, cy: 86 },  // lower arm tip
+    { cx: 28, cy: 18 },  // 0: stem top
+    { cx: 28, cy: 50 },  // 1: stem middle (junction)
+    { cx: 28, cy: 82 },  // 2: stem bottom
+    { cx: 48, cy: 50 },  // 3: intermediate hub (horizontal connectivity rod!)
+    { cx: 63, cy: 35 },  // 4: upper arm mid
+    { cx: 78, cy: 18 },  // 5: upper arm tip
+    { cx: 63, cy: 65 },  // 6: lower arm mid
+    { cx: 78, cy: 82 },  // 7: lower arm tip
   ];
 
   const edges: [number, number][] = [
     [0, 1], // stem top → junction
     [1, 2], // junction → stem bottom
-    [1, 3], // junction → hub
-    [3, 4], // hub → upper mid
-    [4, 5], // upper mid → upper tip
-    [3, 6], // hub → lower mid
-    [6, 7], // lower mid → lower tip
+    [1, 3], // junction → intermediate hub (horizontal connectivity rod!)
+    [3, 4], // intermediate hub → upper arm mid
+    [4, 5], // upper arm mid → upper arm tip
+    [3, 6], // intermediate hub → lower arm mid
+    [6, 7], // lower arm mid → lower arm tip
   ];
+
+  // Widen viewBox when showing the full wordmark
+  const viewBox = showText ? "0 0 280 100" : "0 0 100 100";
+
+  // Parse size to calculate proportional width when showText is true
+  const parsedSize = typeof size === "number" ? size : parseFloat(size);
+  const heightVal = isNaN(parsedSize) ? size : parsedSize;
+  const widthVal = showText 
+    ? (isNaN(parsedSize) ? "auto" : parsedSize * 2.8)
+    : size;
 
   return (
     <svg
-      width={size}
-      height={size}
-      viewBox="0 0 100 100"
+      width={widthVal}
+      height={heightVal}
+      viewBox={viewBox}
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={`${className} select-none`}
@@ -72,7 +79,7 @@ export default function KairosLogo({ className = "", size = "100%" }: KairosLogo
       </defs>
 
       {/* Connecting edges — drawn first so nodes sit on top */}
-      <g stroke={`url(#${uid}-edge)`} strokeWidth="4" strokeLinecap="round" opacity="0.85">
+      <g stroke={`url(#${uid}-edge)`} strokeWidth="3.5" strokeLinecap="round" opacity="0.85">
         {edges.map(([a, b], i) => (
           <line
             key={i}
@@ -89,12 +96,28 @@ export default function KairosLogo({ className = "", size = "100%" }: KairosLogo
         {nodes.map((n, i) => (
           <g key={i}>
             {/* Base sphere */}
-            <circle cx={n.cx} cy={n.cy} r="8.5" fill={`url(#${uid}-node)`} />
+            <circle cx={n.cx} cy={n.cy} r="6.5" fill={`url(#${uid}-node)`} />
             {/* Specular highlight overlay */}
-            <circle cx={n.cx} cy={n.cy} r="8.5" fill={`url(#${uid}-shine)`} />
+            <circle cx={n.cx} cy={n.cy} r="6.5" fill={`url(#${uid}-shine)`} />
           </g>
         ))}
       </g>
+
+      {/* AIROS wordmark text — the K constellation acts as the 'K' */}
+      {showText && (
+        <text
+          x="94"
+          y="54"
+          fill="currentColor"
+          fontFamily="'Alice', serif"
+          fontSize="46"
+          fontWeight="bold"
+          letterSpacing="0.18em"
+          dominantBaseline="middle"
+        >
+          AIROS
+        </text>
+      )}
     </svg>
   );
 }

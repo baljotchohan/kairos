@@ -110,10 +110,10 @@ def test_obsidian_export_creates_files(memory):
 
 
 def test_hybrid_search_returns_results(memory):
-    memory.store(make_node(id="h1", title="React over Vue Decision", topics=["Frontend"]))
-    memory.store(make_node(id="h2", title="Node.js over Python", topics=["Backend", "Engineering"]))
+    memory.store(make_node(id="h1", title="React over Vue Decision", topics=["Frontend"]), user_id="testuser")
+    memory.store(make_node(id="h2", title="Node.js over Python", topics=["Backend", "Engineering"]), user_id="testuser")
 
-    results = memory.hybrid_search("frontend framework choice", n_results=5)
+    results = memory.hybrid_search("frontend framework choice", n_results=5, user_id="testuser")
     assert len(results) >= 1
 
 

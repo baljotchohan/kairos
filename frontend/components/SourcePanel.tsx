@@ -1,6 +1,7 @@
 "use client";
 
 import type { Source } from "@/hooks/useKairosChat";
+import React from "react";
 
 interface SourcePanelProps {
   sources: Source[];
@@ -8,37 +9,56 @@ interface SourcePanelProps {
 
 const SOURCE_STYLES: Record<
   string,
-  { label: string; bg: string; text: string; icon: string }
+  { label: string; bg: string; text: string; icon: React.ReactNode }
 > = {
   slack: {
     label: "Slack",
     bg: "bg-[#4a154b]",
     text: "text-[#e8b4f8]",
-    icon: "#",
+    icon: (<svg viewBox="0 0 24 24" className="w-3 h-3"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z" fill="#E01E5A"/><path d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z" fill="#36C5F0"/><path d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zm-1.27 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.163 0a2.528 2.528 0 0 1 2.523 2.522v6.312z" fill="#2EB67D"/><path d="M15.163 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.163 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zm0-1.27a2.527 2.527 0 0 1-2.52-2.523 2.527 2.527 0 0 1 2.52-2.52h6.315A2.528 2.528 0 0 1 24 15.163a2.528 2.528 0 0 1-2.522 2.523h-6.315z" fill="#ECB22E"/></svg>),
   },
   email: {
     label: "Email",
     bg: "bg-[#ea4335]/20",
     text: "text-[#ea4335]",
-    icon: "@",
+    icon: (
+      <svg viewBox="52 42 88 66" className="w-3 h-3">
+        <path fill="#4285f4" d="M58 108h14V74L52 59v43c0 3.32 2.69 6 6 6"/>
+        <path fill="#34a853" d="M120 108h14c3.32 0 6-2.69 6-6V59l-20 15"/>
+        <path fill="#fbbc04" d="M120 48v26l20-15v-8c0-7.42-8.47-11.65-14.4-7.2L120 48"/>
+        <path fill="#ea4335" d="M72 74V48l24 18 24-18v26L96 92z"/>
+        <path fill="#c5221f" d="M52 59l20 15V48l-20 11"/>
+      </svg>
+    ),
   },
   drive: {
     label: "Drive",
     bg: "bg-[#4285f4]/20",
     text: "text-[#4285f4]",
-    icon: "D",
+    icon: (<svg viewBox="0 0 24 24" className="w-3 h-3"><path d="M7.71 0l7.065 12.25H24L16.93 0z" fill="#0066DA"/><path d="M16.29 0H7.71l-7.065 12.25 4.36 7.56L12.07 7.56z" fill="#00AC47"/><path d="M1.005 19.81L5.005 12.25H14.775L18.995 19.81z" fill="#EA4335"/><path d="M12 16.64l-4.29 7.44h8.58z" fill="#00832D"/><path d="M16.93 0L24 12.25l-4.36 7.56L12.07 7.56z" fill="#2684FC"/><path d="M14.775 12.25H5.005l-4 7.56h9.77z" fill="#FFBA00"/></svg>),
   },
   jira: {
     label: "Jira",
     bg: "bg-[#0052cc]/30",
     text: "text-[#5b8def]",
-    icon: "J",
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-3 h-3">
+        <path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005z" fill="#0052CC"/>
+        <path d="M17.294 5.757H5.723a5.215 5.215 0 0 0 5.215 5.214h2.129v2.058a5.218 5.218 0 0 0 5.215 5.214V6.758a1.001 1.001 0 0 0-1.001-1.001z" fill="#0065FF"/>
+        <path d="M23.013 0H11.455a5.215 5.215 0 0 0-5.215 5.215h2.129v2.057a5.215 5.215 0 0 0 5.215 5.215V1.001A1.001 1.001 0 0 0 12.636 0z" fill="#4C9AFF"/>
+      </svg>
+    ),
   },
   meeting: {
     label: "Meeting",
     bg: "bg-[#ff6b35]/20",
     text: "text-[#ff6b35]",
-    icon: "M",
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-3 h-3">
+        <rect x="0" y="0" width="24" height="24" rx="5" fill="#2D8CFF"/>
+        <path d="M6 8a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8zm12 1.5a.5.5 0 0 0-.8.4v4.2a.5.5 0 0 0 .8.4l3.5 2.5a.5.5 0 0 0 .7-.4V7.8a.5.5 0 0 0-.7-.4l-3.5 2.5z" fill="#ffffff"/>
+      </svg>
+    ),
   },
 };
 
@@ -68,7 +88,7 @@ function SourceBadge({ source }: { source: string }) {
     <span
       className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${style.bg} ${style.text}`}
     >
-      <span className="font-mono">{style.icon}</span>
+      {style.icon}
       {style.label}
     </span>
   );
