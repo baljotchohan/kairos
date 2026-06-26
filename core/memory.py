@@ -181,8 +181,15 @@ class KairosMemory:
     def hybrid_search(self, query: str, n_results: int = 5, user_id: Optional[str] = None) -> list[DecisionNode]:
         """
         Combines semantic (vector) search, keyword SQL search, source filter, and recency boost.
+        Scoped to a single user and FAILS CLOSED: without a user_id we return nothing
+        rather than leak every user's decisions. The query path always passes a real
+        uid, so this only catches future regressions / misuse.
         """
         from datetime import datetime
+
+        if not user_id:
+            print("[Memory] hybrid_search called without user_id — returning [] (fail-closed).")
+            return []
 
         # 1. Semantic Search
         semantic_nodes = self.semantic_search(query, n_results=n_results * 2, user_id=user_id)
@@ -265,6 +272,78 @@ class KairosMemory:
             rows = conn.execute(query, params).fetchall()
         return [n for row in rows if (n := self.graph.get_decision(row[0], user_id=user_id))]
 
+    # ── Inventory cache (raw item snapshots, no LLM) ───────────────────────────
+
+    def store_inventory(self, user_id: str, items: list[dict]):
+        """Upsert lightweight inventory rows for a user. Each item:
+        {source, item_id, title, url, date, kind, snippet}. Never raises."""
+        if not user_id or not items:
+            return
+        from datetime import datetime
+        now = datetime.utcnow().isoformat()
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.executemany("""
+                    INSERT OR REPLACE INTO inventory
+                    (user_id, source, item_id, title, url, item_date, kind, snippet, fetched_at)
+                    VALUES (?,?,?,?,?,?,?,?,?)
+                """, [
+                    (
+                        user_id, it.get("source", ""), str(it.get("item_id", "")),
+                        (it.get("title") or "")[:300], it.get("url", ""),
+                        it.get("date", ""), it.get("kind", ""),
+                        (it.get("snippet") or "")[:500], now,
+                    )
+                    for it in items if it.get("item_id")
+                ])
+                conn.commit()
+        except Exception as e:
+            print(f"[Memory] store_inventory error: {e}")
+
+    def search_inventory(
+        self, user_id: str, query: Optional[str] = None,
+        source: Optional[str] = None, limit: int = 20,
+    ) -> list[dict]:
+        """Read a user's cached inventory (instant 'what do I have' fallback)."""
+        if not user_id:
+            return []
+        clauses = ["user_id = ?"]
+        params: list = [user_id]
+        if source:
+            clauses.append("source LIKE ?")
+            params.append(f"%{source}%")
+        if query:
+            clauses.append("(title LIKE ? OR snippet LIKE ?)")
+            params.extend([f"%{query}%", f"%{query}%"])
+        where = " AND ".join(clauses)
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    f"SELECT source, item_id, title, url, item_date, kind, snippet "
+                    f"FROM inventory WHERE {where} ORDER BY item_date DESC LIMIT ?",
+                    params + [limit],
+                ).fetchall()
+                return [dict(r) for r in rows]
+        except Exception as e:
+            print(f"[Memory] search_inventory error: {e}")
+            return []
+
+    def inventory_counts(self, user_id: str) -> dict:
+        """Per-source counts of a user's cached inventory items."""
+        if not user_id:
+            return {}
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                rows = conn.execute(
+                    "SELECT source, COUNT(*) FROM inventory WHERE user_id = ? GROUP BY source",
+                    (user_id,),
+                ).fetchall()
+                return {r[0]: r[1] for r in rows}
+        except Exception as e:
+            print(f"[Memory] inventory_counts error: {e}")
+            return {}
+
     def get_user_context(self, user_id: str) -> str:
         """Loads the user profile context and recent history summary from UserMemory."""
         from core.user_memory import UserMemory
@@ -332,6 +411,26 @@ class KairosMemory:
             columns = [info[1] for info in cursor.fetchall()]
             if "user_id" not in columns:
                 conn.execute("ALTER TABLE decisions ADD COLUMN user_id TEXT NOT NULL DEFAULT ''")
+
+            # Inventory: lightweight, per-user snapshot of raw items seen during
+            # ingestion (files/emails/messages/issues/recordings). No LLM — just
+            # metadata — so the agent can answer "what do I have" instantly/offline
+            # as a cache alongside live connector lookups.
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS inventory (
+                    user_id    TEXT NOT NULL,
+                    source     TEXT NOT NULL,
+                    item_id    TEXT NOT NULL,
+                    title      TEXT,
+                    url        TEXT,
+                    item_date  TEXT,
+                    kind       TEXT,
+                    snippet    TEXT,
+                    fetched_at TEXT,
+                    PRIMARY KEY (user_id, item_id)
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_inventory_user ON inventory(user_id, source)")
             conn.commit()
 
     def _sqlite_upsert(self, node: DecisionNode):
