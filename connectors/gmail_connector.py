@@ -75,6 +75,24 @@ class GmailConnector:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._get_thread_sync, thread_id)
 
+    async def get_recent(self, limit: int = 10, query: str | None = None) -> list[dict]:
+        """
+        List the most recent emails (NO decision-keyword filter), newest first.
+        Returns lightweight summaries: {id, subject, from_, to, date, snippet, source_url}.
+        Used for live "show my recent / last email" queries.
+        """
+        if not self.refresh_token:
+            return []
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._get_recent_sync, limit, query)
+
+    async def get_last(self, from_sender: str | None = None) -> dict | None:
+        """Return the single most recent email (optionally from a given sender)."""
+        q = f"from:{from_sender}" if from_sender else None
+        recent = await self.get_recent(limit=1, query=q)
+        return recent[0] if recent else None
+
     # ── Sync internals (run in executor) ──────────────────────────────────────
 
     def _get_messages_sync(self, days_back: int, max_results: int) -> list[dict]:
@@ -137,6 +155,61 @@ class GmailConnector:
         except Exception as e:
             print(f"[GmailConnector] get_thread error: {e}")
             return []
+
+    def _get_recent_sync(self, limit: int, query: str | None) -> list[dict]:
+        svc = self._build_service()
+        limit = max(1, min(limit, 50))
+        try:
+            resp = svc.users().messages().list(
+                userId="me",
+                q=query or "in:inbox",
+                maxResults=limit,
+            ).execute()
+        except Exception as e:
+            print(f"[GmailConnector] get_recent list error: {e}")
+            return []
+
+        out: list[dict] = []
+        for raw in resp.get("messages", []):
+            meta = self._fetch_metadata(svc, raw["id"])
+            if meta:
+                out.append(self._parse_summary(meta))
+            if len(out) >= limit:
+                break
+        return out
+
+    def _fetch_metadata(self, svc, msg_id: str):
+        try:
+            return svc.users().messages().get(
+                userId="me", id=msg_id, format="metadata",
+                metadataHeaders=["Subject", "From", "To", "Date"],
+            ).execute()
+        except Exception as e:
+            print(f"[GmailConnector] fetch metadata {msg_id} error: {e}")
+            return None
+
+    def _parse_summary(self, raw: dict) -> dict:
+        """Lightweight parse for listings — headers + snippet, no body fetch."""
+        headers = {
+            h["name"]: h["value"]
+            for h in raw.get("payload", {}).get("headers", [])
+        }
+        date_str = headers.get("Date", "")
+        try:
+            dt = email_lib.utils.parsedate_to_datetime(date_str)
+            date = dt.strftime("%Y-%m-%d")
+        except Exception:
+            date = date_str[:10] if date_str else ""
+        thread_id = raw.get("threadId", "")
+        return {
+            "id": raw.get("id", ""),
+            "subject": headers.get("Subject", "(no subject)"),
+            "from_": headers.get("From", "unknown"),
+            "to": headers.get("To", ""),
+            "date": date,
+            "snippet": raw.get("snippet", ""),
+            "source_url": f"https://mail.google.com/mail/u/0/#all/{thread_id}",
+        }
 
     def _fetch_full_message(self, svc, msg_id: str):
         try:
