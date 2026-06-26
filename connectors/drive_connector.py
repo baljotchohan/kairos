@@ -71,6 +71,30 @@ class DriveConnector:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._get_content_sync, file_id, mime_type)
 
+    async def count_files(self) -> dict:
+        """
+        Count non-trashed files in the user's Drive (capped for speed).
+        Returns {total, capped, by_type} — by_type maps a friendly type → count.
+        Used for live "how many files do I have?" queries.
+        """
+        if not self.refresh_token:
+            return {"total": 0, "capped": False, "by_type": {}}
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._count_files_sync)
+
+    async def list_all_files(self, limit: int = 20, name_query: str | None = None) -> list[dict]:
+        """
+        List the user's most recently modified files of ANY type (not just Docs),
+        optionally filtered by name. Returns dicts with
+        {id, name, mimeType, friendlyType, modifiedTime, webViewLink, owners}.
+        """
+        if not self.refresh_token:
+            return []
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._list_all_files_sync, limit, name_query)
+
     # ── Sync internals (run in executor) ──────────────────────────────────────
 
     def _list_files_sync(self, days_back: int) -> list[dict]:
@@ -105,6 +129,92 @@ class DriveConnector:
                 break
 
         return files
+
+    def _count_files_sync(self, max_count: int = 5000) -> dict:
+        drive, _ = self._build_services()
+        total = 0
+        by_type: dict[str, int] = {}
+        page_token = None
+        capped = False
+        try:
+            while True:
+                resp = drive.files().list(
+                    q="trashed = false",
+                    fields="nextPageToken, files(mimeType)",
+                    pageSize=1000,
+                    pageToken=page_token,
+                ).execute()
+                batch = resp.get("files", [])
+                total += len(batch)
+                for f in batch:
+                    ft = self._friendly_type(f.get("mimeType", ""))
+                    by_type[ft] = by_type.get(ft, 0) + 1
+                page_token = resp.get("nextPageToken")
+                if not page_token:
+                    break
+                if total >= max_count:
+                    capped = True
+                    break
+        except Exception as e:
+            print(f"[DriveConnector] count_files error: {e}")
+        return {"total": total, "capped": capped, "by_type": by_type}
+
+    def _list_all_files_sync(self, limit: int, name_query: str | None) -> list[dict]:
+        drive, _ = self._build_services()
+        q = "trashed = false"
+        if name_query:
+            safe = name_query.replace("\\", "\\\\").replace("'", "\\'")
+            q += f" and name contains '{safe}'"
+
+        files: list[dict] = []
+        page_token = None
+        try:
+            while len(files) < limit:
+                resp = drive.files().list(
+                    q=q,
+                    orderBy="modifiedTime desc",
+                    fields="nextPageToken, files(id, name, mimeType, modifiedTime, webViewLink, owners)",
+                    pageSize=min(100, limit - len(files)),
+                    pageToken=page_token,
+                ).execute()
+                files.extend(resp.get("files", []))
+                page_token = resp.get("nextPageToken")
+                if not page_token:
+                    break
+        except Exception as e:
+            print(f"[DriveConnector] list_all_files error: {e}")
+
+        for f in files:
+            f["friendlyType"] = self._friendly_type(f.get("mimeType", ""))
+        return files[:limit]
+
+    @staticmethod
+    def _friendly_type(mime: str) -> str:
+        mapping = {
+            "application/vnd.google-apps.document": "Google Doc",
+            "application/vnd.google-apps.spreadsheet": "Google Sheet",
+            "application/vnd.google-apps.presentation": "Google Slides",
+            "application/vnd.google-apps.form": "Google Form",
+            "application/vnd.google-apps.folder": "Folder",
+            "application/pdf": "PDF",
+            "application/zip": "Archive",
+            "text/plain": "Text",
+        }
+        if mime in mapping:
+            return mapping[mime]
+        if mime.startswith("image/"):
+            return "Image"
+        if mime.startswith("video/"):
+            return "Video"
+        if mime.startswith("audio/"):
+            return "Audio"
+        if "spreadsheet" in mime or "excel" in mime:
+            return "Spreadsheet"
+        if "word" in mime or "document" in mime:
+            return "Document"
+        if "presentation" in mime or "powerpoint" in mime:
+            return "Presentation"
+        return "Other"
 
     def _get_content_sync(self, file_id: str, mime_type: str) -> str:
         drive, docs = self._build_services()
