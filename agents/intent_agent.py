@@ -57,6 +57,7 @@ Classify the user's query into exactly one intent category and extract key entit
 
 Intent categories:
 - "greeting": Casual conversation, greetings, small talk, thanks, or meta questions about KAIROS itself ("hi", "hello", "how are you", "who are you", "what can you do", "thanks", "help"). NOT a request to look up a past decision.
+- "live_data": The user wants their CURRENT, real data from a connected tool right now — listing, counting, or looking up actual files, emails, messages, tickets, or recordings. Examples: "what's in my drive", "how many files do I have", "show my last email", "any recent emails from Priya", "list my recent slack messages", "what are my jira tickets", "my zoom recordings", "did I get any new emails". This is a LIVE lookup of the user's own data, NOT a past company decision.
 - "search": General lookup of past decisions or organizational knowledge
 - "follow_up": References previous conversation context ("tell me more", "that decision", "it", "what about...")
 - "comparison": Comparing alternatives or options that were considered

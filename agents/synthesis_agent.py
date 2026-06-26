@@ -61,17 +61,17 @@ If nothing important found, return: []
 Return ONLY valid JSON. No markdown, no explanation."""
 
 SYNTHESIS_SYSTEM = """You are KAIROS, the Company Organizational Memory system.
-Answer the user's question using ONLY the decisions provided below as context.
+You answer questions about a company's past decisions using the decisions retrieved from memory below.
 
-Rules (STRICT):
-1. ONLY use information from the provided KAIROS Memories. Never invent, guess, or use outside knowledge.
-2. If the memories don't contain a relevant answer, say exactly: "KAIROS has no recorded decision on this topic yet."
-3. Cite specific decisions with [Decision Title](source_url) when possible.
-4. Include WHO made the decision and WHEN.
-5. Mention alternatives considered and outcomes if available.
-6. Tailor your answer to the user's role/background if provided.
+Rules:
+1. Base any claim about a company decision ONLY on the provided KAIROS Memories. Never invent or guess a decision, date, person, or outcome that isn't in the context.
+2. When the memories DO cover the question: cite specific decisions as [Decision Title](source_url), say WHO decided and WHEN, and mention alternatives considered and the outcome when available.
+3. When the memories DON'T cover the question: don't fake it and don't give a robotic refusal. Say plainly that you have no recorded decision on this yet, then offer a concrete next step — e.g. "I don't have a recorded decision about X. If your team discussed it in Slack, Drive, email, Jira or Zoom, connect or re-ingest that source and I'll find it." You may invite them to ask about their live connected data (files, emails, messages).
+4. If the question isn't about company decisions at all (general knowledge, small talk, coding help), answer briefly and helpfully, but make clear that's general information — not from the company's memory.
+5. Never tell the user to "contact the administrators" or invent fake guidance/sources.
+6. Tailor tone to the user's role/background if provided.
 
-Format: clear, professional markdown. Be concise — one or two paragraphs max unless detail is explicitly needed.
+Format: clear, professional markdown. Be concise — one or two short paragraphs unless more detail is clearly needed.
 """
 
 
@@ -190,11 +190,12 @@ Extract all decisions from the above content."""
         """
         question = input_data if isinstance(input_data, str) else str(input_data)
         resolved_context: ResolvedContext = kwargs.get("resolved_context")
-        
-        # 1. Retrieve decisions using hybrid search
+        user_id = kwargs.get("user_id")
+
+        # 1. Retrieve decisions using hybrid search (scoped to the asking user)
         self.think("Searching KAIROS memory using hybrid vector + structured + graph retrieval")
         search_query = resolved_context.resolved_query if resolved_context else question
-        relevant = self.memory.hybrid_search(search_query, n_results=6)
+        relevant = self.memory.hybrid_search(search_query, n_results=6, user_id=user_id)
         self.observe(f"Retrieved {len(relevant)} relevant decisions from memory.")
 
         # 2. Inject user profile personalization
@@ -308,10 +309,10 @@ Provide your synthesis answer:"""
 
     # ── Streaming version for WebSockets ──────────────────────────────────────
 
-    async def answer_query_stream(self, question: str, resolved_context: ResolvedContext) -> AsyncIterator[str]:
+    async def answer_query_stream(self, question: str, resolved_context: ResolvedContext, user_id: str | None = None) -> AsyncIterator[str]:
         """Stream answer tokens. Yields trace metadata, followed by text tokens."""
         search_query = resolved_context.resolved_query if resolved_context else question
-        relevant = self.memory.hybrid_search(search_query, n_results=6)
+        relevant = self.memory.hybrid_search(search_query, n_results=6, user_id=user_id)
         
         personalization = ""
         if resolved_context and resolved_context.personalization_prompt:

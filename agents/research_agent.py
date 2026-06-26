@@ -38,6 +38,8 @@ class ResearchAgent(BaseAgent):
             max_iterations=5,
         )
         self.memory = memory
+        # Set per-run so the fixed-signature tool handlers can scope to the user.
+        self._current_user_id: Optional[str] = None
 
         # LLM client setup
         api_key = config.GROQ_API_KEY or config.FIREWORKS_API_KEY
@@ -107,7 +109,7 @@ class ResearchAgent(BaseAgent):
     # ── Tool Handlers ─────────────────────────────────────────────────────────
 
     async def _tool_semantic_search(self, query: str, limit: int = 5) -> list[dict]:
-        nodes = self.memory.semantic_search(query, n_results=limit)
+        nodes = self.memory.semantic_search(query, n_results=limit, user_id=self._current_user_id)
         return [self._node_to_dict(n) for n in nodes]
 
     async def _tool_structured_search(
@@ -120,16 +122,17 @@ class ResearchAgent(BaseAgent):
         if not any([topic, person, date_from, date_to]):
             return []
         nodes = self.memory.structured_search(
-            topic=topic, person=person, date_from=date_from, date_to=date_to
+            topic=topic, person=person, date_from=date_from, date_to=date_to,
+            user_id=self._current_user_id,
         )
         return [self._node_to_dict(n) for n in nodes]
 
     async def _tool_get_connected_decisions(self, decision_id: str, depth: int = 1) -> list[dict]:
-        nodes = self.memory.graph.get_connected(decision_id, depth=depth)
+        nodes = self.memory.graph.get_connected(decision_id, depth=depth, user_id=self._current_user_id)
         return [self._node_to_dict(n) for n in nodes]
 
     async def _tool_get_decision_details(self, decision_id: str) -> dict:
-        node = self.memory.graph.get_decision(decision_id)
+        node = self.memory.graph.get_decision(decision_id, user_id=self._current_user_id)
         if not node:
             return {"error": f"Decision {decision_id} not found."}
         res = self._node_to_dict(node)
@@ -158,7 +161,9 @@ class ResearchAgent(BaseAgent):
     async def execute(self, input_data: Any, **kwargs) -> dict:
         """Execute multi-step ReAct reasoning loop to answer a query."""
         question = input_data if isinstance(input_data, str) else str(input_data)
-        
+        # Scope every tool call in this run to the asking user.
+        self._current_user_id = kwargs.get("user_id")
+
         self.think(f"Starting deep research for query: '{question}'")
 
         system_prompt = f"""You are the KAIROS Research Agent, an expert in deep-dive retrieval and fact-finding.
@@ -268,7 +273,7 @@ Do not output any text after the Action block. Always verify facts and relations
                     await asyncio.sleep(0.01)
 
         # Let's perform a semantic search to attach source nodes to the returned output
-        relevant = self.memory.semantic_search(question, n_results=5)
+        relevant = self.memory.semantic_search(question, n_results=5, user_id=self._current_user_id)
 
         return {
             "answer": final_answer,
