@@ -67,6 +67,11 @@ class Config:
     BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8000")
     # Demo seed is OFF by default — KAIROS runs on real ingested data.
     SEED_DEMO_DATA: bool = os.getenv("SEED_DEMO_DATA", "false").lower() == "true"
+    # The Helios Tech sample decisions are scoped to this synthetic demo user so
+    # they only ever appear for the demo login — never in a real user's view. A
+    # login whose email matches DEMO_LOGIN_EMAIL is mapped to DEMO_USER_ID (auth.py).
+    DEMO_USER_ID: str = os.getenv("DEMO_USER_ID", "demo-helios")
+    DEMO_LOGIN_EMAIL: str = os.getenv("DEMO_LOGIN_EMAIL", "demo@kairos.app")
 
     # ── Ingestion ──────────────────────────────────────────────────────────────
     SLACK_LOOKBACK_DAYS: int = int(os.getenv("SLACK_LOOKBACK_DAYS", "30"))
