@@ -15,8 +15,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import uuid
 from typing import Callable, TypedDict, Awaitable
+
+log = logging.getLogger(__name__)
 
 from langgraph.graph import StateGraph, END
 
@@ -63,6 +66,7 @@ class KairosOrchestrator:
         from agents.intent_agent import IntentAgent
         from agents.context_agent import ContextAgent
         from agents.research_agent import ResearchAgent
+        from agents.live_data_agent import LiveDataAgent
         from connectors.jira_connector import JiraConnector
 
         # Ingestion agents & connectors
@@ -77,6 +81,8 @@ class KairosOrchestrator:
         self.intent_agent = IntentAgent()
         self.context_agent = ContextAgent(user_memory=self.user_memory)
         self.research_agent = ResearchAgent(memory=memory)
+        # Live data agent — queries the user's connected sources on-demand
+        self.live_data_agent = LiveDataAgent(memory=memory)
 
         # Lightweight LLM client for conversational (greeting/small-talk) replies
         from openai import AsyncOpenAI
@@ -161,6 +167,25 @@ class KairosOrchestrator:
             errs = state.get("errors", []) + [f"Jira: {e}"]
             return {"jira_data": [], "errors": errs}
 
+    @staticmethod
+    def _inv_row(item: dict, default_source: str, kind: str) -> dict:
+        """Normalize a connector-data item into an inventory row. Handles both the
+        {id,title,content,url} shape (drive/meeting/jira) and the {text,source_url}
+        shape (slack/email)."""
+        item_id = str(item.get("id") or item.get("source_url") or item.get("url") or "")
+        title = item.get("title") or (item.get("text", "") or "")[:80] or default_source
+        url = item.get("url") or item.get("source_url") or ""
+        snippet = (item.get("content") or item.get("text") or "")[:300]
+        return {
+            "source": item.get("source", default_source),
+            "item_id": item_id,
+            "title": title,
+            "url": url,
+            "date": item.get("date", ""),
+            "kind": kind,
+            "snippet": snippet,
+        }
+
     async def _synthesize(self, state: KairosState) -> dict:
         # Interleave sources (round-robin) so a capped cycle samples across
         # Slack/email/drive/meeting/jira instead of burning the whole budget on
@@ -191,6 +216,24 @@ class KairosOrchestrator:
         count = 0
         errors = list(state.get("errors", []))
         user_id = state.get("user_id")
+
+        # Snapshot ALL fetched items (not just the capped extraction batch) into the
+        # per-user inventory cache. No LLM — just metadata — so the LiveDataAgent can
+        # answer "what do I have" instantly/offline. Never blocks ingestion.
+        try:
+            inv: list[dict] = []
+            for items, src, kind in (
+                (state.get("jira_data", []), "Jira", "issue"),
+                (state.get("email_data", []), "Email", "email"),
+                (state.get("drive_data", []), "Google Drive", "file"),
+                (state.get("meeting_data", []), "Zoom", "recording"),
+                (state.get("slack_data", []), "Slack", "message"),
+            ):
+                inv.extend(self._inv_row(it, src, kind) for it in items)
+            if user_id and inv:
+                self.memory.store_inventory(user_id, inv)
+        except Exception as e:
+            print(f"[Ingestion] inventory snapshot error: {e}")
 
         for i, batch in enumerate(batches):
             try:
@@ -318,10 +361,33 @@ class KairosOrchestrator:
                 "session_id": session_id, "user_context": resolved_context.to_dict(),
             }
 
+        # 3b. Live data → query the user's connected sources on-demand (Drive/Gmail/Slack/Jira/Zoom)
+        if intent.intent == "live_data":
+            if stream_callback:
+                await stream_callback({"type": "thinking", "agent": "live_data_agent", "step": "think", "content": "Checking your connected sources live..."})
+
+            result = await self.live_data_agent.run(
+                resolved_context.resolved_query, user_id=user_id, stream_callback=stream_callback
+            )
+            merged_traces.extend(self.live_data_agent.get_trace())
+
+            if stream_callback:
+                await stream_callback({
+                    "type": "agent_trace",
+                    "agent": "live_data_agent",
+                    "trace": [step.to_dict() for step in self.live_data_agent.get_trace()]
+                })
+
+            if not result.success:
+                log.error("Live Data Agent failed: %s", result.error)
+                raise ValueError("Live data lookup could not be completed. Please check your connected sources.")
+
+            answer = result.output.get("answer", "")
+            sources = result.output.get("sources", [])
+            confidence = result.confidence
+
         # If it is comparison, timeline, person lookup or user asks for a deep dive, run ResearchAgent
-        is_research = intent.intent in ("comparison", "timeline", "person_lookup", "what_if")
-        
-        if is_research:
+        elif intent.intent in ("comparison", "timeline", "person_lookup", "what_if"):
             if stream_callback:
                 await stream_callback({"type": "thinking", "agent": "research_agent", "step": "think", "content": "Running deep multi-step research on KAIROS graph..."})
             
@@ -336,7 +402,8 @@ class KairosOrchestrator:
                 })
             
             if not result.success:
-                raise ValueError(f"Research Agent failed: {result.error}")
+                log.error("Research Agent failed: %s", result.error)
+                raise ValueError("Deep research could not be completed. Please try rephrasing your question.")
             
             answer = result.output.get("answer", "")
             sources = result.output.get("sources", [])
@@ -356,7 +423,8 @@ class KairosOrchestrator:
                 })
                 
             if not result.success:
-                raise ValueError(f"Synthesis Agent failed: {result.error}")
+                log.error("Synthesis Agent failed: %s", result.error)
+                raise ValueError("Could not generate an answer right now. Please try again in a moment.")
                 
             answer = result.output.get("answer", "")
             sources = result.output.get("sources", [])
