@@ -319,7 +319,7 @@ export function useKairosChat(token: string | null) {
             m.id === id
               ? {
                   ...m,
-                  content: `Error: ${d.message}`,
+                  content: d.message || "Something went wrong. Please try again.",
                   isStreaming: false,
                   hasWarning: true,
                   thinkingStep: undefined
@@ -332,7 +332,7 @@ export function useKairosChat(token: string | null) {
           {
             id,
             role: "assistant",
-            content: `Error: ${d.message}`,
+            content: d.message || "Something went wrong. Please try again.",
             isStreaming: false,
             sources: [],
             hasWarning: true,

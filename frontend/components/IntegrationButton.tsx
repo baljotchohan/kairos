@@ -2,32 +2,52 @@
 
 import React, { useState } from "react";
 
-const SERVICE_CONFIG = {
+const SERVICE_CONFIG: Record<string, { name: string; icon: React.ReactNode; accentColor: string; description: string }> = {
   slack: {
     name: "Slack",
-    icon: "💬",
+    icon: (<svg viewBox="0 0 24 24" className="w-6 h-6"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z" fill="#E01E5A"/><path d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z" fill="#36C5F0"/><path d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zm-1.27 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.163 0a2.528 2.528 0 0 1 2.523 2.522v6.312z" fill="#2EB67D"/><path d="M15.163 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.163 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zm0-1.27a2.527 2.527 0 0 1-2.52-2.523 2.527 2.527 0 0 1 2.52-2.52h6.315A2.528 2.528 0 0 1 24 15.163a2.528 2.528 0 0 1-2.522 2.523h-6.315z" fill="#ECB22E"/></svg>),
     accentColor: "#36C5F0",
     description: "Read channel messages and extract decision threads",
   },
   gmail: {
     name: "Gmail & Google Drive",
-    icon: "📧",
+    icon: (
+      <svg viewBox="52 42 88 66" className="w-6 h-6">
+        <path fill="#4285f4" d="M58 108h14V74L52 59v43c0 3.32 2.69 6 6 6"/>
+        <path fill="#34a853" d="M120 108h14c3.32 0 6-2.69 6-6V59l-20 15"/>
+        <path fill="#fbbc04" d="M120 48v26l20-15v-8c0-7.42-8.47-11.65-14.4-7.2L120 48"/>
+        <path fill="#ea4335" d="M72 74V48l24 18 24-18v26L96 92z"/>
+        <path fill="#c5221f" d="M52 59l20 15V48l-20 11"/>
+      </svg>
+    ),
     accentColor: "#EA4335",
     description: "Read emails, approvals, and shared documents",
   },
   jira: {
     name: "Jira",
-    icon: "🎯",
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6">
+        <path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005z" fill="#0052CC"/>
+        <path d="M17.294 5.757H5.723a5.215 5.215 0 0 0 5.215 5.214h2.129v2.058a5.218 5.218 0 0 0 5.215 5.214V6.758a1.001 1.001 0 0 0-1.001-1.001z" fill="#0065FF"/>
+        <path d="M23.013 0H11.455a5.215 5.215 0 0 0-5.215 5.215h2.129v2.057a5.215 5.215 0 0 0 5.215 5.215V1.001A1.001 1.001 0 0 0 12.636 0z" fill="#4C9AFF"/>
+      </svg>
+    ),
     accentColor: "#0052CC",
     description: "Read tickets, epics, and project decisions",
   },
   zoom: {
     name: "Zoom",
-    icon: "📹",
-    accentColor: "#0B5CFF",
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
+        <rect width="24" height="24" rx="6" fill="#2D8CFF"/>
+        <path d="M4 9.333C4 8.597 4.597 8 5.333 8H13.334C14.07 8 14.667 8.597 14.667 9.333v5.334C14.667 15.403 14.07 16 13.334 16H5.333C4.597 16 4 15.403 4 14.667V9.333z" fill="white"/>
+        <path d="M15.667 10.4L19.333 8.267A.5.5 0 0 1 20 8.7v6.6a.5.5 0 0 1-.667.433L15.667 13.6V10.4z" fill="white"/>
+      </svg>
+    ),
+    accentColor: "#2D8CFF",
     description: "Transcribe meeting recordings with Whisper",
   },
-} as const;
+};
 
 type ServiceKey = keyof typeof SERVICE_CONFIG;
 
@@ -73,7 +93,16 @@ export default function IntegrationButton({
         throw new Error(err.detail || "Failed to start OAuth");
       }
 
-      const { url } = await res.json();
+      const data = await res.json();
+
+      // S2S or server-side connect (e.g. Zoom with server credentials) — no popup needed
+      if (data.connected === true) {
+        onRefresh();
+        setIsLoading(false);
+        return;
+      }
+
+      const { url } = data;
 
       const popup = window.open(url, "kairos_oauth", "width=600,height=700,left=200,top=100");
       if (!popup) {
@@ -145,7 +174,7 @@ export default function IntegrationButton({
       {/* Left: icon + info */}
       <div className="flex items-start gap-4 flex-1 min-w-0">
         <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
+          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
           style={{ background: `${cfg.accentColor}18` }}
         >
           {cfg.icon}
