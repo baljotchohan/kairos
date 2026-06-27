@@ -5,17 +5,17 @@
 @tailwind utilities;
 
 :root {
-  --bg: 23 23 23;
-  --surface: 33 33 33;
-  --surface-hover: 44 44 46;
-  --border: 44 44 46;
-  --border-focus: 85 85 85;
+  --bg: 8 8 8;
+  --surface: 14 13 20;
+  --surface-hover: 26 21 36;
+  --border: 55 40 80;
+  --border-focus: 124 58 237;
   --accent: 124 58 237;
   --text-primary: 236 236 236;
-  --text-muted: 180 180 180;
+  --text-muted: 156 163 175;
   
-  --graph-node-bg: 33 33 33;
-  --graph-node-border: 55 55 55;
+  --graph-node-bg: 14 13 20;
+  --graph-node-border: 76 56 112;
 }
 
 [data-theme='light'] {
