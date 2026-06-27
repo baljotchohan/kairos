@@ -84,11 +84,10 @@ class KairosOrchestrator:
         # Live data agent — queries the user's connected sources on-demand
         self.live_data_agent = LiveDataAgent(memory=memory)
 
-        # Lightweight LLM client for conversational (greeting/small-talk) replies
+        # Lightweight LLM client for conversational (greeting/small-talk) replies.
+        # Fireworks (AMD) primary; Groq + Gemini auto-fallback. See config.text_providers.
         from openai import AsyncOpenAI
-        _api_key = config.GROQ_API_KEY or config.FIREWORKS_API_KEY
-        _base_url = config.GROQ_BASE_URL if config.GROQ_API_KEY else config.FIREWORKS_BASE_URL
-        self._chat_model = config.GROQ_MODEL if config.GROQ_API_KEY else config.FIREWORKS_MODEL
+        _api_key, _base_url, self._chat_model = config.primary_text()
         self._chat_client = AsyncOpenAI(api_key=_api_key, base_url=_base_url)
 
         self._graph = self._build_graph()
@@ -547,9 +546,8 @@ Return JSON only:
 User History:
 {history_text}"""
 
-            api_key = config.GROQ_API_KEY or config.FIREWORKS_API_KEY
-            base_url = config.GROQ_BASE_URL if config.GROQ_API_KEY else config.FIREWORKS_BASE_URL
-            model = config.GROQ_MODEL if config.GROQ_API_KEY else config.FIREWORKS_MODEL
+            # Fireworks (AMD) primary; Groq + Gemini auto-fallback. See config.text_providers.
+            api_key, base_url, model = config.primary_text(fast=True)
 
             # We create a client locally to avoid circular dependencies
             from openai import AsyncOpenAI
