@@ -17,6 +17,12 @@ class Config:
         "FIREWORKS_MODEL",
         "accounts/fireworks/models/qwen2p5-72b-instruct"
     )
+    # Cheap/fast Fireworks model for high-volume ingestion extraction — keeps
+    # cost + latency down vs. running the 72B on every Slack/email/Drive item.
+    FIREWORKS_MODEL_FAST: str = os.getenv(
+        "FIREWORKS_MODEL_FAST",
+        "accounts/fireworks/models/llama-v3p1-8b-instruct"
+    )
     FIREWORKS_EMBED_MODEL: str = "nomic-ai/nomic-embed-text-v1.5"
 
     # ── Groq API (Text Completions) ─────────────────────────────────────────────
@@ -83,6 +89,50 @@ class Config:
     # the next ingestion cycle (extraction is idempotent).
     MAX_EXTRACT_PER_CYCLE: int = int(os.getenv("MAX_EXTRACT_PER_CYCLE", "24"))
     EXTRACT_DELAY_SECONDS: float = float(os.getenv("EXTRACT_DELAY_SECONDS", "4"))
+
+    # ── Text-generation provider chain ──────────────────────────────────────────
+    # Single source of truth for which LLM providers serve text completions, in
+    # priority order. Fireworks (AMD hardware) is PRIMARY per the hackathon's
+    # "all AI via Fireworks" requirement and because its paid credits give far
+    # higher rate limits than Groq's free tier (6k TPM, which a 5-agent system
+    # blows through instantly). Groq + Gemini remain as automatic fallbacks so a
+    # single provider hiccup never takes the product down.
+    # Providers that returned an auth error (401/403) this process — skipped on
+    # subsequent calls so an invalid/expired key costs one failed request, not a
+    # latency tax on every call. Cleared on restart (paste a good key + restart).
+    _dead_providers: set = set()
+
+    def mark_provider_dead(self, base_url: str):
+        """Disable a provider for the rest of the process (bad/expired key)."""
+        self._dead_providers.add(base_url)
+
+    def text_providers(self, fast: bool = False) -> list[tuple[str, str, str, str]]:
+        """Ordered (name, api_key, base_url, model) for configured text providers.
+
+        `fast=True` selects cheaper/faster models for high-volume ingestion
+        extraction; `fast=False` selects the strongest models for user-facing answers.
+        Providers with no API key — or ones disabled after an auth failure — are skipped.
+        """
+        fw_model = self.FIREWORKS_MODEL_FAST if fast else self.FIREWORKS_MODEL
+        groq_model = self.GROQ_MODEL if fast else self.GROQ_MODEL_LARGE
+        chain = [
+            ("fireworks", self.FIREWORKS_API_KEY, self.FIREWORKS_BASE_URL, fw_model),
+            ("groq", self.GROQ_API_KEY, self.GROQ_BASE_URL, groq_model),
+            ("gemini", self.GEMINI_API_KEY, self.GEMINI_BASE_URL, self.GEMINI_MODEL),
+        ]
+        return [(n, k, u, m) for (n, k, u, m) in chain if k and u not in self._dead_providers]
+
+    def primary_text(self, fast: bool = False) -> tuple[str, str, str]:
+        """(api_key, base_url, model) for the highest-priority configured provider.
+
+        Used by agents to build their default client. Falls back to Fireworks
+        defaults if nothing is configured (so imports never crash).
+        """
+        chain = self.text_providers(fast=fast)
+        if not chain:
+            return ("", self.FIREWORKS_BASE_URL, self.FIREWORKS_MODEL)
+        _name, key, url, model = chain[0]
+        return (key, url, model)
 
 
 config = Config()
