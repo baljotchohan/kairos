@@ -85,12 +85,11 @@ class SynthesisAgent(BaseAgent):
             max_iterations=2,
         )
         self.memory = memory
-        
-        # Use Groq for text completions, fallback to Fireworks if not set
-        api_key = config.GROQ_API_KEY or config.FIREWORKS_API_KEY
-        base_url = config.GROQ_BASE_URL if config.GROQ_API_KEY else config.FIREWORKS_BASE_URL
-        self.model = config.GROQ_MODEL if config.GROQ_API_KEY else config.FIREWORKS_MODEL
-        
+
+        # Fireworks (AMD) is the primary provider; Groq + Gemini are automatic
+        # fallbacks inside _chat_completion_with_fallback. See config.text_providers.
+        api_key, base_url, self.model = config.primary_text()
+
         self._sync_client = OpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -125,14 +124,13 @@ Extract all decisions from the above content."""
 
         try:
             response = await self._chat_completion_with_fallback(
-                client=self._async_client,
-                model=self.model,
                 messages=[
                     {"role": "system", "content": EXTRACTION_SYSTEM},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.1,
                 max_tokens=1200,
+                fast=True,  # high-volume ingestion → cheap/fast model tier
             )
 
             raw = response.choices[0].message.content.strip()
@@ -252,6 +250,8 @@ Provide your synthesis answer:"""
             )
             answer_parts = []
             async for chunk in response_stream:
+                if not chunk.choices:
+                    continue
                 token = chunk.choices[0].delta.content
                 if token:
                     answer_parts.append(token)
@@ -354,6 +354,8 @@ Answer the question clearly and specifically:"""
         )
 
         async for chunk in stream:
+            if not chunk.choices:
+                continue
             token = chunk.choices[0].delta.content
             if token:
                 yield token
