@@ -41,11 +41,8 @@ class ResearchAgent(BaseAgent):
         # Set per-run so the fixed-signature tool handlers can scope to the user.
         self._current_user_id: Optional[str] = None
 
-        # LLM client setup
-        api_key = config.GROQ_API_KEY or config.FIREWORKS_API_KEY
-        base_url = config.GROQ_BASE_URL if config.GROQ_API_KEY else config.FIREWORKS_BASE_URL
-        self.model = config.GROQ_MODEL if config.GROQ_API_KEY else config.FIREWORKS_MODEL
-
+        # LLM client setup — Fireworks (AMD) primary; Groq + Gemini auto-fallback.
+        api_key, base_url, self.model = config.primary_text()
         self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
     def _register_tools(self):

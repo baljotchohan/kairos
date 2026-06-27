@@ -104,11 +104,8 @@ class IntentAgent(BaseAgent):
             max_iterations=1,
         )
 
-        # LLM client
-        api_key = config.GROQ_API_KEY or config.FIREWORKS_API_KEY
-        base_url = config.GROQ_BASE_URL if config.GROQ_API_KEY else config.FIREWORKS_BASE_URL
-        self.model = config.GROQ_MODEL if config.GROQ_API_KEY else config.FIREWORKS_MODEL
-
+        # LLM client — Fireworks (AMD) primary; Groq + Gemini auto-fallback.
+        api_key, base_url, self.model = config.primary_text()
         self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
     async def execute(self, input_data: Any, **kwargs) -> QueryIntent:
