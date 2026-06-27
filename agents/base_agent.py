@@ -300,53 +300,65 @@ class BaseAgent(ABC):
         }
 
     async def _chat_completion_with_fallback(
-        self, client: Any, model: str, messages: list[dict], stream: bool = False, **kwargs
+        self,
+        client: Any = None,
+        model: str = None,
+        *,
+        messages: list[dict],
+        stream: bool = False,
+        fast: bool = False,
+        **kwargs,
     ) -> Any:
         """
-        Runs a chat completion with a dynamic fallback from Groq to Fireworks AI.
-        If the primary client (e.g. Groq) fails due to capacity/rate limits, it falls back to Fireworks AI.
+        Run a chat completion against the configured provider chain, in priority
+        order (Fireworks → Groq → Gemini; see ``config.text_providers``).
+
+        Fireworks (AMD) is primary. If it rate-limits or errors, we fall straight
+        through to the next provider so a single hiccup never breaks a query. The
+        legacy ``client``/``model`` args are accepted for backward-compatibility
+        but ignored — provider selection is owned by config, the single source of
+        truth. Pass ``fast=True`` for high-volume ingestion to use cheaper models.
         """
         import asyncio
         import re
-        from config import config
         from openai import AsyncOpenAI
+        from config import config
 
-        is_groq = bool(config.GROQ_API_KEY) and model == config.GROQ_MODEL
+        providers = config.text_providers(fast=fast)
+        if not providers:
+            raise RuntimeError(
+                "No AI provider configured. Set FIREWORKS_API_KEY (preferred), "
+                "or GROQ_API_KEY / GEMINI_API_KEY."
+            )
 
-        # Retry the primary model on rate-limit (429), honoring the suggested
-        # wait, before falling back. Groq free tier has a low TPM limit, so
-        # ingestion bursts hit 429 — retrying keeps extraction working.
         last_err = None
-        for attempt in range(3):
-            try:
-                return await client.chat.completions.create(
-                    model=model, messages=messages, stream=stream, **kwargs
-                )
-            except Exception as e:
-                last_err = e
-                msg = str(e)
-                is_rate_limit = "429" in msg or "rate_limit" in msg or "rate limit" in msg.lower()
-                if is_rate_limit and attempt < 2:
-                    m = re.search(r"try again in ([\d.]+)s", msg)
-                    wait = float(m.group(1)) + 0.5 if m else 8.0
-                    wait = min(wait, 30.0)
-                    print(f"[{self.name}] Rate limited — retrying in {wait:.1f}s (attempt {attempt + 1}/3)")
-                    await asyncio.sleep(wait)
-                    continue
-                break
+        for name, api_key, base_url, pmodel in providers:
+            cli = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=90)
+            # One in-place retry only when this is the *sole* provider — otherwise
+            # rolling to the next provider is faster than waiting out a 429.
+            attempts = 2 if len(providers) == 1 else 1
+            for attempt in range(attempts):
+                try:
+                    return await cli.chat.completions.create(
+                        model=pmodel, messages=messages, stream=stream, **kwargs
+                    )
+                except Exception as e:
+                    last_err = e
+                    msg = str(e)
+                    # Bad/expired key → disable this provider for the rest of the
+                    # process so we don't pay its latency on every future call.
+                    if "401" in msg or "403" in msg or "invalid" in msg.lower() or "unauthorized" in msg.lower():
+                        config.mark_provider_dead(base_url)
+                        print(f"[{self.name}] {name} auth failed — disabling for this session")
+                        break
+                    is_rate_limit = "429" in msg or "rate" in msg.lower()
+                    if is_rate_limit and attempt < attempts - 1:
+                        m = re.search(r"try again in ([\d.]+)s", msg)
+                        wait = min(float(m.group(1)) + 0.5, 20.0) if m else 6.0
+                        print(f"[{self.name}] {name} rate-limited — retrying in {wait:.1f}s")
+                        await asyncio.sleep(wait)
+                        continue
+                    print(f"[{self.name}] {name} failed ({msg[:140]}) — trying next provider")
+                    break  # move on to the next provider in the chain
 
-        # Primary exhausted — try Fireworks only if a real (working) key exists.
-        if is_groq and config.FIREWORKS_API_KEY:
-            try:
-                print(f"[{self.name}] Primary model failed ({last_err}). Trying Fireworks AI...")
-                fw_client = AsyncOpenAI(
-                    api_key=config.FIREWORKS_API_KEY,
-                    base_url=config.FIREWORKS_BASE_URL,
-                )
-                return await fw_client.chat.completions.create(
-                    model=config.FIREWORKS_MODEL, messages=messages, stream=stream, **kwargs
-                )
-            except Exception as fw_err:
-                print(f"[{self.name}] Fireworks fallback also failed ({fw_err}).")
-                raise last_err or fw_err
-        raise last_err or RuntimeError("chat completion failed")
+        raise last_err or RuntimeError("All AI providers failed")
