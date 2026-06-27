@@ -536,6 +536,22 @@ export default function Home() {
     }
   }, [token]);
 
+  // Refresh decision graph from backend after every completed assistant message
+  useEffect(() => {
+    if (!token || chatHistory.length === 0) return;
+    const lastMsg = chatHistory[chatHistory.length - 1];
+    if (lastMsg.role !== "assistant" || lastMsg.isStreaming) return;
+    // Re-fetch decisions so newly stored nodes from live_data_agent appear
+    fetchRealDecisions();
+  }, [chatHistory, token, fetchRealDecisions]);
+
+  // Poll graph every 45s while user has a token (picks up background ingestion)
+  useEffect(() => {
+    if (!token) return;
+    const interval = setInterval(fetchRealDecisions, 45000);
+    return () => clearInterval(interval);
+  }, [token, fetchRealDecisions]);
+
   // Compile combined decision graph from message citations
   useEffect(() => {
     if (!token || chatHistory.length === 0) return;

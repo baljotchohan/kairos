@@ -25,6 +25,7 @@ from openai import AsyncOpenAI
 from config import config
 from agents.base_agent import BaseAgent, AgentTool
 from core.live_connectors import build_connectors_for_user
+from core.graph import DecisionNode
 
 
 SYSTEM_PROMPT_TEMPLATE = """You are the KAIROS Live Data Agent. You answer the user's question by looking up their REAL, CURRENT data from the company tools they have connected.
@@ -40,20 +41,28 @@ Thought: <brief reasoning>
 
 Action: {{"name": "tool_name", "arguments": {{"key": "value"}}}}
 
-The system returns an Observation. Repeat Thought→Action until you have enough data, then output your final answer as:
+The system returns an Observation. Repeat Thought→Action until you have enough data, then output:
 
 Action: {{"name": "Final Answer", "arguments": {{"answer": "..."}}}}
 
-RULES FOR THE FINAL ANSWER:
-- Be specific: use real numbers, names, dates, and links from the tool output.
-- Format lists in markdown with bullet points and [name](url) links where available.
-- If a question asks "how many", give the exact count.
-- If a tool returns an error or source is not connected, say so clearly — never invent data.
-- For multi-part questions, answer each part.
-- Keep the tone direct and data-driven (you are an enterprise intelligence tool, not a chatbot).
-- Never say "I couldn't complete the lookup" if you actually got data from any tool.
+CRITICAL RULES:
+1. DISCONNECTED SOURCE: If the user asks about a source NOT in the connected sources list (e.g. asks about email but "gmail" is not connected), IMMEDIATELY output Final Answer: "Gmail is not connected yet. Connect it in KAIROS → Connectors to see your emails." Do NOT call any tool. Do NOT loop.
+2. SPECIFIC ANSWERS: Use real numbers, names, dates, and [text](url) markdown links from tool output. Never invent data.
+3. HOW-MANY QUESTIONS: Call the count/stats tool first, then Final Answer with the exact number.
+4. TOOL ERRORS: If a tool returns {{"error": "..."}}, report that error in Final Answer — do not retry the same tool.
+5. FORMAT: Bullet lists for multiple items. Bold for key metrics. Always cite the source.
 
-Do not output anything after the Final Answer action block."""
+Do not output anything after the Final Answer block."""
+
+
+# Map question keywords to source names — for fast early-exit when source not connected
+_SOURCE_KEYWORDS: dict[str, list[str]] = {
+    "gmail": ["mail", "email", "inbox", "gmail", "message", "unread", "sender", "sent"],
+    "drive": ["drive", "file", "doc", "document", "sheet", "folder", "gdrive"],
+    "slack": ["slack", "channel", "message", "workspace", "dm", "post"],
+    "jira": ["jira", "ticket", "issue", "sprint", "backlog", "epic", "bug", "task", "story"],
+    "zoom": ["zoom", "recording", "meeting", "call", "video"],
+}
 
 
 class LiveDataAgent(BaseAgent):
@@ -265,10 +274,37 @@ class LiveDataAgent(BaseAgent):
 
     def _add_source(self, title: str, date: str, source: str, url: str):
         if url and len(self._collected_sources) < 12:
+            # Use deterministic ID matching memory.make_id() so frontend /api/decisions/<id> works
+            node_id = (
+                self.memory.make_id(title=title, source_url=url)
+                if self.memory and title
+                else url
+            )
             self._collected_sources.append({
-                "id": url, "title": title or source, "date": date or "",
+                "id": node_id, "title": title or source, "date": date or "",
                 "source": source, "source_url": url,
             })
+
+    def _write_sources_to_graph(self):
+        """Store collected live-data sources as DecisionNodes in KAIROS memory."""
+        if not self.memory or not self._collected_sources:
+            return
+        for src in self._collected_sources[:8]:
+            try:
+                node = DecisionNode(
+                    id=src["id"],
+                    title=src["title"],
+                    summary=f"Live data fetched from {src['source']}",
+                    date=src.get("date", ""),
+                    source=src["source"].lower(),
+                    source_url=src["source_url"],
+                    topics=[src["source"]],
+                    participants=[],
+                    user_id=self._current_user_id or "",
+                )
+                self.memory.store(node, user_id=self._current_user_id)
+            except Exception as e:
+                print(f"[LiveDataAgent] graph write error: {e}")
 
     # Meta
     async def _tool_list_connected(self) -> dict:
@@ -640,12 +676,24 @@ class LiveDataAgent(BaseAgent):
 
         if not connected:
             answer = (
-                "You don't have any data sources connected yet. Connect Google Drive, Gmail, "
-                "Slack, Jira, or Zoom in the KAIROS Connectors page and I'll be able to answer "
-                "questions about your real data."
+                "No data sources are connected yet. Go to **KAIROS → Connectors** and connect "
+                "Google Drive, Gmail, Slack, Jira, or Zoom to start querying your live data."
             )
             await self._maybe_stream(answer, kwargs.get("stream_callback"))
             return {"answer": answer, "sources": [], "query": question}
+
+        # Early-exit: detect if the user needs a source that isn't connected
+        q_lower = question.lower()
+        for source_name, keywords in _SOURCE_KEYWORDS.items():
+            if source_name not in connected and any(kw in q_lower for kw in keywords):
+                source_display = {"gmail": "Gmail", "drive": "Google Drive", "slack": "Slack",
+                                  "jira": "Jira", "zoom": "Zoom"}.get(source_name, source_name.title())
+                answer = (
+                    f"**{source_display} is not connected.** Go to **KAIROS → Connectors** and "
+                    f"click Connect on {source_display} to enable this. Once connected, ask me again."
+                )
+                await self._maybe_stream(answer, kwargs.get("stream_callback"))
+                return {"answer": answer, "sources": [], "query": question}
 
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
             connected=", ".join(connected) or "none",
@@ -700,11 +748,22 @@ class LiveDataAgent(BaseAgent):
                 messages.append({"role": "user", "content": f"Error on iteration {iteration}: {e}. Adjust your format or pick a different tool."})
 
         if not final_answer:
-            # Build whatever partial data we collected into a useful fallback
             if self._collected_sources:
-                final_answer = f"I found {len(self._collected_sources)} relevant item(s) from your connected sources, but couldn't generate a complete summary. Check the sources panel for details."
+                items = "\n".join(
+                    f"- [{s['title']}]({s['source_url']}) — {s['source']}"
+                    for s in self._collected_sources[:6] if s.get("source_url")
+                )
+                final_answer = f"Here's what I found from your connected sources:\n\n{items}"
             else:
-                final_answer = "I was unable to retrieve data from your connected sources. Please check that your integrations are properly connected in the KAIROS Connectors page."
+                not_connected = [s for s in ("gmail", "drive", "slack", "jira", "zoom") if s not in connected]
+                tip = f" (Not yet connected: {', '.join(not_connected)})" if not_connected else ""
+                final_answer = (
+                    f"I couldn't fetch data for this query from your connected sources "
+                    f"({', '.join(connected)}){tip}. Try reconnecting them in KAIROS → Connectors."
+                )
+
+        # Write fetched live items into the decision graph so they appear as nodes
+        await asyncio.to_thread(self._write_sources_to_graph)
 
         await self._maybe_stream(final_answer, kwargs.get("stream_callback"))
         return {
