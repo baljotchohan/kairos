@@ -58,6 +58,52 @@ class SlackConnector:
 
         return channels
 
+    async def get_workspace_info(self) -> dict:
+        """Workspace size for 'how many users on Slack?' / 'how big is my Slack?':
+        team name + human member count + bot count + channel count.
+        Degrades gracefully if a scope (team:read) is missing."""
+        if not self._token:
+            return {}
+
+        client = self._get_client()
+        info: dict = {}
+
+        try:
+            team = (await client.team_info()).get("team", {})
+            info["team_name"] = team.get("name")
+            info["domain"] = team.get("domain")
+        except Exception as e:
+            print(f"[SlackConnector] team_info error: {e}")
+
+        try:
+            members, bots, cursor = 0, 0, None
+            while True:
+                kwargs: dict = {"limit": 200}
+                if cursor:
+                    kwargs["cursor"] = cursor
+                resp = await client.users_list(**kwargs)
+                for m in resp.get("members", []):
+                    if m.get("deleted"):
+                        continue
+                    if m.get("is_bot") or m.get("id") == "USLACKBOT":
+                        bots += 1
+                    else:
+                        members += 1
+                cursor = resp.get("response_metadata", {}).get("next_cursor")
+                if not cursor:
+                    break
+            info["member_count"] = members
+            info["bot_count"] = bots
+        except Exception as e:
+            print(f"[SlackConnector] users_list error: {e}")
+
+        try:
+            info["channel_count"] = len(await self.get_channels())
+        except Exception:
+            pass
+
+        return info
+
     async def get_messages(
         self,
         channel_id: str,

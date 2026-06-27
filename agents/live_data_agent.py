@@ -71,9 +71,8 @@ class LiveDataAgent(BaseAgent):
         self._connectors: dict = {}
         self._collected_sources: list[dict] = []
 
-        api_key = config.GROQ_API_KEY or config.FIREWORKS_API_KEY
-        base_url = config.GROQ_BASE_URL if config.GROQ_API_KEY else config.FIREWORKS_BASE_URL
-        self.model = config.GROQ_MODEL if config.GROQ_API_KEY else config.FIREWORKS_MODEL
+        # Fireworks (AMD) primary; Groq + Gemini auto-fallback. See config.text_providers.
+        api_key, base_url, self.model = config.primary_text()
         self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
     # ── Tools ──────────────────────────────────────────────────────────────────
@@ -128,6 +127,12 @@ class LiveDataAgent(BaseAgent):
             description="List recent Slack messages across the user's channels. Optional 'limit' (default 15).",
             handler=self._tool_slack_recent,
             parameters={"type": "object", "properties": {"limit": {"type": "integer"}}},
+        ))
+        self.register_tool(AgentTool(
+            name="slack_workspace_info",
+            description="Get the Slack workspace size: workspace name, number of members/people, and channel count. Use for 'how many users on Slack', 'how big is my Slack', 'how many people are in the workspace'.",
+            handler=self._tool_slack_workspace,
+            parameters={"type": "object", "properties": {}},
         ))
         self.register_tool(AgentTool(
             name="jira_list_issues",
@@ -225,6 +230,12 @@ class LiveDataAgent(BaseAgent):
             return {"error": "Slack is not connected."}
         channels = await c.get_channels()
         return {"count": len(channels), "channels": [ch.get("name", "") for ch in channels]}
+
+    async def _tool_slack_workspace(self) -> Any:
+        c = self._connectors.get("slack")
+        if not c:
+            return {"error": "Slack is not connected."}
+        return await c.get_workspace_info()
 
     async def _tool_slack_recent(self, limit: int = 15) -> Any:
         c = self._connectors.get("slack")
