@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import IntegrationButton from "./IntegrationButton";
 
-type ServiceKey = "slack" | "gmail" | "jira" | "zoom";
+type ServiceKey = "slack" | "gmail" | "drive" | "jira" | "zoom";
 
 interface ServiceStatus {
   connected: boolean;
@@ -17,11 +17,12 @@ interface IntegrationGridProps {
   token: string | null;
 }
 
-const SERVICES: ServiceKey[] = ["slack", "gmail", "jira", "zoom"];
+const SERVICES: ServiceKey[] = ["slack", "gmail", "drive", "jira", "zoom"];
 
 const DEFAULT_STATE: ConnectionsMap = {
   slack: { connected: false },
   gmail: { connected: false },
+  drive: { connected: false },
   jira: { connected: false },
   zoom: { connected: false },
 };
