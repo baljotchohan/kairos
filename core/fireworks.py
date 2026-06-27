@@ -16,13 +16,12 @@ from config import config
 
 
 def _providers() -> list[tuple[str, str, str]]:
-    """Return (api_key, base_url, model) in priority order, skipping unconfigured."""
-    candidates = [
-        (config.GROQ_API_KEY, config.GROQ_BASE_URL, config.GROQ_MODEL),
-        (config.GEMINI_API_KEY, config.GEMINI_BASE_URL, config.GEMINI_MODEL),
-        (config.FIREWORKS_API_KEY, config.FIREWORKS_BASE_URL, config.FIREWORKS_MODEL),
-    ]
-    return [(k, u, m) for k, u, m in candidates if k]
+    """Return (api_key, base_url, model) in priority order, skipping unconfigured.
+
+    Single source of truth is config.text_providers() — Fireworks (AMD) primary,
+    then Groq + Gemini as fallbacks.
+    """
+    return [(k, u, m) for _name, k, u, m in config.text_providers()]
 
 
 class FireworksClient:
@@ -133,7 +132,7 @@ class FireworksClient:
     async def embed(self, text: str) -> list[float]:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
-                f"{self.embed_base_url}/embeddings",
+                f"{self.embed_base_url.rstrip('/')}/embeddings",
                 headers={"Authorization": f"Bearer {self.embed_api_key}"},
                 json={
                     "model": self.embed_model,
@@ -146,7 +145,7 @@ class FireworksClient:
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(
-                f"{self.embed_base_url}/embeddings",
+                f"{self.embed_base_url.rstrip('/')}/embeddings",
                 headers={"Authorization": f"Bearer {self.embed_api_key}"},
                 json={
                     "model": self.embed_model,
