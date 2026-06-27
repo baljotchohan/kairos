@@ -245,6 +245,17 @@ class SlackConnector:
             m["text"] = await self._resolve_mentions(m.get("text", ""))
         return top
 
+    async def get_channel_messages(self, channel_id: str, limit: int = 20) -> list[dict]:
+        """Fetch the most recent `limit` messages from a specific channel."""
+        if not self._token:
+            return []
+        msgs = await self.get_messages(channel_id, days_back=90)
+        msgs.sort(key=lambda m: float(m.get("ts", "0") or 0), reverse=True)
+        top = msgs[:limit]
+        for m in top:
+            m["text"] = await self._resolve_mentions(m.get("text", ""))
+        return top
+
     # ── Helpers ────────────────────────────────────────────────────────────────
 
     async def _resolve_user(self, user_id: str) -> str:
