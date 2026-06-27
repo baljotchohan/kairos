@@ -15,7 +15,6 @@ from config import config
 class DriveConnector:
     SCOPES = [
         "https://www.googleapis.com/auth/drive.readonly",
-        "https://www.googleapis.com/auth/documents.readonly",
     ]
 
     def __init__(self, refresh_token: str | None = None, client_id: str | None = None, client_secret: str | None = None):

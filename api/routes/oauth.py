@@ -252,6 +252,7 @@ async def gmail_start(current_user: UserProfile = Depends(get_current_user)):
     scopes = " ".join([
         "https://www.googleapis.com/auth/gmail.readonly",
         "https://www.googleapis.com/auth/drive.readonly",
+        "https://www.googleapis.com/auth/documents.readonly",
         "https://www.googleapis.com/auth/userinfo.email",
     ])
     from urllib.parse import quote
