@@ -30,9 +30,9 @@ export interface Message {
   hasWarning: boolean;
   intent?: {
     intent: string;
-    confidence: number;
-    search_strategy: string;
-    entities: Record<string, any>;
+    confidence?: number;
+    search_strategy?: string;
+    entities?: Record<string, any>;
     rewritten_query?: string;
   };
   confidence?: number;
@@ -100,13 +100,14 @@ export function useKairosChat(token: string | null) {
         headers: { Authorization: `Bearer ${token}` }
       });
       const turns = await res.json();
+      if (!res.ok || !Array.isArray(turns)) return;
       const loadedMessages: Message[] = turns.map((turn: any) => ({
         id: turn.id,
         role: turn.role,
-        content: turn.content,
+        content: turn.content ?? "",
         isStreaming: false,
         sources: turn.metadata?.sources ?? [],
-        hasWarning: turn.content.includes("WARNING") || turn.content.includes("ALERT"),
+        hasWarning: (turn.content || "").includes("WARNING") || (turn.content || "").includes("ALERT"),
         intent: turn.query_intent ? { intent: turn.query_intent } : undefined,
         confidence: turn.metadata?.confidence
       }));
@@ -253,15 +254,16 @@ export function useKairosChat(token: string | null) {
       const id = currentAssistantId.current;
       if (!id) return;
 
+      const answer = d.answer ?? "";
       const hasWarning =
-        d.answer.includes("WARNING") || d.answer.includes("ALERT");
+        answer.includes("WARNING") || answer.includes("ALERT");
 
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === id
             ? {
                 ...msg,
-                content: d.answer,
+                content: answer || msg.content,
                 isStreaming: false,
                 sources: d.sources ?? [],
                 hasWarning,
