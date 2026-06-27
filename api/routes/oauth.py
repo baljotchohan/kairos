@@ -329,6 +329,18 @@ async def gmail_callback(code: str = None, state: str = None, error: str = None)
         return _popup_error("We couldn't complete the connection. Please try again.")
 
 
+@router.get("/drive/start")
+async def drive_start(current_user: UserProfile = Depends(get_current_user)):
+    """Google Drive shares Google's single OAuth grant with Gmail (one consent
+    covers both gmail.readonly + drive.readonly scopes). So the Drive card runs
+    the exact same Google flow + callback as Gmail and stores the same `google`
+    token — connecting either card lights up both. This avoids registering a
+    second redirect URI in Google Cloud Console."""
+    res = await gmail_start(current_user)
+    res["service"] = "drive"
+    return res
+
+
 # ── JIRA ──────────────────────────────────────────────────────────────────────
 
 @router.get("/jira/start")
@@ -502,7 +514,11 @@ async def get_status(current_user: UserProfile = Depends(get_current_user)):
     """Returns connection status for all 4 OAuth services for the current user.
     Only shows connected when the user has explicitly connected via OAuth popup."""
 
-    frontend_to_storage = {"slack": "slack", "gmail": "google", "jira": "jira", "zoom": "zoom"}
+    # Gmail + Drive both read the single Google grant (one consent covers both).
+    frontend_to_storage = {
+        "slack": "slack", "gmail": "google", "drive": "google",
+        "jira": "jira", "zoom": "zoom",
+    }
 
     result = {}
     for frontend_key, storage_key in frontend_to_storage.items():
@@ -523,11 +539,11 @@ async def disconnect_service(
     service: str,
     current_user: UserProfile = Depends(get_current_user),
 ):
-    valid = {"slack", "gmail", "jira", "zoom"}
+    valid = {"slack", "gmail", "drive", "jira", "zoom"}
     if service not in valid:
         raise HTTPException(400, f"Unknown service: {service}")
-    # "gmail" in frontend maps to "google" in token store
-    storage_key = "google" if service == "gmail" else service
+    # "gmail" and "drive" both map to the single "google" grant in the token store
+    storage_key = "google" if service in ("gmail", "drive") else service
     # Mark as disconnected in DB to prevent re-inheriting env fallback
     _store_token(current_user.uid, storage_key, {"disconnected": True})
     print(f"[OAuth] 🔓 {service} disconnected uid={current_user.uid}")
