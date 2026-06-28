@@ -429,9 +429,49 @@ export default function DecisionGraph({
     setIsPanning(false);
   };
 
+  // RESET = fit-to-view: frame the whole node cluster in the viewport.
+  // (Previously just snapped to a fixed zoom/pan, which did nothing visible
+  // once the physics sim had spread nodes out — so it read as "not working".)
   const resetViewport = () => {
-    setZoom(0.95);
-    setPan({ x: 0, y: 0 });
+    const container = containerRef.current;
+    const pNodes = physicsNodesRef.current;
+    if (!container || pNodes.length === 0) {
+      setZoom(0.95);
+      setPan({ x: 0, y: 0 });
+      return;
+    }
+
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    // Bounding box of all nodes in world coordinates
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of pNodes) {
+      if (n.x < minX) minX = n.x;
+      if (n.y < minY) minY = n.y;
+      if (n.x > maxX) maxX = n.x;
+      if (n.y > maxY) maxY = n.y;
+    }
+
+    const padding = 80; // px of breathing room around the cluster
+    const bboxW = Math.max(maxX - minX, 1);
+    const bboxH = Math.max(maxY - minY, 1);
+
+    // Zoom to fit, capped so a tiny/single-node graph doesn't over-zoom
+    const fitZoom = Math.min(
+      (width - padding * 2) / bboxW,
+      (height - padding * 2) / bboxH
+    );
+    const newZoom = Math.max(0.2, Math.min(1.4, fitZoom));
+
+    // Center the bbox center in the viewport: screen = pan + world * zoom
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    setZoom(newZoom);
+    setPan({
+      x: width / 2 - centerX * newZoom,
+      y: height / 2 - centerY * newZoom,
+    });
   };
 
   const pNodes = physicsNodesRef.current;

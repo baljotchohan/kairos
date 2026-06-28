@@ -1178,18 +1178,18 @@ export default function Home() {
               <div className="flex flex-col gap-0.5 mt-1">
                 {sessions.length > 0 ? sessions.slice(0, 8).map((session) => (
                   <button
-                    key={session.id}
+                    key={session.session_id}
                     onClick={() => {
                       setActiveTab("chat");
-                      loadSession(session.id);
+                      loadSession(session.session_id);
                     }}
                     className={`w-full text-left px-2.5 py-2 hover:bg-[rgb(var(--surface-hover))]/60 rounded-xl text-[11.5px] font-medium truncate transition-all ${
-                      activeSessionId === session.id
+                      activeSessionId === session.session_id
                         ? "text-[rgb(var(--text-primary))] bg-[rgb(var(--surface-hover))]/40"
                         : "text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))]"
                     }`}
                   >
-                    {session.title || "Untitled Session"}
+                    {session.preview || "New Session"}
                   </button>
                 )) : (
                   <p className="text-[10px] text-[rgb(var(--text-muted))]/60 px-2.5 italic">No sessions yet. Start chatting!</p>
