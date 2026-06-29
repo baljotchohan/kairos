@@ -12,6 +12,7 @@ router = APIRouter()
 class QueryRequest(BaseModel):
     question: str
     user_role: str = "admin"  # admin | manager | employee
+    session_id: str | None = None
 
 
 class QueryResponse(BaseModel):
@@ -37,7 +38,8 @@ async def query(
     try:
         result = await orchestrator.query_with_memory(
             question=req.question,
-            user_id=current_user.uid
+            user_id=current_user.uid,
+            session_id=req.session_id
         )
     except Exception:
         log.error("REST /query failed for user %s", current_user.uid, exc_info=True)

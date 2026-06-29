@@ -107,22 +107,25 @@ def _get_active_user_ids() -> list[str]:
 
 
 async def _ingestion_loop():
-    """Run ingestion every INGEST_INTERVAL_MINUTES minutes, once per connected user."""
+    """Run ingestion every INGEST_INTERVAL_MINUTES minutes, concurrently per connected user."""
     interval = config.INGEST_INTERVAL_MINUTES * 60
     # Small initial delay so app is ready before first run
     await asyncio.sleep(10)
 
     while True:
-        user_ids = _get_active_user_ids()
+        user_ids = await asyncio.to_thread(_get_active_user_ids)
         if not user_ids:
             print("[Ingestion] No connected users — skipping run.")
         else:
-            for uid in user_ids:
+            async def run_for_user(uid: str):
                 try:
                     print(f"[Ingestion] Starting run for user {uid}...")
                     await orchestrator.run_ingestion(user_id=uid)
                 except Exception as e:
                     print(f"[Ingestion] Error for user {uid}: {e}")
+
+            # Execute user ingestions concurrently
+            await asyncio.gather(*(run_for_user(uid) for uid in user_ids))
         await asyncio.sleep(interval)
 
 

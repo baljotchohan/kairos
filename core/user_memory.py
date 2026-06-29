@@ -17,6 +17,7 @@ import json
 import time
 import uuid
 import sqlite3
+import contextlib
 from typing import Optional
 from dataclasses import dataclass, field, asdict
 
@@ -81,11 +82,16 @@ class UserMemory:
 
     # ── SQLite Connections ───────────────────────────────────────────────────
 
+    @contextlib.contextmanager
     def _get_connection(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous=NORMAL;")
-        return conn
+        conn.execute("PRAGMA busy_timeout=30000;")
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     # ── Schema ────────────────────────────────────────────────────────────────
 

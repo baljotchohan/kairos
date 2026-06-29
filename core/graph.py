@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+import contextlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Optional
@@ -24,13 +25,24 @@ class DecisionNode:
     summary: str
     date: str                   # ISO date string
     participants: list[str]
-    source: str                 # e.g. "Slack #engineering", "Email thread", "Meeting 2021-08-15"
+    source: str                 # e.g. "Slack #engineering", "Email thread"
     source_url: str
     topics: list[str]
     outcome: str
     raw_text: str = ""
     metadata: dict = field(default_factory=dict)
     user_id: str = ""
+
+    def __post_init__(self):
+        if self.participants is None:
+            self.participants = []
+        else:
+            self.participants = [p for p in self.participants if p is not None]
+        
+        if self.topics is None:
+            self.topics = []
+        else:
+            self.topics = [t for t in self.topics if t is not None]
 
 
 class DecisionGraph:
@@ -48,11 +60,16 @@ class DecisionGraph:
 
     # ── SQLite Connections ───────────────────────────────────────────────────
 
+    @contextlib.contextmanager
     def _get_connection(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous=NORMAL;")
-        return conn
+        conn.execute("PRAGMA busy_timeout=30000;")
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     # ── Persistence ──────────────────────────────────────────────────────────
 
@@ -109,7 +126,14 @@ class DecisionGraph:
                 for row in conn.execute("SELECT from_id, to_id, relation_type FROM relations"):
                     # Only add edge if both nodes have decision data (skip orphans)
                     if row[0] in self.graph and row[1] in self.graph:
-                        self.graph.add_edge(row[0], row[1], relation=row[2])
+                        if self.graph.has_edge(row[0], row[1]):
+                            existing = self.graph.edges[row[0], row[1]].get("relations", [])
+                            if row[2] not in existing:
+                                existing.append(row[2])
+                            self.graph.edges[row[0], row[1]]["relations"] = existing
+                            self.graph.edges[row[0], row[1]]["relation"] = ", ".join(existing)
+                        else:
+                            self.graph.add_edge(row[0], row[1], relation=row[2], relations=[row[2]])
 
     def _save_node(self, node: DecisionNode):
         with self._get_connection() as conn:
@@ -144,8 +168,9 @@ class DecisionGraph:
             node.user_id = user_id
 
         with self._lock:
-            self.graph.add_node(node.id, data=node)
+            # Save to SQLite first (durable layer) to prevent desync if write fails
             self._save_node(node)
+            self.graph.add_node(node.id, data=node)
             affected = self._auto_link(node)  # IDs of nodes that gained new edges
 
             if vault_path:
@@ -165,7 +190,14 @@ class DecisionGraph:
         with self._lock:
             if from_id not in self.graph or to_id not in self.graph:
                 return
-            self.graph.add_edge(from_id, to_id, relation=relation)
+            if self.graph.has_edge(from_id, to_id):
+                existing = self.graph.edges[from_id, to_id].get("relations", [])
+                if relation not in existing:
+                    existing.append(relation)
+                self.graph.edges[from_id, to_id]["relations"] = existing
+                self.graph.edges[from_id, to_id]["relation"] = ", ".join(existing)
+            else:
+                self.graph.add_edge(from_id, to_id, relation=relation, relations=[relation])
             self._save_edge(from_id, to_id, relation)
 
     def add_relations_batch(self, relations_list: list[tuple[str, str, RelationType]]):
@@ -175,7 +207,14 @@ class DecisionGraph:
             for from_id, to_id, relation in relations_list:
                 if from_id not in self.graph or to_id not in self.graph:
                     continue
-                self.graph.add_edge(from_id, to_id, relation=relation)
+                if self.graph.has_edge(from_id, to_id):
+                    existing = self.graph.edges[from_id, to_id].get("relations", [])
+                    if relation not in existing:
+                        existing.append(relation)
+                    self.graph.edges[from_id, to_id]["relations"] = existing
+                    self.graph.edges[from_id, to_id]["relation"] = ", ".join(existing)
+                else:
+                    self.graph.add_edge(from_id, to_id, relation=relation, relations=[relation])
                 valid_relations.append((from_id, to_id, relation))
             
             if not valid_relations:
@@ -188,8 +227,47 @@ class DecisionGraph:
                 )
                 conn.commit()
 
+    def _load_node_from_db(self, decision_id: str):
+        """Load a single node and its edges from the DB (for multi-worker sync)."""
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    "SELECT id, title, summary, date, participants, source, source_url, topics, outcome, raw_text, metadata, user_id "
+                    "FROM decisions WHERE id = ?",
+                    (decision_id,)
+                ).fetchone()
+                if not row:
+                    return
+                node = DecisionNode(
+                    id=row[0], title=row[1], summary=row[2], date=row[3],
+                    participants=json.loads(row[4]), source=row[5],
+                    source_url=row[6], topics=json.loads(row[7]),
+                    outcome=row[8], raw_text=row[9],
+                    metadata=json.loads(row[10]), user_id=row[11] if len(row) > 11 else "",
+                )
+                self.graph.add_node(node.id, data=node)
+                
+                # Load relations where this node is involved
+                for r_row in conn.execute(
+                    "SELECT from_id, to_id, relation_type FROM relations WHERE from_id = ? OR to_id = ?",
+                    (decision_id, decision_id)
+                ):
+                    if r_row[0] in self.graph and r_row[1] in self.graph:
+                        if self.graph.has_edge(r_row[0], r_row[1]):
+                            existing = self.graph.edges[r_row[0], r_row[1]].get("relations", [])
+                            if r_row[2] not in existing:
+                                existing.append(r_row[2])
+                            self.graph.edges[r_row[0], r_row[1]]["relations"] = existing
+                            self.graph.edges[r_row[0], r_row[1]]["relation"] = ", ".join(existing)
+                        else:
+                            self.graph.add_edge(r_row[0], r_row[1], relation=r_row[2], relations=[r_row[2]])
+        except Exception as e:
+            print(f"[Graph] _load_node_from_db error: {e}")
+
     def get_decision(self, decision_id: str, user_id: Optional[str] = None) -> Optional[DecisionNode]:
         with self._lock:
+            if decision_id not in self.graph:
+                self._load_node_from_db(decision_id)
             if decision_id not in self.graph:
                 return None
             node = self.graph.nodes[decision_id].get("data")
@@ -371,7 +449,7 @@ class DecisionGraph:
         content = f"""---
 kairos_id: {node.id}
 date: {node.date}
-source: {node.source}
+source: "{node.source}"
 topics: {json.dumps(node.topics)}
 participants: {json.dumps(node.participants)}
 ---

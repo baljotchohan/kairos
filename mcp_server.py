@@ -142,6 +142,17 @@ def store_context(
     """
     node_id = str(uuid.uuid4())
 
+    # Sanitize inputs
+    if participants is None:
+        participants = []
+    elif isinstance(participants, str):
+        participants = [participants]
+    else:
+        participants = [p for p in participants if p is not None]
+
+    if project is None:
+        project = "General"
+
     # Derive a clean outcome from the decision title + context
     outcome = context[:500] if len(context) > 500 else context
 
@@ -182,7 +193,7 @@ def store_context(
 
 @mcp.tool()
 def search_decisions(
-    topic: str,
+    topic: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     person: Optional[str] = None,
@@ -208,6 +219,9 @@ def search_decisions(
     Returns:
         Formatted list of matching decisions with dates, sources, and summaries.
     """
+    if not topic and not project and not person and not date_from and not date_to:
+        return "KAIROS: Please provide at least one search filter (topic, person, project, date range)."
+
     # Use project as an additional topic filter if provided
     search_topic = topic
     if project and not topic:

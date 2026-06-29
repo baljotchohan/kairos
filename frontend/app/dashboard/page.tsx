@@ -331,7 +331,13 @@ export default function Home() {
     }
   }, [token, realDecisions, activeSimulationDecisions, compileGlobalGraph]);
 
-  const displayStats = isConnected && stats ? stats : simulatedStats;
+  // When authenticated: show real stats or zeros (never fake demo numbers).
+  // When guest/no token: show simulatedStats so the demo feels alive.
+  const displayStats = (isConnected && stats)
+    ? stats
+    : token
+      ? { total_decisions: 0, total_relations: 0, connected_components: 0 }
+      : simulatedStats;
   const chatHistory = isConnected ? messages : simulatedMessages;
   const isChatStreaming = isConnected ? isStreaming : simulatedStreaming;
   const activeSources = chatHistory.length > 0 ? (chatHistory[chatHistory.length - 1]?.sources || []) : [];
@@ -476,6 +482,11 @@ export default function Home() {
       const data = await res.json();
       if (data) {
         const nodes: GraphNode[] = [];
+        const edges: GraphEdge[] = [];
+
+        const addEdge = (source: string, target: string) => {
+          edges.push({ source, target });
+        };
         
         nodes.push({
           id: data.id,
@@ -487,44 +498,52 @@ export default function Home() {
 
         if (data.participants) {
           data.participants.forEach((p: string, idx: number) => {
+            const pId = `${data.id}-person-${idx}`;
             nodes.push({
-              id: `${data.id}-person-${idx}`,
+              id: pId,
               label: p,
               type: "person",
               info: "Participant",
               icon: "👤"
             });
+            addEdge(data.id, pId);
           });
         }
 
         if (data.date) {
+          const dId = `${data.id}-date`;
           nodes.push({
-            id: `${data.id}-date`,
+            id: dId,
             label: data.date,
             type: "date",
             info: "Decision Date",
             icon: "📅"
           });
+          addEdge(data.id, dId);
         }
 
         if (data.source) {
+          const sId = `${data.id}-source`;
           nodes.push({
-            id: `${data.id}-source`,
+            id: sId,
             label: data.source.toUpperCase(),
             type: "source",
             info: data.source_url || "Ingested Source",
             icon: getSourceIcon(data.source) === "?" ? "📁" : "🔌"
           });
+          addEdge(data.id, sId);
         }
 
         if (data.outcome) {
+          const oId = `${data.id}-outcome`;
           nodes.push({
-            id: `${data.id}-outcome`,
+            id: oId,
             label: data.outcome,
             type: "outcome",
             info: "Decision Outcome",
             icon: "✅"
           });
+          addEdge(data.id, oId);
         }
 
         if (data.related) {
@@ -536,10 +555,12 @@ export default function Home() {
               info: `Related | ${r.date} | ${r.source}`,
               icon: "🔗"
             });
+            addEdge(data.id, r.id);
           });
         }
 
         setCurrentGraphNodes(nodes);
+        setCurrentGraphEdges(edges);
         setCurrentGraphTitle(data.title);
       }
     } catch (e) {
@@ -599,7 +620,12 @@ export default function Home() {
         if (validResults.length === 0) return;
 
         const nodes: GraphNode[] = [];
+        const edges: GraphEdge[] = [];
         const seenIds = new Set<string>();
+
+        const addEdge = (source: string, target: string) => {
+          edges.push({ source, target });
+        };
 
         validResults.forEach((data: any) => {
           if (!seenIds.has(data.id)) {
@@ -626,6 +652,7 @@ export default function Home() {
                   icon: "👤"
                 });
               }
+              addEdge(data.id, pid);
             });
           }
 
@@ -641,6 +668,7 @@ export default function Home() {
                 icon: "📅"
               });
             }
+            addEdge(data.id, did);
           }
 
           if (data.source) {
@@ -655,6 +683,7 @@ export default function Home() {
                 icon: getSourceIcon(data.source) === "?" ? "📁" : "🔌"
               });
             }
+            addEdge(data.id, sid);
           }
 
           if (data.outcome) {
@@ -669,6 +698,7 @@ export default function Home() {
                 icon: "✅"
               });
             }
+            addEdge(data.id, oid);
           }
 
           if (data.related) {
@@ -683,11 +713,13 @@ export default function Home() {
                   icon: "🔗"
                 });
               }
+              addEdge(data.id, r.id);
             });
           }
         });
 
         setCurrentGraphNodes(nodes);
+        setCurrentGraphEdges(edges);
         setCurrentGraphTitle(`Combined Query Sources Graph (${validResults.length} decisions)`);
       } catch (err) {
         console.error("Error compiling combined graph", err);
@@ -1606,7 +1638,12 @@ export default function Home() {
                                     } else {
                                       const match = SIMULATED_RESPONSES.find((r) => r.keywords.some((k) => src.title.toLowerCase().includes(k)));
                                       if (match) {
+                                        const edges = match.graph.slice(1).map((node) => ({
+                                          source: match.graph[0].id,
+                                          target: node.id
+                                        }));
                                         setCurrentGraphNodes(match.graph);
+                                        setCurrentGraphEdges(edges);
                                         setCurrentGraphTitle(match.question);
                                         setIsGraphOpen(true);
                                       }
@@ -1691,7 +1728,29 @@ export default function Home() {
                     onMouseDown={handleResize("horizontal", setGraphWidth, 300, 800, true)}
                   />
                   <div className="flex-1 relative overflow-hidden">
-                    <DecisionGraph nodes={currentGraphNodes} edges={currentGraphEdges} decisionTitle={currentGraphTitle} />
+                    <DecisionGraph
+                      nodes={currentGraphNodes}
+                      edges={currentGraphEdges}
+                      decisionTitle={currentGraphTitle}
+                      onNodeClick={async (nodeId) => {
+                        if (nodeId && !nodeId.includes("-person-") && !nodeId.includes("-date") && !nodeId.includes("-source") && !nodeId.includes("-outcome")) {
+                          if (token) {
+                            await fetchDecisionGraphData(nodeId);
+                          } else {
+                            const match = SIMULATED_RESPONSES.find((r) => r.graph.some((n) => n.id === nodeId));
+                            if (match) {
+                              const edges = match.graph.slice(1).map((node) => ({
+                                source: match.graph[0].id,
+                                target: node.id
+                              }));
+                              setCurrentGraphNodes(match.graph);
+                              setCurrentGraphEdges(edges);
+                              setCurrentGraphTitle(match.question);
+                            }
+                          }
+                        }
+                      }}
+                    />
                   </div>
                   <div
                     className="relative shrink-0"
@@ -1858,7 +1917,12 @@ export default function Home() {
                           } else {
                             const match = SIMULATED_RESPONSES.find((r) => r.keywords.some((k) => dec.title.toLowerCase().includes(k)));
                             if (match) {
+                              const edges = match.graph.slice(1).map((node) => ({
+                                source: match.graph[0].id,
+                                target: node.id
+                              }));
                               setCurrentGraphNodes(match.graph);
+                              setCurrentGraphEdges(edges);
                               setCurrentGraphTitle(match.question);
                               setActiveTab("chat");
                             }
@@ -2172,7 +2236,7 @@ export default function Home() {
                 <div className="flex flex-wrap gap-2 mt-1">
                   {[
                     { text: "100% Secure & Scoped", icon: "🛡️" },
-                    { text: "Helios Tech Workspace", icon: "🏢" },
+                    { text: user?.displayName ? `${user.displayName}'s Workspace` : "Your Workspace", icon: "🏢" },
                     { text: "Real-time Two-way Sync", icon: "⚡" }
                   ].map((badge, idx) => (
                     <span key={idx} className="flex items-center gap-1 text-[9.5px] font-mono text-[rgb(var(--text-muted))] px-2.5 py-1 rounded-md bg-[rgb(var(--surface))]/40 border border-[rgb(var(--border))]/50">

@@ -9,6 +9,8 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta
 
+from typing import Callable
+
 from config import config
 
 
@@ -17,10 +19,19 @@ class DriveConnector:
         "https://www.googleapis.com/auth/drive.readonly",
     ]
 
-    def __init__(self, refresh_token: str | None = None, client_id: str | None = None, client_secret: str | None = None):
+    def __init__(
+        self,
+        access_token: str | None = None,
+        refresh_token: str | None = None,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        on_token_refresh: Callable[[dict], None] | None = None,
+    ):
+        self.access_token = access_token
         self.refresh_token = refresh_token or config.GOOGLE_REFRESH_TOKEN
         self.client_id = client_id or config.GOOGLE_CLIENT_ID
         self.client_secret = client_secret or config.GOOGLE_CLIENT_SECRET
+        self.on_token_refresh = on_token_refresh
         self._drive = None
         self._docs = None
 
@@ -34,14 +45,23 @@ class DriveConnector:
         from googleapiclient.discovery import build
 
         creds = Credentials(
-            token=None,
+            token=self.access_token,
             refresh_token=self.refresh_token,
             client_id=self.client_id,
             client_secret=self.client_secret,
             token_uri="https://oauth2.googleapis.com/token",
             scopes=self.SCOPES,
         )
-        creds.refresh(Request())
+        if not creds.valid:
+            creds.refresh(Request())
+            self.access_token = creds.token
+            if self.on_token_refresh:
+                self.on_token_refresh({
+                    "access_token": creds.token,
+                    "refresh_token": self.refresh_token,
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                })
         self._drive = build("drive", "v3", credentials=creds)
         self._docs = build("docs", "v1", credentials=creds)
         return self._drive, self._docs
