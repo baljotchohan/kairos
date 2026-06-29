@@ -197,6 +197,8 @@ export default function Home() {
   // Per-user remote MCP connect info (personal URL + ready-to-paste configs)
   const [mcpConnection, setMcpConnection] = useState<any>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [mcpPlatform, setMcpPlatform] = useState<"claude" | "chatgpt" | "cursor">("claude");
+  const [showMcpAdvanced, setShowMcpAdvanced] = useState<boolean>(false);
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard?.writeText(text);
     setCopiedKey(key);
@@ -2120,146 +2122,259 @@ export default function Home() {
 
           {/* MCP SERVER INTERFACE */}
           {activeTab === "mcp" && (
-            <div className="p-8 max-w-4xl mx-auto flex flex-col gap-6 animate-[fadeIn_0.2s_ease-out]">
+            <div className="p-8 max-w-4xl mx-auto flex flex-col gap-8 animate-[fadeIn_0.2s_ease-out]">
+              
+              {/* Header */}
               <div className="border-b border-[rgb(var(--border))]/40 pb-4">
-                <h3 className="text-lg font-bold tracking-tight text-[rgb(var(--text-primary))] mb-0.5">Model Context Protocol (MCP)</h3>
-                <p className="text-xs text-[rgb(var(--text-muted))]">Connect KAIROS to Claude, ChatGPT, or Cursor — each connection is scoped to <span className="text-[rgb(var(--accent))] font-semibold">your</span> organizational memory only.</p>
+                <h3 className="text-lg font-bold tracking-tight text-[rgb(var(--text-primary))] mb-1 flex items-center gap-2">
+                  <span>🔌</span> Connect Your AI Assistants
+                </h3>
+                <p className="text-xs text-[rgb(var(--text-muted))] leading-relaxed">
+                  Sync KAIROS memory directly to your favorite AI Assistant (like Claude or ChatGPT) so it has access to your company's full decision history.
+                </p>
               </div>
 
-              {/* ⚡ ONE-CLICK REMOTE CONNECT (per-user) */}
-              <div className="p-6 rounded-2xl border border-[rgb(var(--accent))]/25 bg-gradient-to-br from-[rgb(var(--accent))]/5 to-transparent flex flex-col gap-4 shadow-sm">
+              {/* Status & Sync Card */}
+              <div className="p-6 rounded-2xl border border-[rgb(var(--accent))]/25 bg-gradient-to-br from-[rgb(var(--accent))]/10 via-zinc-900/40 to-zinc-950/60 flex flex-col gap-4 shadow-lg shadow-black/40">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">⚡</span>
-                    <h4 className="text-sm font-bold text-[rgb(var(--text-primary))] font-mono uppercase">One-Click Connect (Remote)</h4>
+                    <span className="text-lg animate-pulse">🔒</span>
+                    <h4 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider">Your Personal AI Link</h4>
                   </div>
-                  <span className="text-[9px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md uppercase tracking-wider">
-                    🔒 Personal — scoped to your data
+                  <span className="flex items-center gap-1.5 text-[9px] font-mono px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold uppercase tracking-wider">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                    </span>
+                    Sync Active
                   </span>
                 </div>
+
                 <p className="text-[11.5px] text-[rgb(var(--text-muted))] leading-relaxed">
-                  Paste this single URL as a custom connector in <strong>Claude</strong> (web/mobile/desktop), <strong>ChatGPT</strong>, or <strong>Cursor</strong>. Every query is automatically scoped to your account — no setup, no API keys.
+                  This secure link allows AI assistants to read and write your KAIROS memory. Keep it confidential as it uniquely identifies your account.
                 </p>
 
                 {/* Personal MCP URL + copy */}
-                <div className="flex items-stretch gap-2">
-                  <code className="flex-1 bg-zinc-950/75 border border-zinc-800 rounded-xl px-3.5 py-2.5 font-mono text-[10.5px] text-emerald-400 overflow-x-auto whitespace-nowrap select-all">
+                <div className="flex items-stretch gap-2 bg-zinc-950/80 border border-zinc-800 rounded-xl p-1">
+                  <div className="flex-1 px-3 py-2.5 font-mono text-[10.5px] text-zinc-400 overflow-x-auto whitespace-nowrap select-all scrollbar-none flex items-center">
                     {mcpConnection?.url || "Generating your personal connect URL…"}
-                  </code>
+                  </div>
                   <button
                     disabled={!mcpConnection?.url}
                     onClick={() => copyToClipboard(mcpConnection.url, "url")}
-                    className="shrink-0 px-3.5 py-2.5 rounded-xl bg-[rgb(var(--accent))] text-white text-[10px] font-bold tracking-wider hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="shrink-0 px-4 py-2 rounded-lg bg-[rgb(var(--accent))] text-white text-[10px] font-bold tracking-wider hover:opacity-90 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed uppercase"
                   >
-                    {copiedKey === "url" ? "✓ COPIED" : "COPY URL"}
+                    {copiedKey === "url" ? "✓ Copied" : "Copy Link"}
                   </button>
                 </div>
 
-                {/* Connect targets */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-1">
+                {/* Badges */}
+                <div className="flex flex-wrap gap-2 mt-1">
                   {[
-                    { key: "claude", name: "Claude (web/mobile)", steps: "Settings → Connectors → Add custom connector → paste URL", icon: "🟣" },
-                    { key: "chatgpt", name: "ChatGPT", steps: "Settings → Connectors (developer mode) → Add → paste URL", icon: "🟢" },
-                    { key: "cursor", name: "Cursor / Desktop", steps: "Copy the JSON config below into your MCP settings", icon: "🔵" },
-                  ].map((tgt) => (
-                    <div key={tgt.key} className="p-3.5 rounded-xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/20 flex flex-col gap-1.5">
-                      <span className="text-xs font-bold text-[rgb(var(--text-primary))] flex items-center gap-1.5">{tgt.icon} {tgt.name}</span>
-                      <span className="text-[10px] text-[rgb(var(--text-muted))] leading-snug">{tgt.steps}</span>
-                    </div>
+                    { text: "100% Secure & Scoped", icon: "🛡️" },
+                    { text: "Helios Tech Workspace", icon: "🏢" },
+                    { text: "Real-time Two-way Sync", icon: "⚡" }
+                  ].map((badge, idx) => (
+                    <span key={idx} className="flex items-center gap-1 text-[9.5px] font-mono text-[rgb(var(--text-muted))] px-2.5 py-1 rounded-md bg-[rgb(var(--surface))]/40 border border-[rgb(var(--border))]/50">
+                      <span>{badge.icon}</span>
+                      <span>{badge.text}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Onboarding Wizard / Platform Tabs */}
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between border-b border-[rgb(var(--border))]/30 pb-2">
+                  <h4 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider">Choose your Assistant</h4>
+                  <span className="text-[10px] text-[rgb(var(--text-muted))] font-mono">Select a platform below to see step-by-step setup</span>
+                </div>
+
+                {/* Tabs */}
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: "claude", name: "Claude AI", color: "hover:border-amber-500/30 active:border-amber-500/50", activeColor: "border-amber-500/50 bg-amber-500/5 text-amber-300", logo: "🟣" },
+                    { id: "chatgpt", name: "ChatGPT", color: "hover:border-emerald-500/30 active:border-emerald-500/50", activeColor: "border-emerald-500/50 bg-emerald-500/5 text-emerald-300", logo: "🟢" },
+                    { id: "cursor", name: "Cursor / IDE", color: "hover:border-sky-500/30 active:border-sky-500/50", activeColor: "border-sky-500/50 bg-sky-500/5 text-sky-300", logo: "🔵" }
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setMcpPlatform(tab.id as any)}
+                      className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all text-center gap-1.5 ${
+                        mcpPlatform === tab.id
+                          ? tab.activeColor
+                          : `border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 text-[rgb(var(--text-muted))] ${tab.color}`
+                      }`}
+                    >
+                      <span className="text-base">{tab.logo}</span>
+                      <span className="text-xs font-semibold tracking-wide">{tab.name}</span>
+                    </button>
                   ))}
                 </div>
 
-                {/* Ready-to-paste config */}
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-mono text-[rgb(var(--text-muted))] uppercase tracking-wider font-bold">Cursor / Claude Desktop config</span>
-                    <button
-                      disabled={!mcpConnection?.claude_desktop_config}
-                      onClick={() => copyToClipboard(JSON.stringify(mcpConnection.claude_desktop_config, null, 2), "config")}
-                      className="text-[9px] font-mono font-bold text-[rgb(var(--accent))] hover:underline disabled:opacity-40"
-                    >
-                      {copiedKey === "config" ? "✓ COPIED" : "COPY JSON"}
-                    </button>
-                  </div>
-                  <pre className="bg-zinc-950 border border-zinc-900 rounded-xl p-4 font-mono text-[10px] text-emerald-400 overflow-x-auto select-all leading-relaxed whitespace-pre">
+                {/* Step contents */}
+                <div className="p-6 rounded-2xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 min-h-[160px] flex flex-col justify-center animate-[fadeIn_0.15s_ease-out]">
+                  {mcpPlatform === "claude" && (
+                    <div className="flex flex-col gap-4">
+                      <h5 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider flex items-center gap-1">
+                        <span className="text-amber-400">🟣</span> Claude Web / Mobile Integration
+                      </h5>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                        {[
+                          { step: "1️⃣", title: "Copy Your URL", desc: "Click the 'Copy Link' button on your personal card above." },
+                          { step: "2️⃣", title: "Open Settings", desc: "Go to your Claude account settings and click on 'Connectors'." },
+                          { step: "3️⃣", title: "Paste & Connect", desc: "Add a custom connector, paste your URL, and click save. Done!" }
+                        ].map((s, idx) => (
+                          <div key={idx} className="flex flex-col gap-1.5 p-3 rounded-xl bg-zinc-900/30 border border-zinc-800/40">
+                            <span className="font-bold text-sm text-zinc-300">{s.step} {s.title}</span>
+                            <span className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">{s.desc}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {mcpPlatform === "chatgpt" && (
+                    <div className="flex flex-col gap-4">
+                      <h5 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider flex items-center gap-1">
+                        <span className="text-emerald-400">🟢</span> ChatGPT Integration
+                      </h5>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                        {[
+                          { step: "1️⃣", title: "Copy Your URL", desc: "Click the 'Copy Link' button on your personal card above." },
+                          { step: "2️⃣", title: "Enable Dev mode", desc: "In ChatGPT settings under 'Connectors', toggle developer mode on." },
+                          { step: "3️⃣", title: "Paste URL", desc: "Click 'Add custom connector', paste your link, and register. Done!" }
+                        ].map((s, idx) => (
+                          <div key={idx} className="flex flex-col gap-1.5 p-3 rounded-xl bg-zinc-900/30 border border-zinc-800/40">
+                            <span className="font-bold text-sm text-zinc-300">{s.step} {s.title}</span>
+                            <span className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">{s.desc}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {mcpPlatform === "cursor" && (
+                    <div className="flex flex-col gap-4">
+                      <h5 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider flex items-center gap-1">
+                        <span className="text-sky-400">🔵</span> Cursor & IDE Desktop Integration
+                      </h5>
+                      <p className="text-[11.5px] text-[rgb(var(--text-muted))] leading-relaxed">
+                        Cursor and Claude Desktop require a local JSON server configuration or command line tool. Follow these simple steps:
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div className="flex flex-col gap-2 p-3 rounded-xl bg-zinc-900/30 border border-zinc-800/40">
+                          <span className="font-bold text-zinc-300">Option A: Cursor (Simple UI setup)</span>
+                          <span className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">
+                            1. Open Cursor Settings → Features → MCP.<br />
+                            2. Click "+ Add New MCP Server".<br />
+                            3. Enter name: <code className="text-violet-400 font-mono">kairos</code>, type: <code className="text-violet-400 font-mono">command</code>.<br />
+                            4. Click the "Advanced Developer Settings" toggle below and copy the command to paste.
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-2 p-3 rounded-xl bg-zinc-900/30 border border-zinc-800/40">
+                          <span className="font-bold text-zinc-300">Option B: Claude Desktop Config</span>
+                          <span className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">
+                            1. Open the Developer options section below.<br />
+                            2. Copy the pre-generated JSON configuration.<br />
+                            3. Paste it directly into your local <code className="text-violet-400 font-mono">claude_desktop_config.json</code> file.
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Collapsible Advanced / Developer Section */}
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => setShowMcpAdvanced(!showMcpAdvanced)}
+                  className="w-full flex items-center justify-between p-4 rounded-xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 hover:bg-[rgb(var(--surface))]/20 hover:border-[rgb(var(--border-focus))]/30 transition-all font-mono text-[10.5px] uppercase tracking-wider font-bold text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))]"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>🛠️</span>
+                    <span>Advanced / Developer Settings</span>
+                  </span>
+                  <span className={`transform transition-transform duration-200 ${showMcpAdvanced ? 'rotate-180' : ''}`}>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </span>
+                </button>
+
+                {showMcpAdvanced && (
+                  <div className="flex flex-col gap-6 p-6 rounded-2xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 animate-[fadeIn_0.2s_ease-out]">
+                    
+                    {/* Intro & Status Card */}
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-4 border-b border-[rgb(var(--border))]/40">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-lg">🔌</span>
+                          <h5 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider">Two-way LLM Brain Integration</h5>
+                        </div>
+                        <p className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed max-w-2xl">
+                          MCP allows LLMs like Claude to query KAIROS memory before answering questions, and store new decisions back into the graph in real-time. This creates a unified knowledge loop.
+                        </p>
+                      </div>
+                      <div className="shrink-0 w-full md:w-auto">
+                        <span className="flex items-center justify-center gap-1.5 text-[9px] font-mono px-3 py-1.5 rounded-lg bg-[rgb(var(--surface-hover))]/80 border border-[rgb(var(--border))]/70 text-emerald-400 font-bold shadow-sm select-none">
+                          MCP PORT: 8002 / STDIO
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Stdio / SSE Modes */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-4 rounded-xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/20 flex flex-col gap-3">
+                        <div>
+                           <h5 className="text-[11px] font-bold text-[rgb(var(--text-primary))] mb-1 flex items-center gap-1.5 font-mono uppercase">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[rgb(var(--accent))]" />
+                            1. Stdio Mode (Recommended)
+                          </h5>
+                          <p className="text-[10.5px] text-[rgb(var(--text-muted))] leading-relaxed">
+                            Best for local IDE integrations where the editor manages the server process via standard I/O.
+                          </p>
+                        </div>
+                        <pre className="bg-zinc-950/75 border border-zinc-800 rounded-xl p-3 font-mono text-[9.5px] text-zinc-300 overflow-x-auto select-all">
+                          python mcp_server.py --stdio
+                        </pre>
+                      </div>
+
+                      <div className="p-4 rounded-xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/20 flex flex-col gap-3">
+                        <div>
+                          <h5 className="text-[11px] font-bold text-[rgb(var(--text-primary))] mb-1 flex items-center gap-1.5 font-mono uppercase">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[rgb(var(--accent))]" />
+                            2. SSE Server Mode
+                          </h5>
+                          <p className="text-[10.5px] text-[rgb(var(--text-muted))] leading-relaxed">
+                            Runs a persistent HTTP event stream on port 8002. Useful for remote setups or webhooks.
+                          </p>
+                        </div>
+                        <pre className="bg-zinc-950/75 border border-zinc-800 rounded-xl p-3 font-mono text-[9.5px] text-zinc-300 overflow-x-auto select-all">
+                          python mcp_server.py
+                        </pre>
+                      </div>
+                    </div>
+
+                    {/* Editor Configurations */}
+                    <div className="flex flex-col gap-4 border-t border-[rgb(var(--border))]/40 pt-4">
+                      {/* Claude Desktop */}
+                      <div className="flex flex-col gap-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-semibold text-[rgb(var(--text-primary))]">Claude Desktop Settings</span>
+                          <button
+                            disabled={!mcpConnection?.claude_desktop_config}
+                            onClick={() => copyToClipboard(JSON.stringify(mcpConnection.claude_desktop_config, null, 2), "config")}
+                            className="text-[9px] font-mono font-bold text-[rgb(var(--accent))] hover:underline disabled:opacity-40"
+                          >
+                            {copiedKey === "config" ? "✓ COPIED" : "COPY JSON"}
+                          </button>
+                        </div>
+                        <pre className="bg-zinc-950 border border-zinc-900 rounded-xl p-4 font-mono text-[10px] text-emerald-400 overflow-x-auto select-all leading-relaxed whitespace-pre">
 {mcpConnection?.claude_desktop_config
   ? JSON.stringify(mcpConnection.claude_desktop_config, null, 2)
-  : `{\n  "mcpServers": {\n    "kairos": { "url": "…" }\n  }\n}`}
-                  </pre>
-                </div>
-              </div>
-
-              {/* Intro & Status Card */}
-              <div className="p-6 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 hover:border-[rgb(var(--border-focus))]/30 transition-all shadow-sm">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xl">🔌</span>
-                    <h4 className="text-sm font-bold text-[rgb(var(--text-primary))] font-mono uppercase">Two-way LLM Brain Integration</h4>
-                  </div>
-                  <p className="text-[11.5px] text-[rgb(var(--text-muted))] leading-relaxed max-w-2xl">
-                    MCP allows LLMs like Claude to query KAIROS memory before answering questions, and store new decisions back into the graph in real-time. This creates a unified knowledge loop.
-                  </p>
-                </div>
-                <div className="flex flex-col items-center md:items-end gap-2.5 shrink-0 w-full md:w-auto">
-                  <span className="flex items-center gap-1.5 text-[9.5px] font-mono px-3 py-1.5 rounded-lg bg-[rgb(var(--surface-hover))]/80 border border-[rgb(var(--border))]/70 text-emerald-400 font-bold shadow-sm select-none">
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
-                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-                    </span>
-                    MCP PORT: 8002 / STDIO
-                  </span>
-                </div>
-              </div>
-
-              {/* Quick Start / Commands */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-5 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/20 flex flex-col gap-4">
-                  <div>
-                     <h4 className="text-xs font-bold text-[rgb(var(--text-primary))] mb-1 flex items-center gap-1.5 font-mono uppercase">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[rgb(var(--accent))]" />
-                      1. Stdio Mode (Recommended)
-                    </h4>
-                    <p className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">
-                      Best for IDE integrations (Cursor / Claude Desktop / Claude Code) where the editor manages the server process via standard I/O.
-                    </p>
-                  </div>
-                  <div className="relative">
-                    <pre className="bg-zinc-950/75 border border-zinc-800 rounded-xl p-3.5 font-mono text-[10.5px] text-zinc-300 overflow-x-auto select-all">
-                      python mcp_server.py --stdio
-                    </pre>
-                  </div>
-                </div>
-
-                <div className="p-5 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/20 flex flex-col gap-4">
-                  <div>
-                    <h4 className="text-xs font-bold text-[rgb(var(--text-primary))] mb-1 flex items-center gap-1.5 font-mono uppercase">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[rgb(var(--accent))]" />
-                      2. SSE Server Mode
-                    </h4>
-                    <p className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">
-                      Runs a persistent HTTP event stream on port 8002. Useful for remote setups, webhooks, or centralized agents.
-                    </p>
-                  </div>
-                  <div className="relative">
-                    <pre className="bg-zinc-950/75 border border-zinc-800 rounded-xl p-3.5 font-mono text-[10.5px] text-zinc-300 overflow-x-auto select-all">
-                      python mcp_server.py
-                    </pre>
-                  </div>
-                </div>
-              </div>
-
-              {/* Editor Configurations */}
-              <div className="p-6 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/30 flex flex-col gap-4">
-                <h4 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase mb-1">Editor & Desktop Configurations</h4>
-                <div className="flex flex-col gap-4">
-                  {/* Claude Desktop */}
-                  <div className="flex flex-col gap-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs font-semibold text-[rgb(var(--text-primary))]">Claude Desktop Settings</span>
-                      <span className="text-[10px] font-mono text-[rgb(var(--text-muted))]">claude_desktop_config.json</span>
-                    </div>
-                    <pre className="bg-zinc-950 border border-zinc-900 rounded-xl p-4 font-mono text-[10px] text-emerald-400 overflow-x-auto select-all leading-relaxed whitespace-pre">
-{`{
+  : `{
   "mcpServers": {
     "kairos": {
       "command": "python3",
@@ -2273,45 +2388,52 @@ export default function Home() {
     }
   }
 }`}
-                    </pre>
-                  </div>
+                        </pre>
+                      </div>
 
-                  {/* Cursor */}
-                  <div className="flex flex-col gap-2 mt-2">
-                    <span className="text-xs font-semibold text-[rgb(var(--text-primary))]">Cursor Editor Setup</span>
-                    <div className="text-[11.5px] text-[rgb(var(--text-muted))] leading-relaxed space-y-2 bg-[rgb(var(--surface-hover))]/20 p-4 rounded-xl border border-[rgb(var(--border))]/50">
-                      <p>1. Open **Cursor Settings** → **Features** → **MCP**.</p>
-                      <p>2. Click **+ Add New MCP Server**.</p>
-                      <p>3. Enter the following parameters:</p>
-                      <div className="pl-4 font-mono text-[10.5px] space-y-1 mt-1 text-[rgb(var(--text-primary))]">
-                        <div>• **Name:** <span className="text-violet-400">kairos</span></div>
-                        <div>• **Type:** <span className="text-violet-400">command</span></div>
-                        <div>• **Command:** <span className="text-violet-400">python3 /Users/baljotchohan/Desktop/Kairos/kairos/mcp_server.py --stdio</span></div>
+                      {/* Cursor CLI command details */}
+                      <div className="flex flex-col gap-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-semibold text-[rgb(var(--text-primary))]">Cursor Command Line Setup</span>
+                          <button
+                            onClick={() => copyToClipboard(`python3 /Users/baljotchohan/Desktop/Kairos/kairos/mcp_server.py --stdio`, "cursor-cmd")}
+                            className="text-[9px] font-mono font-bold text-[rgb(var(--accent))] hover:underline"
+                          >
+                            {copiedKey === "cursor-cmd" ? "✓ COPIED" : "COPY COMMAND"}
+                          </button>
+                        </div>
+                        <div className="bg-zinc-950 border border-zinc-900 p-4 rounded-xl font-mono text-[10px] text-emerald-400 overflow-x-auto select-all whitespace-pre">
+{`command: python3
+args: /Users/baljotchohan/Desktop/Kairos/kairos/mcp_server.py --stdio
+env: MCP_TENANT_ID=${user?.uid || "mcp-system"}`}
+                        </div>
                       </div>
                     </div>
+
+                    {/* Exposed Tools Guide */}
+                    <div className="flex flex-col gap-3 border-t border-[rgb(var(--border))]/40 pt-4">
+                      <h5 className="text-[11px] font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider">Exposed MCP Tools Registry</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {[
+                          { name: "get_context", sig: "(query)", desc: "Retrieves top decisions with full context, participants, and outcomes using vector search." },
+                          { name: "store_context", sig: "(decision, ...)", desc: "Directly inserts a decision from chat into KAIROS, auto-linking related nodes." },
+                          { name: "search_decisions", sig: "(topic, ...)", desc: "Structured search across metadata indices by date, project, or person." }
+                        ].map((t) => (
+                          <div key={t.name} className="p-4 rounded-xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 flex flex-col gap-2">
+                            <div className="font-mono text-[11px]">
+                              <span className="text-violet-400 font-bold">{t.name}</span>
+                              <span className="text-zinc-500">{t.sig}</span>
+                            </div>
+                            <p className="text-[10.5px] text-[rgb(var(--text-muted))] leading-relaxed">{t.desc}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
                   </div>
-                </div>
+                )}
               </div>
 
-              {/* Exposed Tools Guide */}
-              <div className="p-6 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/30 flex flex-col gap-4">
-                <h4 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase">Exposed MCP Tools Registry</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {[
-                    { name: "get_context", sig: "(query)", desc: "Retrieves top decisions with full context, participants, and outcomes using vector search." },
-                    { name: "store_context", sig: "(decision, ...)", desc: "Directly inserts a decision from chat into KAIROS, auto-linking related nodes." },
-                    { name: "search_decisions", sig: "(topic, ...)", desc: "Structured search across metadata indices by date, project, or person." }
-                  ].map((t) => (
-                    <div key={t.name} className="p-4 rounded-xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 flex flex-col gap-2.5">
-                      <div className="font-mono text-[11.5px]">
-                        <span className="text-violet-400 font-bold">{t.name}</span>
-                        <span className="text-zinc-500">{t.sig}</span>
-                      </div>
-                      <p className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">{t.desc}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
         </div>
