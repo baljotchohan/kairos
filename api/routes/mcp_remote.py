@@ -390,7 +390,9 @@ async def mcp_streamable_http_get(token: str, request: Request):
 
     async def sse_generator():
         # Push the endpoint configuration event immediately
-        base_url = config.BACKEND_URL.rstrip('/')
+        scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+        host = request.headers.get("x-forwarded-host", request.url.netloc)
+        base_url = f"{scheme}://{host}"
         endpoint_url = f"{base_url}/mcp/u/{token}?session_id={session_id}"
         yield f"event: endpoint\ndata: {endpoint_url}\n\n"
 
@@ -427,10 +429,13 @@ mcp_connect_router = APIRouter(prefix="/mcp", tags=["mcp"])
 
 
 @mcp_connect_router.get("/connection")
-def mcp_connection_info(current_user: UserProfile = Depends(get_current_user)):
+def mcp_connection_info(request: Request, current_user: UserProfile = Depends(get_current_user)):
     """Return this user's personal remote-MCP connect URL + ready-to-paste configs."""
     token = mint_mcp_token(current_user.uid)
-    url = f"{config.BACKEND_URL.rstrip('/')}/mcp/u/{token}"
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.url.netloc)
+    base_url = f"{scheme}://{host}"
+    url = f"{base_url}/mcp/u/{token}"
     return {
         "url": url,
         "token": token,
