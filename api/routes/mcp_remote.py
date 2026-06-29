@@ -22,6 +22,7 @@ one-click; the documented upgrade is OAuth 2.1 + dynamic client registration
 
 from __future__ import annotations
 
+import json
 import uuid
 import logging
 
@@ -292,6 +293,20 @@ def mcp_icon():
     )
 
 
+def _format_response(payload, request: Request, extra_headers: dict | None = None):
+    """Streamable-HTTP response. Claude's MCP client sends
+    `Accept: application/json, text/event-stream` and expects the JSON-RPC
+    response framed as an SSE `message` event — returning plain JSON makes it
+    report "not a valid MCP server". So we emit SSE when the client accepts it,
+    and fall back to JSON otherwise."""
+    headers = extra_headers or {}
+    accept = request.headers.get("accept", "")
+    if "text/event-stream" in accept:
+        body = f"event: message\ndata: {json.dumps(payload)}\n\n"
+        return Response(content=body, media_type="text/event-stream", headers=headers)
+    return JSONResponse(payload, headers=headers)
+
+
 @mcp_rpc_router.post("/mcp/u/{token}")
 async def mcp_streamable_http(token: str, request: Request):
     user_id = verify_mcp_token(token)
@@ -311,13 +326,20 @@ async def mcp_streamable_http(token: str, request: Request):
     # JSON-RPC supports single messages and batches (a JSON array).
     if isinstance(body, list):
         responses = [r for r in (_handle_message(m, memory, user_id) for m in body) if r is not None]
-        return JSONResponse(responses) if responses else JSONResponse([], status_code=202)
+        if not responses:
+            return Response(status_code=202)
+        return _format_response(responses, request)
+
+    extra_headers = {}
+    if body.get("method") == "initialize":
+        # Assign a Streamable-HTTP session id. We don't require it on later
+        # requests, but advertising one improves client compatibility.
+        extra_headers["Mcp-Session-Id"] = uuid.uuid4().hex
 
     resp = _handle_message(body, memory, user_id)
     if resp is None:
-        # Notification — nothing to return.
-        return JSONResponse({}, status_code=202)
-    return JSONResponse(resp)
+        return Response(status_code=202)  # notification — no body
+    return _format_response(resp, request, extra_headers)
 
 
 @mcp_rpc_router.get("/mcp/u/{token}")
