@@ -37,11 +37,22 @@ class StoreRequest(BaseModel):
 # ── Decisions ─────────────────────────────────────────────────────────────────
 
 @router.get("/decisions")
-async def list_decisions(memory=Depends(get_memory), current_user: UserProfile = Depends(get_current_user)):
-    """List all decisions in memory."""
+async def list_decisions(
+    limit: int = 100,
+    offset: int = 0,
+    memory=Depends(get_memory),
+    current_user: UserProfile = Depends(get_current_user),
+):
+    """List this user's decisions (paginated, newest first)."""
+    limit = max(1, min(limit, 500))   # clamp to a sane bound
+    offset = max(0, offset)
     nodes = memory.graph.all_decisions(user_id=current_user.uid)
+    nodes.sort(key=lambda n: n.date or "", reverse=True)
+    page = nodes[offset:offset + limit]
     return {
         "total": len(nodes),
+        "limit": limit,
+        "offset": offset,
         "decisions": [
             {
                 "id": n.id,
@@ -52,7 +63,7 @@ async def list_decisions(memory=Depends(get_memory), current_user: UserProfile =
                 "topics": n.topics,
                 "participants": n.participants,
             }
-            for n in nodes
+            for n in page
         ],
     }
 
