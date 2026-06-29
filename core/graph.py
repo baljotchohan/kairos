@@ -279,6 +279,12 @@ class DecisionGraph:
                     continue
                 existing: DecisionNode = self.graph.nodes[existing_id]["data"]
 
+                # Never link across users — a shared topic ("infrastructure") or a
+                # common first name must not connect User A's decisions to User B's
+                # (which would also leak B's titles into A's Obsidian notes).
+                if existing.user_id != new_node.user_id:
+                    continue
+
                 shared_topics = set(t.lower() for t in new_node.topics) & set(t.lower() for t in existing.topics)
                 if shared_topics:
                     relations_to_add.append((new_node.id, existing_id, "same_topic"))
@@ -335,17 +341,18 @@ class DecisionGraph:
         filepath = vault / "KAIROS" / f"{filename}.md"
 
         with self._lock:
-            # Outgoing edges from this node
+            # Outgoing edges from this node (same-user only — defense-in-depth so even
+            # legacy cross-user edges created before the _auto_link fix never surface).
             outgoing = [
                 (self.graph.nodes[t]["data"], self.graph.edges[node.id, t]["relation"])
                 for t in self.graph.successors(node.id)
-                if t in self.graph.nodes
+                if t in self.graph.nodes and self.graph.nodes[t]["data"].user_id == node.user_id
             ]
             # Incoming edges to this node
             incoming = [
                 (self.graph.nodes[s]["data"], self.graph.edges[s, node.id]["relation"])
                 for s in self.graph.predecessors(node.id)
-                if s in self.graph.nodes
+                if s in self.graph.nodes and self.graph.nodes[s]["data"].user_id == node.user_id
             ]
 
         participant_links = " · ".join(f"[[{p}]]" for p in node.participants)
