@@ -42,7 +42,7 @@ PROTOCOL_VERSION = "2025-03-26"
 # advertised in serverInfo.icons so Claude/connector UIs show the real logo
 # instead of a placeholder.
 KAIROS_ICON_SVG = """<svg width="512" height="512" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="100" height="100" rx="22" fill="#171717"/>
+  <rect width="100" height="100" rx="0" fill="#171717"/>
   <defs>
     <radialGradient id="n" cx="38%" cy="32%" r="65%">
       <stop offset="0%" stop-color="#d8b4fe"/>
@@ -143,19 +143,25 @@ TOOLS = [
 # ── Tool implementations (always scoped to the resolved user_id) ────────────────
 
 def _tool_get_context(memory, user_id: str, query: str, limit: int = 5) -> str:
-    results = memory.get_context(query, n_results=limit, user_id=user_id)
-    if not results:
+    # Hybrid retrieval (vector + keyword + source-aware + graph neighbours) — the
+    # SAME rich recall the KAIROS web app uses, so Claude actually finds what's in
+    # memory instead of vector-only near-misses.
+    nodes = memory.hybrid_search(query, n_results=limit, user_id=user_id)
+    if not nodes:
         return (
             f"KAIROS: No decisions found in organizational memory for: '{query}'. "
             "This topic has no recorded history yet."
         )
-    lines = [f"KAIROS ORGANIZATIONAL MEMORY — {len(results)} decision(s) for: '{query}'", "=" * 60]
-    for i, d in enumerate(results, 1):
-        participants = ", ".join(d["participants"]) if d["participants"] else "Unknown"
+    lines = [f"KAIROS ORGANIZATIONAL MEMORY — {len(nodes)} decision(s) for: '{query}'", "=" * 60]
+    for i, n in enumerate(nodes, 1):
+        participants = ", ".join(n.participants) if n.participants else "Unknown"
+        related = memory.graph.get_connected(n.id, depth=1, user_id=user_id)
+        ctx = (n.metadata or {}).get("context", "")
         lines.append(
-            f"\nDECISION {i}: {d['title']}\n  Date: {d['date']}\n  Source: {d['source']}\n"
-            f"  Participants: {participants}\n  Summary: {d['summary']}\n  Outcome: {d['outcome']}\n"
-            f"  Related: {len(d.get('related', []))} connected decision(s)"
+            f"\nDECISION {i}: {n.title}\n  Date: {n.date}\n  Source: {n.source} — {n.source_url}\n"
+            f"  Participants: {participants}\n  Summary: {n.summary}\n"
+            + (f"  Context: {ctx}\n" if ctx else "")
+            + f"  Outcome: {n.outcome}\n  Related: {len(related)} connected decision(s)"
         )
     return "\n".join(lines)
 
@@ -190,6 +196,10 @@ def _tool_search_decisions(memory, user_id: str, topic: str, date_from=None,
         topic=topic or project, person=person,
         date_from=date_from, date_to=date_to, user_id=user_id,
     )
+    # Fall back to hybrid semantic recall when the exact filters matched nothing,
+    # so a near-miss topic still surfaces related decisions.
+    if not results and (topic or project):
+        results = memory.hybrid_search(topic or project, n_results=8, user_id=user_id)
     if not results:
         return f"KAIROS: No decisions found matching topic='{topic}'."
     lines = [f"KAIROS: {len(results)} decision(s) found", "=" * 60]
