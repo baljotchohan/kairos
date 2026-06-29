@@ -289,7 +289,7 @@ def _handle_message(msg: dict, memory, user_id: str):
     if method == "initialize":
         icon_url = f"{config.BACKEND_URL.rstrip('/')}/mcp/icon.svg"
         return _result(req_id, {
-            "protocolVersion": params.get("protocolVersion", PROTOCOL_VERSION),
+            "protocolVersion": PROTOCOL_VERSION,
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": {
                 "name": "KAIROS",
