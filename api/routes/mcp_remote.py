@@ -26,7 +26,7 @@ import uuid
 import logging
 
 from fastapi import APIRouter, Request, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from core.graph import DecisionNode
 from core.mcp_auth import verify_mcp_token, mint_mcp_token
@@ -36,6 +36,47 @@ from api.auth import get_current_user, UserProfile
 log = logging.getLogger(__name__)
 
 PROTOCOL_VERSION = "2025-03-26"
+
+# KAIROS brand logo (the node-constellation "K") served at /mcp/icon.svg and
+# advertised in serverInfo.icons so Claude/connector UIs show the real logo
+# instead of a placeholder.
+KAIROS_ICON_SVG = """<svg width="512" height="512" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100" height="100" rx="22" fill="#171717"/>
+  <defs>
+    <radialGradient id="n" cx="38%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#d8b4fe"/>
+      <stop offset="40%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#7e22ce"/>
+    </radialGradient>
+    <radialGradient id="s" cx="40%" cy="30%" r="50%">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="e" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c084fc"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+  <g stroke="url(#e)" stroke-width="3.5" stroke-linecap="round" opacity="0.85">
+    <line x1="28" y1="18" x2="28" y2="50"/>
+    <line x1="28" y1="50" x2="28" y2="82"/>
+    <line x1="28" y1="50" x2="48" y2="50"/>
+    <line x1="48" y1="50" x2="63" y2="35"/>
+    <line x1="63" y1="35" x2="78" y2="18"/>
+    <line x1="48" y1="50" x2="63" y2="65"/>
+    <line x1="63" y1="65" x2="78" y2="82"/>
+  </g>
+  <g>
+    <circle cx="28" cy="18" r="7" fill="url(#n)"/><circle cx="28" cy="18" r="7" fill="url(#s)"/>
+    <circle cx="28" cy="50" r="7" fill="url(#n)"/><circle cx="28" cy="50" r="7" fill="url(#s)"/>
+    <circle cx="28" cy="82" r="7" fill="url(#n)"/><circle cx="28" cy="82" r="7" fill="url(#s)"/>
+    <circle cx="48" cy="50" r="7" fill="url(#n)"/><circle cx="48" cy="50" r="7" fill="url(#s)"/>
+    <circle cx="63" cy="35" r="7" fill="url(#n)"/><circle cx="63" cy="35" r="7" fill="url(#s)"/>
+    <circle cx="78" cy="18" r="7" fill="url(#n)"/><circle cx="78" cy="18" r="7" fill="url(#s)"/>
+    <circle cx="63" cy="65" r="7" fill="url(#n)"/><circle cx="63" cy="65" r="7" fill="url(#s)"/>
+    <circle cx="78" cy="82" r="7" fill="url(#n)"/><circle cx="78" cy="82" r="7" fill="url(#s)"/>
+  </g>
+</svg>"""
 
 # ── Tool definitions (advertised via tools/list) ───────────────────────────────
 
@@ -198,10 +239,20 @@ def _handle_message(msg: dict, memory, user_id: str):
         return None
 
     if method == "initialize":
+        icon_url = f"{config.BACKEND_URL.rstrip('/')}/mcp/icon.svg"
         return _result(req_id, {
             "protocolVersion": params.get("protocolVersion", PROTOCOL_VERSION),
             "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": "KAIROS", "version": "1.0.0"},
+            "serverInfo": {
+                "name": "KAIROS",
+                "title": "KAIROS — Organizational Memory",
+                "version": "1.0.0",
+                "websiteUrl": config.FRONTEND_URL,
+                # MCP icon advertisement so connector UIs show the real logo.
+                "icons": [
+                    {"src": icon_url, "mimeType": "image/svg+xml", "sizes": "any"},
+                ],
+            },
             "instructions": (
                 "KAIROS is your company's organizational memory. Call get_context before "
                 "answering questions about past company decisions; call store_context to "
@@ -229,6 +280,16 @@ def _handle_message(msg: dict, memory, user_id: str):
 
 # (1) The MCP transport endpoint — mounted at the app root for a clean URL.
 mcp_rpc_router = APIRouter()
+
+
+@mcp_rpc_router.get("/mcp/icon.svg")
+def mcp_icon():
+    """Public KAIROS logo for MCP connector UIs (referenced from serverInfo.icons)."""
+    return Response(
+        content=KAIROS_ICON_SVG,
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @mcp_rpc_router.post("/mcp/u/{token}")
