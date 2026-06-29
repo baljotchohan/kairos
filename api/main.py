@@ -246,12 +246,13 @@ async def rate_limit_middleware(request: Request, call_next):
 from api.routes import router
 from api.websocket import ws_router
 from api.routes.mcp_remote import mcp_rpc_router
+from api.routes.mcp_oauth import mcp_oauth_public_router
 
 app.include_router(router)
 app.include_router(ws_router)
-# Remote MCP transport — clean root URL (https://<backend>/mcp/u/<token>) so it can
-# be pasted directly as a custom connector in Claude / ChatGPT / Cursor.
 app.include_router(mcp_rpc_router)
+# OAuth 2.0 server for Claude.ai connector auth (/.well-known/*, /oauth/*)
+app.include_router(mcp_oauth_public_router)
 
 
 @app.exception_handler(Exception)

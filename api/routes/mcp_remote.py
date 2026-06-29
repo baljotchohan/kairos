@@ -389,6 +389,42 @@ async def mcp_streamable_http(token: str, request: Request):
     return _format_response(resp, extra_headers)
 
 
+@mcp_rpc_router.post("/mcp")
+async def mcp_bearer_http(request: Request):
+    """MCP endpoint for OAuth-authenticated clients (Claude.ai web connectors).
+    Reads user_id from 'Authorization: Bearer {access_token}' header."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return JSONResponse(
+            {"jsonrpc": "2.0", "id": None, "error": {"code": -32001, "message": "Bearer token required."}},
+            status_code=401,
+            headers={"WWW-Authenticate": 'Bearer realm="KAIROS"'},
+        )
+    user_id = verify_mcp_token(auth_header.removeprefix("Bearer ").strip())
+    if not user_id:
+        return JSONResponse(
+            {"jsonrpc": "2.0", "id": None, "error": {"code": -32001, "message": "Invalid or revoked KAIROS token."}},
+            status_code=401,
+        )
+    memory = request.app.state.memory
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(_error(None, -32700, "Parse error"), status_code=400)
+    if isinstance(body, list):
+        responses = [r for m in body if (r := _handle_message(m, memory, user_id)) is not None]
+        if not responses:
+            return Response(status_code=202)
+        return _format_response(responses)
+    extra_headers = {}
+    if body.get("method") == "initialize":
+        extra_headers["Mcp-Session-Id"] = uuid.uuid4().hex
+    resp = _handle_message(body, memory, user_id)
+    if resp is None:
+        return Response(status_code=202)
+    return _format_response(resp, extra_headers)
+
+
 @mcp_rpc_router.get("/mcp/u/{token}")
 async def mcp_streamable_http_get(token: str, request: Request):
     # GET establishes the SSE channel for official MCP HTTP/SSE clients (like Claude).
@@ -453,16 +489,20 @@ def mcp_connection_info(request: Request, current_user: UserProfile = Depends(ge
     scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
     host = request.headers.get("x-forwarded-host", request.url.netloc)
     base_url = f"{scheme}://{host}"
-    url = f"{base_url}/mcp/u/{token}"
+    # OAuth URL (for Claude.ai web/mobile connectors — required by claude.ai platform)
+    oauth_url = f"{base_url}/mcp"
+    # Token-in-URL (for Claude Desktop local config and direct clients)
+    token_url = f"{base_url}/mcp/u/{token}"
     return {
-        "url": url,
+        "url": oauth_url,
+        "token_url": token_url,
         "token": token,
         "tools": [t["name"] for t in TOOLS],
-        "claude_desktop_config": {"mcpServers": {"kairos": {"url": url}}},
-        "cursor_config": {"mcpServers": {"kairos": {"url": url}}},
+        "claude_desktop_config": {"mcpServers": {"kairos": {"url": token_url}}},
+        "cursor_config": {"mcpServers": {"kairos": {"url": token_url}}},
         "instructions": {
-            "claude_web_mobile": "Settings → Connectors → Add custom connector → paste the URL.",
-            "chatgpt": "Settings → Connectors (developer mode) → Add → paste the URL.",
+            "claude_web_mobile": f"Settings → Connectors → Add custom connector → paste: {oauth_url}",
+            "chatgpt": f"Settings → Connectors (developer mode) → Add → paste: {oauth_url}",
             "claude_desktop": "Paste claude_desktop_config into claude_desktop_config.json.",
         },
     }

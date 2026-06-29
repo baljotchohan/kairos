@@ -8,6 +8,7 @@ from api.routes.decisions import router as decisions_router
 from api.routes.memory import router as memory_router
 from api.routes.oauth import router as oauth_router
 from api.routes.mcp_remote import mcp_connect_router
+from api.routes.mcp_oauth import mcp_oauth_api_router
 
 router = APIRouter()
 
@@ -35,3 +36,6 @@ router.include_router(oauth_router, prefix="/api/v1")
 
 router.include_router(mcp_connect_router, prefix="/api")
 router.include_router(mcp_connect_router, prefix="/api/v1")
+
+router.include_router(mcp_oauth_api_router, prefix="/api")
+router.include_router(mcp_oauth_api_router, prefix="/api/v1")
