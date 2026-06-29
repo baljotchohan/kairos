@@ -246,13 +246,15 @@ async def rate_limit_middleware(request: Request, call_next):
 from api.routes import router
 from api.websocket import ws_router
 from api.routes.mcp_remote import mcp_rpc_router
-from api.routes.mcp_oauth import mcp_oauth_public_router
+from api.routes.mcp_oauth import mcp_oauth_public_router, mcp_oauth_api_router
 
 app.include_router(router)
 app.include_router(ws_router)
 app.include_router(mcp_rpc_router)
 # OAuth 2.0 server for Claude.ai connector auth (/.well-known/*, /oauth/*)
 app.include_router(mcp_oauth_public_router)
+# OAuth complete endpoint called by login page: POST /api/mcp/oauth/complete
+app.include_router(mcp_oauth_api_router, prefix="/api")
 
 
 @app.exception_handler(Exception)

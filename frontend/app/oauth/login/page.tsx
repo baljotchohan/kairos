@@ -7,12 +7,15 @@ import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 
 function OAuthLoginContent() {
   const searchParams = useSearchParams();
+  // Backend flow: /oauth/authorize stores req_id in SQLite → redirects here
+  const req_id = searchParams.get("req_id");
+  // Legacy Vercel JWT flow (fallback, rarely used)
   const session = searchParams.get("session");
+
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [error, setError] = useState("");
 
   const handleSignIn = async () => {
-    if (!session) return;
     setStatus("loading");
     setError("");
     try {
@@ -21,11 +24,24 @@ function OAuthLoginContent() {
       const result = await signInWithPopup(auth, new GoogleAuthProvider());
       const idToken = await result.user.getIdToken();
 
-      const resp = await fetch("/api/oauth/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ firebase_token: idToken, session }),
-      });
+      let resp: Response;
+      if (req_id) {
+        // Backend flow: POST to /api/mcp/oauth/complete → proxied to backend via afterFiles
+        resp = await fetch("/api/mcp/oauth/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ firebase_token: idToken, req_id }),
+        });
+      } else if (session) {
+        // Vercel JWT flow (legacy)
+        resp = await fetch("/api/oauth/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ firebase_token: idToken, session }),
+        });
+      } else {
+        throw new Error("Missing OAuth session. Please try adding the connector again.");
+      }
 
       if (!resp.ok) {
         const err = await resp.json();
@@ -45,7 +61,7 @@ function OAuthLoginContent() {
     }
   };
 
-  if (!session) {
+  if (!req_id && !session) {
     return (
       <div style={styles.container}>
         <div style={styles.card}>
