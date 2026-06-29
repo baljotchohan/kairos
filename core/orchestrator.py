@@ -149,6 +149,10 @@ class KairosOrchestrator:
             return {"meeting_data": [], "errors": errs}
 
     async def _gather_jira(self, state: KairosState) -> dict:
+        # Jira creds are global env (no per-user OAuth yet) — only ingest the
+        # deployer's Jira for the authorized owner uid, never for other users.
+        if state.get("user_id") != config.JIRA_OWNER_UID:
+            return {"jira_data": [], "status": "jira_skipped"}
         try:
             issues = await self.jira_connector.get_recent_issues(days_back=30)
             data = []
@@ -307,38 +311,53 @@ class KairosOrchestrator:
         
         # Verify/ensure the session exists in SQLite
         session_id = await asyncio.to_thread(self.user_memory.get_or_create_session, user_id, session_id)
-        
+
+        # Per-request agent instances. The query agents hold per-user mutable state
+        # (_current_user_id, _connectors, _collected_sources, _trace), so a single
+        # shared instance would interleave/leak state across concurrent users.
+        # Constructors only build an AsyncOpenAI client + config, so this is cheap.
+        from agents.intent_agent import IntentAgent
+        from agents.context_agent import ContextAgent
+        from agents.research_agent import ResearchAgent
+        from agents.synthesis_agent import SynthesisAgent
+        from agents.live_data_agent import LiveDataAgent
+        intent_agent = IntentAgent()
+        context_agent = ContextAgent(user_memory=self.user_memory)
+        research_agent = ResearchAgent(memory=self.memory)
+        synthesis_agent = SynthesisAgent(memory=self.memory)
+        live_data_agent = LiveDataAgent(memory=self.memory)
+
         # 1. Intent Classification
         if stream_callback:
             await stream_callback({"type": "thinking", "agent": "intent_agent", "step": "think", "content": "Analyzing query intent..."})
-            
+
         history = await asyncio.to_thread(self.user_memory.get_current_session_context, user_id, max_turns=6, session_id=session_id)
-        intent = await self.intent_agent.classify(question, conversation_history=history)
-        
+        intent = await intent_agent.classify(question, conversation_history=history)
+
         if stream_callback:
             await stream_callback({
                 "type": "agent_trace",
                 "agent": "intent_agent",
-                "trace": [step.to_dict() for step in self.intent_agent.get_trace()]
+                "trace": [step.to_dict() for step in intent_agent.get_trace()]
             })
 
         # 2. Context Resolution
         if stream_callback:
             await stream_callback({"type": "thinking", "agent": "context_agent", "step": "think", "content": "Resolving pronouns and personal profile context..."})
-            
-        resolved_context = await self.context_agent.resolve(question, user_id=user_id, intent=intent)
-        
+
+        resolved_context = await context_agent.resolve(question, user_id=user_id, intent=intent, session_id=session_id)
+
         if stream_callback:
             await stream_callback({
                 "type": "agent_trace",
                 "agent": "context_agent",
-                "trace": [step.to_dict() for step in self.context_agent.get_trace()]
+                "trace": [step.to_dict() for step in context_agent.get_trace()]
             })
 
         # 3. Choose agent & Execute Answering
         merged_traces = []
-        merged_traces.extend(self.intent_agent.get_trace())
-        merged_traces.extend(self.context_agent.get_trace())
+        merged_traces.extend(intent_agent.get_trace())
+        merged_traces.extend(context_agent.get_trace())
 
         # 3a. Greeting / small-talk → reply conversationally, skip memory search
         if intent.intent == "greeting":
@@ -365,16 +384,16 @@ class KairosOrchestrator:
             if stream_callback:
                 await stream_callback({"type": "thinking", "agent": "live_data_agent", "step": "think", "content": "Checking your connected sources live..."})
 
-            result = await self.live_data_agent.run(
+            result = await live_data_agent.run(
                 resolved_context.resolved_query, user_id=user_id, stream_callback=stream_callback
             )
-            merged_traces.extend(self.live_data_agent.get_trace())
+            merged_traces.extend(live_data_agent.get_trace())
 
             if stream_callback:
                 await stream_callback({
                     "type": "agent_trace",
                     "agent": "live_data_agent",
-                    "trace": [step.to_dict() for step in self.live_data_agent.get_trace()]
+                    "trace": [step.to_dict() for step in live_data_agent.get_trace()]
                 })
 
             if not result.success:
@@ -390,14 +409,14 @@ class KairosOrchestrator:
             if stream_callback:
                 await stream_callback({"type": "thinking", "agent": "research_agent", "step": "think", "content": "Running deep multi-step research on KAIROS graph..."})
             
-            result = await self.research_agent.run(resolved_context.resolved_query, user_id=user_id)
-            merged_traces.extend(self.research_agent.get_trace())
-            
+            result = await research_agent.run(resolved_context.resolved_query, user_id=user_id, stream_callback=stream_callback)
+            merged_traces.extend(research_agent.get_trace())
+
             if stream_callback:
                 await stream_callback({
                     "type": "agent_trace",
                     "agent": "research_agent",
-                    "trace": [step.to_dict() for step in self.research_agent.get_trace()]
+                    "trace": [step.to_dict() for step in research_agent.get_trace()]
                 })
             
             if not result.success:
@@ -411,14 +430,14 @@ class KairosOrchestrator:
             if stream_callback:
                 await stream_callback({"type": "thinking", "agent": "synthesis_agent", "step": "think", "content": "Synthesizing response from relevant company memories..."})
             
-            result = await self.synthesis_agent.run(question, resolved_context=resolved_context, user_id=user_id)
-            merged_traces.extend(self.synthesis_agent.get_trace())
-            
+            result = await synthesis_agent.run(question, resolved_context=resolved_context, user_id=user_id, stream_callback=stream_callback)
+            merged_traces.extend(synthesis_agent.get_trace())
+
             if stream_callback:
                 await stream_callback({
                     "type": "agent_trace",
                     "agent": "synthesis_agent",
-                    "trace": [step.to_dict() for step in self.synthesis_agent.get_trace()]
+                    "trace": [step.to_dict() for step in synthesis_agent.get_trace()]
                 })
                 
             if not result.success:
@@ -495,29 +514,46 @@ class KairosOrchestrator:
                 msgs.append({"role": role, "content": str(m.get("content", ""))[:500]})
         msgs.append({"role": "user", "content": question})
 
-        answer = ""
-        try:
-            stream = await self._chat_client.chat.completions.create(
-                model=self._chat_model, messages=msgs,
-                temperature=0.6, max_tokens=200, stream=True,
-            )
-            async for chunk in stream:
-                if not chunk.choices:
-                    continue
-                token = chunk.choices[0].delta.content
-                if token:
-                    answer += token
-                    if stream_callback:
-                        await stream_callback({"type": "token", "content": token})
-        except Exception as e:
-            print(f"[Orchestrator] Conversational reply error: {e}")
-            answer = (
-                "Hi! I'm KAIROS — your company's organizational memory. Ask me why a "
-                "past decision was made, e.g. \"Why did we choose this vendor?\""
-            )
-            if stream_callback:
-                await stream_callback({"type": "token", "content": answer})
-        return answer.strip()
+        # Try each configured provider in order (Fireworks → Groq → Gemini) so a
+        # greeting doesn't fail just because the primary provider is down — matching
+        # the multi-provider fallback the agents use.
+        from openai import AsyncOpenAI
+        for name, api_key, base_url, model in config.text_providers():
+            answer = ""
+            emitted = False
+            try:
+                client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+                stream = await client.chat.completions.create(
+                    model=model, messages=msgs,
+                    temperature=0.6, max_tokens=200, stream=True,
+                )
+                async for chunk in stream:
+                    if not chunk.choices:
+                        continue
+                    token = chunk.choices[0].delta.content
+                    if token:
+                        answer += token
+                        emitted = True
+                        if stream_callback:
+                            await stream_callback({"type": "token", "content": token})
+                if answer.strip():
+                    return answer.strip()
+            except Exception as e:
+                print(f"[Orchestrator] greeting provider {name} failed: {e}")
+                # If we already streamed partial tokens, don't retry (would duplicate
+                # output to the client) — return what we have.
+                if emitted and answer.strip():
+                    return answer.strip()
+                continue
+
+        # All providers failed → graceful canned reply.
+        fallback = (
+            "Hi! I'm KAIROS — your company's organizational memory. Ask me why a "
+            "past decision was made, e.g. \"Why did we choose this vendor?\""
+        )
+        if stream_callback:
+            await stream_callback({"type": "token", "content": fallback})
+        return fallback
 
     async def _trigger_profile_update(self, user_id: str):
         """Asynchronously triggers LLM summary update on user profile context."""
