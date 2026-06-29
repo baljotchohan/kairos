@@ -92,6 +92,7 @@ class ContextAgent(BaseAgent):
         """Resolve query context with user history and profile."""
         question = input_data if isinstance(input_data, str) else str(input_data)
         user_id = kwargs.get("user_id", "anonymous")
+        session_id = kwargs.get("session_id")
         intent: QueryIntent = kwargs.get("intent", QueryIntent(
             intent="search", confidence=0.5, search_strategy="semantic", rewritten_query=question
         ))
@@ -108,9 +109,9 @@ class ContextAgent(BaseAgent):
             "total_queries": profile.total_queries,
         }
 
-        # 2. Get conversation history
+        # 2. Get conversation history (scoped to THIS session, not just the most recent)
         conversation_history = self.user_memory.get_current_session_context(
-            user_id, max_turns=6
+            user_id, max_turns=6, session_id=session_id
         )
         memory_count = len(conversation_history)
 
@@ -209,9 +210,9 @@ Rewrite the query to be fully self-contained:"""
             return min(base, 1.0)
         return 0.5
 
-    async def resolve(self, question: str, user_id: str, intent: QueryIntent) -> ResolvedContext:
+    async def resolve(self, question: str, user_id: str, intent: QueryIntent, session_id: str | None = None) -> ResolvedContext:
         """Convenience method for direct context resolution."""
-        result = await self.run(question, user_id=user_id, intent=intent)
+        result = await self.run(question, user_id=user_id, intent=intent, session_id=session_id)
         return result.output if result.success else ResolvedContext(
             original_query=question,
             resolved_query=question,

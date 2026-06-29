@@ -109,11 +109,24 @@ class KairosMemory:
     # ── Write ─────────────────────────────────────────────────────────────────
 
     def store(self, node: DecisionNode, user_id: Optional[str] = None):
-        """Store a decision in all three layers and sync the Obsidian vault."""
+        """Store a decision in all three layers and sync the Obsidian vault.
+
+        Order matters: semantic_search resolves vector ids back through the
+        SQLite-backed graph (graph.get_decision), so the durable layers are
+        written FIRST. If a durable write fails we abort before creating an
+        orphan vector; if the vector upsert fails last, the decision is still
+        found via structured/graph search (degraded, not silently dropped)."""
         if user_id:
             node.user_id = user_id
 
-        # 1. ChromaDB (vector search)
+        # 1. SQLite (structured queries) — durable source of truth
+        self._sqlite_upsert(node)
+
+        # 2. Graph + Obsidian — auto-links the node and writes only the changed notes
+        self.graph.add_decision(node, vault_path=self.obsidian_vault, user_id=node.user_id)
+
+        # 3. ChromaDB (vector search) — written LAST so a failure can't orphan a
+        #    vector whose id resolves to a missing decision (silent drop in search).
         doc_text = f"{node.title}\n{node.summary}\n{node.outcome}\n{' '.join(node.topics)}"
         self.collection.upsert(
             ids=[node.id],
@@ -128,17 +141,15 @@ class KairosMemory:
             }],
         )
 
-        # 2. SQLite (structured queries)
-        self._sqlite_upsert(node)
-
-        # 3. Graph + Obsidian — auto-links the node and writes only the changed notes
-        self.graph.add_decision(node, vault_path=self.obsidian_vault, user_id=node.user_id)
-
     # ── Read ──────────────────────────────────────────────────────────────────
 
     def semantic_search(self, query: str, n_results: int = 5, user_id: Optional[str] = None) -> list[DecisionNode]:
         """Vector similarity search — best for open-ended NL queries."""
-        where_filter = {"user_id": user_id} if user_id else None
+        # Fail CLOSED: never return every tenant's vectors when user_id is missing.
+        if not user_id:
+            print("[Memory] semantic_search called without user_id — returning [] (fail-closed).")
+            return []
+        where_filter = {"user_id": user_id}
         results = self.collection.query(
             query_texts=[query], 
             n_results=n_results,
@@ -156,6 +167,10 @@ class KairosMemory:
         user_id: Optional[str] = None,
     ) -> list[DecisionNode]:
         """SQL-backed exact / range queries."""
+        # Fail CLOSED: never return every tenant's rows when user_id is missing.
+        if not user_id:
+            print("[Memory] structured_search called without user_id — returning [] (fail-closed).")
+            return []
         clauses, params = [], []
         if topic:
             clauses.append("topics LIKE ?")
@@ -174,7 +189,7 @@ class KairosMemory:
             params.append(user_id)
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             rows = conn.execute(f"SELECT id FROM decisions {where}", params).fetchall()
         return [n for row in rows if (n := self.graph.get_decision(row[0], user_id=user_id))]
 
@@ -268,7 +283,7 @@ class KairosMemory:
             params.append(user_id)
         query += " ORDER BY date DESC LIMIT 20"
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
         return [n for row in rows if (n := self.graph.get_decision(row[0], user_id=user_id))]
 
@@ -282,7 +297,7 @@ class KairosMemory:
         from datetime import datetime
         now = datetime.utcnow().isoformat()
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connect() as conn:
                 conn.executemany("""
                     INSERT OR REPLACE INTO inventory
                     (user_id, source, item_id, title, url, item_date, kind, snippet, fetched_at)
@@ -317,7 +332,7 @@ class KairosMemory:
             params.extend([f"%{query}%", f"%{query}%"])
         where = " AND ".join(clauses)
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connect() as conn:
                 conn.row_factory = sqlite3.Row
                 rows = conn.execute(
                     f"SELECT source, item_id, title, url, item_date, kind, snippet "
@@ -334,7 +349,7 @@ class KairosMemory:
         if not user_id:
             return {}
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connect() as conn:
                 rows = conn.execute(
                     "SELECT source, COUNT(*) FROM inventory WHERE user_id = ? GROUP BY source",
                     (user_id,),
@@ -389,8 +404,17 @@ class KairosMemory:
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
+    def _connect(self) -> sqlite3.Connection:
+        """SQLite connection with WAL + busy timeout so concurrent async writes
+        don't raise 'database is locked' (matches graph.py / user_memory.py)."""
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        conn.execute("PRAGMA busy_timeout=30000;")
+        return conn
+
     def _init_sqlite(self):
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS decisions (
                     id TEXT PRIMARY KEY,
@@ -434,7 +458,7 @@ class KairosMemory:
             conn.commit()
 
     def _sqlite_upsert(self, node: DecisionNode):
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute("""
                 INSERT OR REPLACE INTO decisions
                 (id, title, summary, date, participants, source, source_url, topics, outcome, raw_text, metadata, user_id)
@@ -448,11 +472,14 @@ class KairosMemory:
             conn.commit()
 
     @staticmethod
-    def make_id(title: str | None = None, source_url: str | None = None) -> str:
-        if title and source_url:
+    def make_id(title: str | None = None, source_url: str | None = None, user_id: str | None = None) -> str:
+        # Namespace the deterministic ID by user_id so two users who ingest the SAME
+        # public doc/link (or a shared "Untitled" title) never produce the same id and
+        # silently overwrite each other's decision (INSERT OR REPLACE / vector upsert).
+        # Missing user_id → random uuid, so unauthenticated ingests can't collide either.
+        if title and source_url and user_id:
             import uuid
-            # Deterministic namespace for KAIROS decisions
             namespace = uuid.UUID("3c8f8d22-1d57-4b77-84a1-f761d4aef822")
-            unique_key = f"{title.strip().lower()}:{source_url.strip().lower()}"
+            unique_key = f"{user_id.strip().lower()}:{title.strip().lower()}:{source_url.strip().lower()}"
             return str(uuid.uuid5(namespace, unique_key))
         return str(uuid.uuid4())

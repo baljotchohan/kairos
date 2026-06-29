@@ -134,7 +134,9 @@ def verify_token(token: str) -> UserProfile:
 
     # 3. Real Firebase Verification
     try:
-        decoded_token = auth.verify_id_token(token)
+        # check_revoked=True so a disabled/revoked user is cut off immediately
+        # (not after the ID token's ~1h natural expiry).
+        decoded_token = auth.verify_id_token(token, check_revoked=True)
         
         # Determine if anonymous sign-in was used
         provider = decoded_token.get("firebase", {}).get("sign_in_provider")
@@ -173,11 +175,11 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
         else:
-            # simulation mode default - generate unique random ID per request
-            import uuid
-            rand_id = uuid.uuid4().hex[:8]
+            # Simulation/dev mode (no Firebase, no credentials): use a STABLE uid so a
+            # dev's sessions/data persist across requests instead of getting a brand-new
+            # random identity every call. Never reached when Firebase is enabled.
             return UserProfile(
-                uid=f"sim-guest-uid-{rand_id}",
+                uid="sim-guest-local",
                 email=None,
                 name="Guest User",
                 is_anonymous=True

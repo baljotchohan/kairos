@@ -13,10 +13,10 @@ Tokens are stored in the existing kairos.db SQLite file under the oauth_tokens t
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import hmac
 import hashlib
+import html
 import time
 import os
 from datetime import datetime
@@ -27,6 +27,7 @@ from fastapi.responses import HTMLResponse
 
 from api.auth import get_current_user, UserProfile
 from config import config
+from core.token_crypto import encrypt_token_data, decrypt_token_data
 
 router = APIRouter(prefix="/oauth", tags=["oauth"])
 
@@ -82,7 +83,7 @@ def _store_token(user_uid: str, service: str, token_data: dict):
         conn.execute(
             """INSERT OR REPLACE INTO oauth_tokens (user_uid, service, token_data, connected_at)
                VALUES (?, ?, ?, ?)""",
-            (user_uid, service, json.dumps(token_data), datetime.utcnow().isoformat()),
+            (user_uid, service, encrypt_token_data(token_data), datetime.utcnow().isoformat()),
         )
         conn.commit()
     finally:
@@ -98,7 +99,7 @@ def _get_token(user_uid: str, service: str) -> dict | None:
         ).fetchone()
         if not row:
             return None
-        data = json.loads(row["token_data"])
+        data = decrypt_token_data(row["token_data"])
         data["connected_at"] = row["connected_at"]
         return data
     finally:
@@ -138,31 +139,38 @@ _POPUP_STYLE = """
 
 
 def _popup_success(service: str, detail: str) -> HTMLResponse:
-    html = f"""<!DOCTYPE html><html><head><title>KAIROS</title>
+    # Escape provider/user-controlled values (workspace name, email) — they are
+    # rendered into HTML on the backend origin, so unescaped values are XSS.
+    service_s = html.escape((service or "").upper())
+    detail_s = html.escape(detail or "")
+    page = f"""<!DOCTYPE html><html><head><title>KAIROS</title>
 <style>{_POPUP_STYLE}</style></head><body>
 <div class="card">
   <div class="dot green"></div>
-  <strong>{service.upper()} CONNECTED</strong>
-  <small>{detail}</small>
+  <strong>{service_s} CONNECTED</strong>
+  <small>{detail_s}</small>
   <small style="color:#52525b;margin-top:10px;">Closing window…</small>
 </div>
 <script>setTimeout(() => window.close(), 1500);</script>
 </body></html>"""
-    return HTMLResponse(content=html)
+    return HTMLResponse(content=page)
 
 
 def _popup_error(msg: str) -> HTMLResponse:
-    html = f"""<!DOCTYPE html><html><head><title>KAIROS</title>
+    # Escape the message — it can be a reflected `error` query param or a
+    # provider-returned error string (reflected XSS otherwise).
+    msg_s = html.escape(msg or "")
+    page = f"""<!DOCTYPE html><html><head><title>KAIROS</title>
 <style>{_POPUP_STYLE}</style></head><body>
 <div class="card" style="border-color:#7f1d1d;">
   <div class="dot red"></div>
   <strong style="color:#ef4444;">Connection Failed</strong>
-  <small>{msg}</small>
+  <small>{msg_s}</small>
   <small style="color:#52525b;margin-top:10px;">Closing window…</small>
 </div>
 <script>setTimeout(() => window.close(), 3000);</script>
 </body></html>"""
-    return HTMLResponse(content=html, status_code=400)
+    return HTMLResponse(content=page, status_code=400)
 
 
 def _callback_url(service: str) -> str:

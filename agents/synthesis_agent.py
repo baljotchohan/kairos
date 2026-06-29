@@ -153,7 +153,7 @@ Extract all decisions from the above content."""
                 continue
 
             node = DecisionNode(
-                id=self.memory.make_id(title=d.get("title"), source_url=d.get("source_url", source_url)),
+                id=self.memory.make_id(title=d.get("title"), source_url=d.get("source_url", source_url), user_id=user_id),
                 title=d.get("title", ""),
                 summary=d.get("summary", ""),
                 date=d.get("date", content_date or "unknown"),

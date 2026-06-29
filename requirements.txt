@@ -7,6 +7,9 @@ pydantic>=2.10.1
 python-multipart==0.0.12
 firebase-admin==6.5.0
 
+# Security — encrypt OAuth tokens at rest (set TOKEN_ENCRYPTION_KEY in prod)
+cryptography>=43.0.0
+
 # AI — Fireworks AI (AMD hardware, OpenAI-compatible client)
 openai==1.51.0
 

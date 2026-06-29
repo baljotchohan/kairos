@@ -194,6 +194,15 @@ export default function Home() {
   const [realDecisions, setRealDecisions] = useState<any[]>([]);
   const [activeSimulationDecisions, setActiveSimulationDecisions] = useState<any[]>([]);
 
+  // Per-user remote MCP connect info (personal URL + ready-to-paste configs)
+  const [mcpConnection, setMcpConnection] = useState<any>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard?.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 1800);
+  };
+
   // Helper to compile a global graph from a list of decisions, deduping participants, sources, dates
   const compileGlobalGraph = useCallback((decisionsList: any[]) => {
     const nodes: GraphNode[] = [];
@@ -551,6 +560,15 @@ export default function Home() {
     const interval = setInterval(fetchRealDecisions, 45000);
     return () => clearInterval(interval);
   }, [token, fetchRealDecisions]);
+
+  // Fetch this user's personal remote-MCP connect info when the MCP tab opens
+  useEffect(() => {
+    if (activeTab !== "mcp" || !token) return;
+    fetch("/api/mcp/connection", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setMcpConnection(d))
+      .catch((e) => console.error("Error fetching MCP connection", e));
+  }, [activeTab, token]);
 
   // Compile combined decision graph from message citations
   useEffect(() => {
@@ -2105,7 +2123,70 @@ export default function Home() {
             <div className="p-8 max-w-4xl mx-auto flex flex-col gap-6 animate-[fadeIn_0.2s_ease-out]">
               <div className="border-b border-[rgb(var(--border))]/40 pb-4">
                 <h3 className="text-lg font-bold tracking-tight text-[rgb(var(--text-primary))] mb-0.5">Model Context Protocol (MCP)</h3>
-                <p className="text-xs text-[rgb(var(--text-muted))]">Configure and connect KAIROS directly as an MCP server for Cursor, Claude Desktop, or Claude Code.</p>
+                <p className="text-xs text-[rgb(var(--text-muted))]">Connect KAIROS to Claude, ChatGPT, or Cursor — each connection is scoped to <span className="text-[rgb(var(--accent))] font-semibold">your</span> organizational memory only.</p>
+              </div>
+
+              {/* ⚡ ONE-CLICK REMOTE CONNECT (per-user) */}
+              <div className="p-6 rounded-2xl border border-[rgb(var(--accent))]/25 bg-gradient-to-br from-[rgb(var(--accent))]/5 to-transparent flex flex-col gap-4 shadow-sm">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">⚡</span>
+                    <h4 className="text-sm font-bold text-[rgb(var(--text-primary))] font-mono uppercase">One-Click Connect (Remote)</h4>
+                  </div>
+                  <span className="text-[9px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                    🔒 Personal — scoped to your data
+                  </span>
+                </div>
+                <p className="text-[11.5px] text-[rgb(var(--text-muted))] leading-relaxed">
+                  Paste this single URL as a custom connector in <strong>Claude</strong> (web/mobile/desktop), <strong>ChatGPT</strong>, or <strong>Cursor</strong>. Every query is automatically scoped to your account — no setup, no API keys.
+                </p>
+
+                {/* Personal MCP URL + copy */}
+                <div className="flex items-stretch gap-2">
+                  <code className="flex-1 bg-zinc-950/75 border border-zinc-800 rounded-xl px-3.5 py-2.5 font-mono text-[10.5px] text-emerald-400 overflow-x-auto whitespace-nowrap select-all">
+                    {mcpConnection?.url || "Generating your personal connect URL…"}
+                  </code>
+                  <button
+                    disabled={!mcpConnection?.url}
+                    onClick={() => copyToClipboard(mcpConnection.url, "url")}
+                    className="shrink-0 px-3.5 py-2.5 rounded-xl bg-[rgb(var(--accent))] text-white text-[10px] font-bold tracking-wider hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {copiedKey === "url" ? "✓ COPIED" : "COPY URL"}
+                  </button>
+                </div>
+
+                {/* Connect targets */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-1">
+                  {[
+                    { key: "claude", name: "Claude (web/mobile)", steps: "Settings → Connectors → Add custom connector → paste URL", icon: "🟣" },
+                    { key: "chatgpt", name: "ChatGPT", steps: "Settings → Connectors (developer mode) → Add → paste URL", icon: "🟢" },
+                    { key: "cursor", name: "Cursor / Desktop", steps: "Copy the JSON config below into your MCP settings", icon: "🔵" },
+                  ].map((tgt) => (
+                    <div key={tgt.key} className="p-3.5 rounded-xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/20 flex flex-col gap-1.5">
+                      <span className="text-xs font-bold text-[rgb(var(--text-primary))] flex items-center gap-1.5">{tgt.icon} {tgt.name}</span>
+                      <span className="text-[10px] text-[rgb(var(--text-muted))] leading-snug">{tgt.steps}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Ready-to-paste config */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-mono text-[rgb(var(--text-muted))] uppercase tracking-wider font-bold">Cursor / Claude Desktop config</span>
+                    <button
+                      disabled={!mcpConnection?.claude_desktop_config}
+                      onClick={() => copyToClipboard(JSON.stringify(mcpConnection.claude_desktop_config, null, 2), "config")}
+                      className="text-[9px] font-mono font-bold text-[rgb(var(--accent))] hover:underline disabled:opacity-40"
+                    >
+                      {copiedKey === "config" ? "✓ COPIED" : "COPY JSON"}
+                    </button>
+                  </div>
+                  <pre className="bg-zinc-950 border border-zinc-900 rounded-xl p-4 font-mono text-[10px] text-emerald-400 overflow-x-auto select-all leading-relaxed whitespace-pre">
+{mcpConnection?.claude_desktop_config
+  ? JSON.stringify(mcpConnection.claude_desktop_config, null, 2)
+  : `{\n  "mcpServers": {\n    "kairos": { "url": "…" }\n  }\n}`}
+                  </pre>
+                </div>
               </div>
 
               {/* Intro & Status Card */}
