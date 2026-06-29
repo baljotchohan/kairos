@@ -159,6 +159,57 @@ app.add_middleware(
 )
 
 
+class _MCPCORSMiddleware:
+    """Pure-ASGI middleware: allow any origin on /mcp/* paths.
+    The MCP endpoints use token-in-URL auth (no cookies), so open CORS is safe.
+    This runs BEFORE CORSMiddleware (added after it → wraps around it) so OPTIONS
+    preflights from claude.ai / chatgpt.com / cursor.com are handled correctly
+    instead of being rejected by the stricter API-route CORS policy."""
+
+    _CORS = [
+        (b"access-control-allow-origin", b"*"),
+        (b"access-control-allow-methods", b"GET, POST, OPTIONS"),
+        (b"access-control-allow-headers", b"content-type, accept, mcp-session-id"),
+        (b"access-control-max-age", b"86400"),
+    ]
+
+    def __init__(self, app, **_kwargs):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or not scope.get("path", "").startswith("/mcp/"):
+            await self.app(scope, receive, send)
+            return
+
+        if scope.get("method") == "OPTIONS":
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": self._CORS + [(b"content-length", b"0")],
+            })
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
+            return
+
+        # Strip the origin header so CORSMiddleware (inner) doesn't add its own
+        # Access-Control-Allow-Origin and create a duplicate-header conflict.
+        clean_headers = [
+            (k, v) for k, v in scope.get("headers", []) if k.lower() != b"origin"
+        ]
+        scope = {**scope, "headers": clean_headers}
+
+        async def inject_cors(event):
+            if event["type"] == "http.response.start":
+                event = {**event, "headers": list(event.get("headers", [])) + self._CORS}
+            await send(event)
+
+        await self.app(scope, receive, inject_cors)
+
+
+# Must be added AFTER CORSMiddleware so it wraps around it (Starlette inserts at
+# position 0, so the last-added middleware is the outermost = runs first).
+app.add_middleware(_MCPCORSMiddleware)
+
+
 # ── Lightweight in-memory rate limiting (per client IP) ────────────────────────
 # Protects the expensive LLM/connector/MCP paths from abuse without adding a
 # dependency. Fixed window; fine for a single-process deployment.

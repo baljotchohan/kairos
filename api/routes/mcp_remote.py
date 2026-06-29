@@ -309,10 +309,12 @@ def _format_response(payload, request: Request, extra_headers: dict | None = Non
     response framed as an SSE `message` event — returning plain JSON makes it
     report "not a valid MCP server". So we emit SSE when the client accepts it,
     and fall back to JSON otherwise."""
-    headers = extra_headers or {}
+    headers = dict(extra_headers or {})
     accept = request.headers.get("accept", "")
     if "text/event-stream" in accept:
         body = f"event: message\ndata: {json.dumps(payload)}\n\n"
+        headers.setdefault("Cache-Control", "no-cache")
+        headers.setdefault("X-Accel-Buffering", "no")
         return Response(content=body, media_type="text/event-stream", headers=headers)
     return JSONResponse(payload, headers=headers)
 
