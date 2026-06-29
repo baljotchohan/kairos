@@ -5,9 +5,19 @@ export async function POST(req: NextRequest) {
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
 
   if (!token) {
+    const proto = req.headers.get("x-forwarded-proto") ?? "https";
+    const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";
+    const base = `${proto}://${host}`;
     return NextResponse.json(
       { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Bearer token required" } },
-      { status: 401, headers: { "WWW-Authenticate": 'Bearer realm="KAIROS"' } }
+      {
+        status: 401,
+        headers: {
+          // RFC 9728: point Claude.ai to the protected-resource metadata so it
+          // discovers the authorization server before trying registration
+          "WWW-Authenticate": `Bearer realm="KAIROS", resource_metadata="${base}/.well-known/oauth-protected-resource"`,
+        },
+      }
     );
   }
 

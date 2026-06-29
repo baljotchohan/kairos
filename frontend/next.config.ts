@@ -13,6 +13,11 @@ const nextConfig: NextConfig = {
           source: "/.well-known/oauth-authorization-server",
           destination: "/api/oauth/discovery",
         },
+        // RFC 9728 — Claude.ai uses this to discover the authorization server
+        {
+          source: "/.well-known/oauth-protected-resource",
+          destination: "/api/oauth/protected-resource",
+        },
         {
           source: "/oauth/register",
           destination: "/api/oauth/register",
