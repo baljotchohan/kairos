@@ -29,6 +29,7 @@ def client():
     with TestClient(app, raise_server_exceptions=True) as c:
         app.state.memory = mock_memory
         app.state.orchestrator = mock_orchestrator
+        app.state.testing = True
         yield c
 
 
@@ -93,3 +94,20 @@ def test_admin_status(client):
     data = resp.json()
     assert "connectors" in data
     assert "total_decisions" in data
+
+
+def test_remote_mcp_sse_handshake(client):
+    """Test that the remote MCP GET endpoint establishes an SSE connection and returns the endpoint event."""
+    from core.mcp_auth import mint_mcp_token
+    token = mint_mcp_token("test-user-uid")
+
+    # Mock the memory search results
+    client.app.state.memory.hybrid_search.return_value = []
+
+    # GET request starts and completes the SSE stream quickly in test mode
+    resp = client.get(f"/mcp/u/{token}", headers={"Accept": "text/event-stream"})
+    assert resp.status_code == 200
+    assert "text/event-stream" in resp.headers.get("content-type", "")
+    assert "event: endpoint" in resp.text
+    assert "session_id=" in resp.text
+

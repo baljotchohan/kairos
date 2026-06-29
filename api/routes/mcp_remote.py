@@ -26,8 +26,12 @@ import json
 import uuid
 import logging
 
+import asyncio
 from fastapi import APIRouter, Request, Depends
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
+
+# Registry for active MCP SSE transport sessions (mapping session_id -> asyncio.Queue)
+_active_sessions: dict[str, asyncio.Queue] = {}
 
 from core.graph import DecisionNode
 from core.mcp_auth import verify_mcp_token, mint_mcp_token
@@ -335,32 +339,87 @@ async def mcp_streamable_http(token: str, request: Request):
     except Exception:
         return JSONResponse(_error(None, -32700, "Parse error"), status_code=400)
 
+    session_id = request.query_params.get("session_id")
+    has_sse_session = session_id and session_id in _active_sessions
+
     # JSON-RPC supports single messages and batches (a JSON array).
     if isinstance(body, list):
-        responses = [r for r in (_handle_message(m, memory, user_id) for m in body) if r is not None]
+        responses = []
+        for m in body:
+            resp = _handle_message(m, memory, user_id)
+            if resp is not None:
+                if has_sse_session:
+                    await _active_sessions[session_id].put(resp)
+                else:
+                    responses.append(resp)
+        if has_sse_session:
+            return Response(status_code=202)  # Response routed via SSE
         if not responses:
             return Response(status_code=202)
         return _format_response(responses, request)
 
     extra_headers = {}
     if body.get("method") == "initialize":
-        # Assign a Streamable-HTTP session id. We don't require it on later
-        # requests, but advertising one improves client compatibility.
-        extra_headers["Mcp-Session-Id"] = uuid.uuid4().hex
+        # Assign a session id.
+        extra_headers["Mcp-Session-Id"] = session_id or uuid.uuid4().hex
 
     resp = _handle_message(body, memory, user_id)
     if resp is None:
         return Response(status_code=202)  # notification — no body
+
+    if has_sse_session:
+        # Route response message back to client via the active SSE stream queue
+        await _active_sessions[session_id].put(resp)
+        return Response(status_code=202)
+
+    # Fallback to returning direct JSON/SSE on POST response (for stateless Streamable-HTTP)
     return _format_response(resp, request, extra_headers)
 
 
 @mcp_rpc_router.get("/mcp/u/{token}")
-async def mcp_streamable_http_get(token: str):
-    # GET opens an optional server→client SSE stream. KAIROS pushes no unsolicited
-    # messages, so we signal "no stream" — clients fall back to POST request/response.
-    if not verify_mcp_token(token):
+async def mcp_streamable_http_get(token: str, request: Request):
+    # GET establishes the SSE channel for official MCP HTTP/SSE clients (like Claude).
+    # Returns 200 OK and pushes the 'endpoint' event containing the POST URL.
+    user_id = verify_mcp_token(token)
+    if not user_id:
         return JSONResponse({"error": "invalid token"}, status_code=401)
-    return JSONResponse({"detail": "This MCP server is request/response only (POST)."}, status_code=405)
+
+    session_id = uuid.uuid4().hex
+    queue = asyncio.Queue()
+    _active_sessions[session_id] = queue
+
+    async def sse_generator():
+        # Push the endpoint configuration event immediately
+        base_url = config.BACKEND_URL.rstrip('/')
+        endpoint_url = f"{base_url}/mcp/u/{token}?session_id={session_id}"
+        yield f"event: endpoint\ndata: {endpoint_url}\n\n"
+
+        if getattr(request.app.state, "testing", False):
+            return
+
+        try:
+            while True:
+                try:
+                    # Wait for outgoing message responses with a timeout for keepalive
+                    msg = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    yield f"event: message\ndata: {json.dumps(msg)}\n\n"
+                except asyncio.TimeoutError:
+                    # Keep-alive comment to keep connection active
+                    yield ": ping\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            _active_sessions.pop(session_id, None)
+
+    return StreamingResponse(
+        sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive"
+        }
+    )
 
 
 # (2) The connect-info endpoint — authed, mounted under /api.
