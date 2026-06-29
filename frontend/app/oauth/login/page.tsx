@@ -7,12 +7,12 @@ import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 
 function OAuthLoginContent() {
   const searchParams = useSearchParams();
-  const reqId = searchParams.get("req_id");
+  const session = searchParams.get("session");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [error, setError] = useState("");
 
   const handleSignIn = async () => {
-    if (!reqId) return;
+    if (!session) return;
     setStatus("loading");
     setError("");
     try {
@@ -21,10 +21,10 @@ function OAuthLoginContent() {
       const result = await signInWithPopup(auth, new GoogleAuthProvider());
       const idToken = await result.user.getIdToken();
 
-      const resp = await fetch("/api/mcp/oauth/complete", {
+      const resp = await fetch("/api/oauth/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ firebase_token: idToken, req_id: reqId }),
+        body: JSON.stringify({ firebase_token: idToken, session }),
       });
 
       if (!resp.ok) {
@@ -45,13 +45,13 @@ function OAuthLoginContent() {
     }
   };
 
-  if (!reqId) {
+  if (!session) {
     return (
       <div style={styles.container}>
         <div style={styles.card}>
           <div style={{ ...styles.dot, background: "#ef4444" }} />
           <p style={styles.title}>Invalid Request</p>
-          <p style={styles.sub}>Missing OAuth request ID. Please try adding the connector again.</p>
+          <p style={styles.sub}>Missing OAuth session. Please try adding the connector again.</p>
         </div>
       </div>
     );
