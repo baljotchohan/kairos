@@ -18,18 +18,20 @@ router = APIRouter(prefix="/memory", tags=["memory"])
 
 
 @router.get("/sessions")
-async def get_sessions(
+def get_sessions(
     current_user: AuthUserProfile = Depends(get_current_user)
 ):
-    """List all past conversation sessions for the authenticated user."""
-    from core.user_memory import UserMemory
-    # We can instantiate UserMemory. It gets db_path from config.
+    """List all past conversation sessions for the authenticated user.
+
+    Sync handler on purpose: it does blocking SQLite, so FastAPI runs it in the
+    threadpool instead of stalling the event loop (which `async def` + blocking
+    sqlite3 would do)."""
     um = UserMemory()
     return um.list_sessions(current_user.uid)
 
 
 @router.get("/sessions/{session_id}")
-async def get_session_details(
+def get_session_details(
     session_id: str,
     current_user: AuthUserProfile = Depends(get_current_user)
 ):
@@ -55,7 +57,7 @@ async def get_session_details(
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_session(
+def delete_session(
     session_id: str,
     current_user: AuthUserProfile = Depends(get_current_user)
 ):
@@ -66,7 +68,7 @@ async def delete_session(
 
 
 @router.get("/profile")
-async def get_profile(
+def get_profile(
     current_user: AuthUserProfile = Depends(get_current_user)
 ):
     """Retrieve user's learned profile context."""
@@ -87,7 +89,7 @@ async def get_profile(
 
 
 @router.post("/profile/reset")
-async def reset_profile(
+def reset_profile(
     current_user: AuthUserProfile = Depends(get_current_user)
 ):
     """Reset user's learned preferences (retains conversation history)."""
