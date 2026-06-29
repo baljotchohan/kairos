@@ -340,19 +340,15 @@ def mcp_icon():
     )
 
 
-def _format_response(payload, request: Request, extra_headers: dict | None = None):
-    """Streamable-HTTP response. Claude's MCP client sends
-    `Accept: application/json, text/event-stream` and expects the JSON-RPC
-    response framed as an SSE `message` event — returning plain JSON makes it
-    report "not a valid MCP server". So we emit SSE when the client accepts it,
-    and fall back to JSON otherwise."""
+def _format_response(payload, extra_headers: dict | None = None):
+    """Return the JSON-RPC response as plain JSON.
+
+    Per the MCP Streamable-HTTP spec, the server may respond with either
+    application/json or text/event-stream.  Plain JSON is more compatible across
+    all MCP clients (Claude web/mobile, Claude Desktop, Cursor, ChatGPT) for
+    synchronous tool responses.  We never need SSE here because none of our tools
+    stream — every response is computed synchronously and returned whole."""
     headers = dict(extra_headers or {})
-    accept = request.headers.get("accept", "")
-    if "text/event-stream" in accept:
-        body = f"event: message\ndata: {json.dumps(payload)}\n\n"
-        headers.setdefault("Cache-Control", "no-cache")
-        headers.setdefault("X-Accel-Buffering", "no")
-        return Response(content=body, media_type="text/event-stream", headers=headers)
     return JSONResponse(payload, headers=headers)
 
 
@@ -372,41 +368,25 @@ async def mcp_streamable_http(token: str, request: Request):
     except Exception:
         return JSONResponse(_error(None, -32700, "Parse error"), status_code=400)
 
-    session_id = request.query_params.get("session_id")
-    has_sse_session = session_id and session_id in _active_sessions
-
-    # JSON-RPC supports single messages and batches (a JSON array).
+    # Pure stateless Streamable-HTTP: respond directly to every POST.
+    # No persistent SSE session routing — each request gets an immediate JSON response.
+    # This is the most compatible approach for Claude web/mobile, Claude Desktop,
+    # Cursor and ChatGPT custom connectors.
     if isinstance(body, list):
-        responses = []
-        for m in body:
-            resp = _handle_message(m, memory, user_id)
-            if resp is not None:
-                if has_sse_session:
-                    await _active_sessions[session_id].put(resp)
-                else:
-                    responses.append(resp)
-        if has_sse_session:
-            return Response(status_code=202)  # Response routed via SSE
+        responses = [r for m in body if (r := _handle_message(m, memory, user_id)) is not None]
         if not responses:
             return Response(status_code=202)
-        return _format_response(responses, request)
+        return _format_response(responses)
 
     extra_headers = {}
     if body.get("method") == "initialize":
-        # Assign a session id.
-        extra_headers["Mcp-Session-Id"] = session_id or uuid.uuid4().hex
+        extra_headers["Mcp-Session-Id"] = uuid.uuid4().hex
 
     resp = _handle_message(body, memory, user_id)
     if resp is None:
-        return Response(status_code=202)  # notification — no body
-
-    if has_sse_session:
-        # Route response message back to client via the active SSE stream queue
-        await _active_sessions[session_id].put(resp)
         return Response(status_code=202)
 
-    # Fallback to returning direct JSON/SSE on POST response (for stateless Streamable-HTTP)
-    return _format_response(resp, request, extra_headers)
+    return _format_response(resp, extra_headers)
 
 
 @mcp_rpc_router.get("/mcp/u/{token}")
@@ -473,7 +453,7 @@ async def oauth_protected_resource_metadata(request: Request, token: str | None 
 
 @mcp_rpc_router.get("/.well-known/oauth-authorization-server")
 @mcp_rpc_router.get("/mcp/u/{token}/.well-known/oauth-authorization-server")
-async def oauth_authorization_server_metadata(request: Request, token: str | None = None):
+async def oauth_authorization_server_metadata(token: str | None = None):  # noqa: ARG001
     return JSONResponse({"detail": "This server does not act as an OAuth authorization server."}, status_code=404)
 
 

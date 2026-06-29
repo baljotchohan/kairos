@@ -331,7 +331,13 @@ export default function Home() {
     }
   }, [token, realDecisions, activeSimulationDecisions, compileGlobalGraph]);
 
-  const displayStats = isConnected && stats ? stats : simulatedStats;
+  // When authenticated: show real stats or zeros (never fake demo numbers).
+  // When guest/no token: show simulatedStats so the demo feels alive.
+  const displayStats = (isConnected && stats)
+    ? stats
+    : token
+      ? { total_decisions: 0, total_relations: 0, connected_components: 0 }
+      : simulatedStats;
   const chatHistory = isConnected ? messages : simulatedMessages;
   const isChatStreaming = isConnected ? isStreaming : simulatedStreaming;
   const activeSources = chatHistory.length > 0 ? (chatHistory[chatHistory.length - 1]?.sources || []) : [];
@@ -2230,7 +2236,7 @@ export default function Home() {
                 <div className="flex flex-wrap gap-2 mt-1">
                   {[
                     { text: "100% Secure & Scoped", icon: "🛡️" },
-                    { text: "Helios Tech Workspace", icon: "🏢" },
+                    { text: user?.displayName ? `${user.displayName}'s Workspace` : "Your Workspace", icon: "🏢" },
                     { text: "Real-time Two-way Sync", icon: "⚡" }
                   ].map((badge, idx) => (
                     <span key={idx} className="flex items-center gap-1 text-[9.5px] font-mono text-[rgb(var(--text-muted))] px-2.5 py-1 rounded-md bg-[rgb(var(--surface))]/40 border border-[rgb(var(--border))]/50">
