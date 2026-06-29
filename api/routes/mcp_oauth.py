@@ -150,9 +150,11 @@ async def oauth_authorize(request: Request):
     finally:
         c.close()
 
-    # Redirect user's browser to the KAIROS frontend login page
-    frontend = config.FRONTEND_URL.rstrip("/")
-    return RedirectResponse(f"{frontend}/oauth/login?req_id={req_id}", status_code=302)
+    # Redirect user's browser to the KAIROS login page.
+    # Use base_url from the request (Vercel domain) not config.FRONTEND_URL
+    # (which may be localhost in the HF Space env).
+    base = _base_url(request)
+    return RedirectResponse(f"{base}/oauth/login?req_id={req_id}", status_code=302)
 
 
 # ── 4. Complete (frontend calls this after Firebase sign-in) ───────────────────
