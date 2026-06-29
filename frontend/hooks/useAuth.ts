@@ -115,6 +115,9 @@ export function useAuth() {
       provider.setCustomParameters({ prompt: "select_account" });
       try {
         await signInWithPopup(auth, provider);
+        // onIdTokenChanged will call setLoading(false); add a fallback timeout
+        // in case it fires before React can flush the state update
+        setTimeout(() => setLoading(false), 3000);
       } catch (popupErr: any) {
         const code = popupErr?.code ?? "";
         // Popup blocked / closed / not supported → fall back to full-page redirect
