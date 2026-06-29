@@ -276,7 +276,7 @@ class LiveDataAgent(BaseAgent):
         if url and len(self._collected_sources) < 12:
             # Use deterministic ID matching memory.make_id() so frontend /api/decisions/<id> works
             node_id = (
-                self.memory.make_id(title=title, source_url=url)
+                self.memory.make_id(title=title, source_url=url, user_id=self._current_user_id)
                 if self.memory and title
                 else url
             )
