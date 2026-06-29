@@ -45,46 +45,57 @@ def make_node(id="n1", title="Test Decision", topics=None, participants=None) ->
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
+# All reads/writes are scoped to a user_id — searches fail closed without one.
+TEST_UID = "testuser"
+
+
 def test_store_and_retrieve(memory):
     node = make_node(id="test-1", title="Chose PostgreSQL over MongoDB")
-    memory.store(node)
+    memory.store(node, user_id=TEST_UID)
 
-    results = memory.semantic_search("database choice", n_results=5)
+    results = memory.semantic_search("database choice", n_results=5, user_id=TEST_UID)
     assert len(results) >= 1
     titles = [r.title for r in results]
     assert "Chose PostgreSQL over MongoDB" in titles
 
 
 def test_structured_search_by_topic(memory):
-    memory.store(make_node(id="s1", title="Infrastructure Decision", topics=["Infrastructure"]))
-    memory.store(make_node(id="s2", title="Product Decision", topics=["Product"]))
+    memory.store(make_node(id="s1", title="Infrastructure Decision", topics=["Infrastructure"]), user_id=TEST_UID)
+    memory.store(make_node(id="s2", title="Product Decision", topics=["Product"]), user_id=TEST_UID)
 
-    infra = memory.structured_search(topic="Infrastructure")
+    infra = memory.structured_search(topic="Infrastructure", user_id=TEST_UID)
     assert any(n.id == "s1" for n in infra)
     assert all(n.id != "s2" for n in infra)
 
 
 def test_structured_search_by_person(memory):
-    memory.store(make_node(id="p1", title="John's Call", participants=["John Smith", "Alice"]))
-    memory.store(make_node(id="p2", title="Bob's Call", participants=["Bob Jones"]))
+    memory.store(make_node(id="p1", title="John's Call", participants=["John Smith", "Alice"]), user_id=TEST_UID)
+    memory.store(make_node(id="p2", title="Bob's Call", participants=["Bob Jones"]), user_id=TEST_UID)
 
-    results = memory.structured_search(person="John")
+    results = memory.structured_search(person="John", user_id=TEST_UID)
     ids = [n.id for n in results]
     assert "p1" in ids
     assert "p2" not in ids
 
 
 def test_structured_search_date_range(memory):
-    memory.store(make_node(id="d1", title="Early Decision"))
+    memory.store(make_node(id="d1", title="Early Decision"), user_id=TEST_UID)
     # Manually set date in SQLite
     import sqlite3, json
     with sqlite3.connect(memory.db_path) as conn:
         conn.execute("UPDATE decisions SET date = '2020-03-01' WHERE id = 'd1'")
         conn.commit()
 
-    results = memory.structured_search(date_from="2020-01-01", date_to="2020-12-31")
+    results = memory.structured_search(date_from="2020-01-01", date_to="2020-12-31", user_id=TEST_UID)
     ids = [n.id for n in results]
     assert "d1" in ids
+
+
+def test_search_fails_closed_without_user_id(memory):
+    """Defense-in-depth: searches must NOT leak across tenants when user_id is missing."""
+    memory.store(make_node(id="leak1", title="Secret Decision", topics=["Secret"]), user_id="owner-a")
+    assert memory.semantic_search("secret", n_results=5) == []
+    assert memory.structured_search(topic="Secret") == []
 
 
 def test_graph_auto_links(memory):
