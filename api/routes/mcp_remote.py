@@ -22,6 +22,7 @@ one-click; the documented upgrade is OAuth 2.1 + dynamic client registration
 
 from __future__ import annotations
 
+import json
 import uuid
 import logging
 
@@ -41,7 +42,7 @@ PROTOCOL_VERSION = "2025-03-26"
 # advertised in serverInfo.icons so Claude/connector UIs show the real logo
 # instead of a placeholder.
 KAIROS_ICON_SVG = """<svg width="512" height="512" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="100" height="100" rx="22" fill="#171717"/>
+  <rect width="100" height="100" rx="0" fill="#171717"/>
   <defs>
     <radialGradient id="n" cx="38%" cy="32%" r="65%">
       <stop offset="0%" stop-color="#d8b4fe"/>
@@ -142,19 +143,25 @@ TOOLS = [
 # ── Tool implementations (always scoped to the resolved user_id) ────────────────
 
 def _tool_get_context(memory, user_id: str, query: str, limit: int = 5) -> str:
-    results = memory.get_context(query, n_results=limit, user_id=user_id)
-    if not results:
+    # Hybrid retrieval (vector + keyword + source-aware + graph neighbours) — the
+    # SAME rich recall the KAIROS web app uses, so Claude actually finds what's in
+    # memory instead of vector-only near-misses.
+    nodes = memory.hybrid_search(query, n_results=limit, user_id=user_id)
+    if not nodes:
         return (
             f"KAIROS: No decisions found in organizational memory for: '{query}'. "
             "This topic has no recorded history yet."
         )
-    lines = [f"KAIROS ORGANIZATIONAL MEMORY — {len(results)} decision(s) for: '{query}'", "=" * 60]
-    for i, d in enumerate(results, 1):
-        participants = ", ".join(d["participants"]) if d["participants"] else "Unknown"
+    lines = [f"KAIROS ORGANIZATIONAL MEMORY — {len(nodes)} decision(s) for: '{query}'", "=" * 60]
+    for i, n in enumerate(nodes, 1):
+        participants = ", ".join(n.participants) if n.participants else "Unknown"
+        related = memory.graph.get_connected(n.id, depth=1, user_id=user_id)
+        ctx = (n.metadata or {}).get("context", "")
         lines.append(
-            f"\nDECISION {i}: {d['title']}\n  Date: {d['date']}\n  Source: {d['source']}\n"
-            f"  Participants: {participants}\n  Summary: {d['summary']}\n  Outcome: {d['outcome']}\n"
-            f"  Related: {len(d.get('related', []))} connected decision(s)"
+            f"\nDECISION {i}: {n.title}\n  Date: {n.date}\n  Source: {n.source} — {n.source_url}\n"
+            f"  Participants: {participants}\n  Summary: {n.summary}\n"
+            + (f"  Context: {ctx}\n" if ctx else "")
+            + f"  Outcome: {n.outcome}\n  Related: {len(related)} connected decision(s)"
         )
     return "\n".join(lines)
 
@@ -189,6 +196,10 @@ def _tool_search_decisions(memory, user_id: str, topic: str, date_from=None,
         topic=topic or project, person=person,
         date_from=date_from, date_to=date_to, user_id=user_id,
     )
+    # Fall back to hybrid semantic recall when the exact filters matched nothing,
+    # so a near-miss topic still surfaces related decisions.
+    if not results and (topic or project):
+        results = memory.hybrid_search(topic or project, n_results=8, user_id=user_id)
     if not results:
         return f"KAIROS: No decisions found matching topic='{topic}'."
     lines = [f"KAIROS: {len(results)} decision(s) found", "=" * 60]
@@ -292,6 +303,22 @@ def mcp_icon():
     )
 
 
+def _format_response(payload, request: Request, extra_headers: dict | None = None):
+    """Streamable-HTTP response. Claude's MCP client sends
+    `Accept: application/json, text/event-stream` and expects the JSON-RPC
+    response framed as an SSE `message` event — returning plain JSON makes it
+    report "not a valid MCP server". So we emit SSE when the client accepts it,
+    and fall back to JSON otherwise."""
+    headers = dict(extra_headers or {})
+    accept = request.headers.get("accept", "")
+    if "text/event-stream" in accept:
+        body = f"event: message\ndata: {json.dumps(payload)}\n\n"
+        headers.setdefault("Cache-Control", "no-cache")
+        headers.setdefault("X-Accel-Buffering", "no")
+        return Response(content=body, media_type="text/event-stream", headers=headers)
+    return JSONResponse(payload, headers=headers)
+
+
 @mcp_rpc_router.post("/mcp/u/{token}")
 async def mcp_streamable_http(token: str, request: Request):
     user_id = verify_mcp_token(token)
@@ -311,13 +338,20 @@ async def mcp_streamable_http(token: str, request: Request):
     # JSON-RPC supports single messages and batches (a JSON array).
     if isinstance(body, list):
         responses = [r for r in (_handle_message(m, memory, user_id) for m in body) if r is not None]
-        return JSONResponse(responses) if responses else JSONResponse([], status_code=202)
+        if not responses:
+            return Response(status_code=202)
+        return _format_response(responses, request)
+
+    extra_headers = {}
+    if body.get("method") == "initialize":
+        # Assign a Streamable-HTTP session id. We don't require it on later
+        # requests, but advertising one improves client compatibility.
+        extra_headers["Mcp-Session-Id"] = uuid.uuid4().hex
 
     resp = _handle_message(body, memory, user_id)
     if resp is None:
-        # Notification — nothing to return.
-        return JSONResponse({}, status_code=202)
-    return JSONResponse(resp)
+        return Response(status_code=202)  # notification — no body
+    return _format_response(resp, request, extra_headers)
 
 
 @mcp_rpc_router.get("/mcp/u/{token}")

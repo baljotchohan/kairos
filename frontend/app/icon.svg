@@ -1,5 +1,5 @@
 <svg width="512" height="512" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="100" height="100" rx="22" fill="#171717"/>
+  <rect width="100" height="100" rx="0" fill="#171717"/>
   <defs>
     <radialGradient id="n" cx="38%" cy="32%" r="65%">
       <stop offset="0%" stop-color="#d8b4fe"/>
