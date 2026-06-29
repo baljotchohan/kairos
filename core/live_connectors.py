@@ -13,11 +13,11 @@ user's data can never be served from another user's (or the server's) tokens.
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from typing import Optional
 
 from config import config
+from core.token_crypto import decrypt_token_data
 
 
 def _read_token_rows(user_id: str, service: str) -> list[dict]:
@@ -35,7 +35,7 @@ def _read_token_rows(user_id: str, service: str) -> list[dict]:
         conn.close()
         for r in rows:
             try:
-                data = json.loads(r["token_data"])
+                data = decrypt_token_data(r["token_data"])
             except Exception:
                 continue
             if not data.get("disconnected"):
@@ -109,8 +109,13 @@ def build_connectors_for_user(user_id: str) -> dict:
         )
         out["connected"].append("zoom")
 
-    # Jira is currently configured globally (no per-user OAuth stored yet).
-    if config.JIRA_URL and config.JIRA_EMAIL and config.JIRA_API_TOKEN:
+    # Jira is configured globally (no per-user OAuth stored yet). Only attach it for
+    # the authorized owner uid — otherwise every user (incl. anonymous guests) would
+    # be served the deployer's private Jira workspace.
+    if (
+        user_id and user_id == config.JIRA_OWNER_UID
+        and config.JIRA_URL and config.JIRA_EMAIL and config.JIRA_API_TOKEN
+    ):
         out["jira"] = JiraConnector()
         out["connected"].append("jira")
 
