@@ -145,8 +145,9 @@ _ALLOWED_ORIGINS = [
     "https://kairos-memory-os.vercel.app",
 ]
 
-# Also allow all *.vercel.app and *.hf.space origins via regex
-_ALLOWED_ORIGIN_REGEX = r"https://(.*\.vercel\.app|.*\.hf\.space)"
+# Allow this project's Vercel previews + HF Space origins (must contain "kairos")
+# — NOT any attacker-controlled *.vercel.app / *.hf.space subdomain.
+_ALLOWED_ORIGIN_REGEX = r"https://[a-z0-9-]*kairos[a-z0-9-]*\.(vercel\.app|hf\.space)"
 
 app.add_middleware(
     CORSMiddleware,
@@ -157,12 +158,46 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ── Lightweight in-memory rate limiting (per client IP) ────────────────────────
+# Protects the expensive LLM/connector/MCP paths from abuse without adding a
+# dependency. Fixed window; fine for a single-process deployment.
+import time as _time
+from collections import defaultdict, deque
+
+_RL_WINDOW = 60.0   # seconds
+_RL_MAX = 120       # max requests per window per IP across /api/* and /mcp/*
+_rl_hits: dict[str, deque] = defaultdict(deque)
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/") or path.startswith("/mcp/"):
+        ip = request.client.host if request.client else "unknown"
+        now = _time.time()
+        hits = _rl_hits[ip]
+        while hits and now - hits[0] > _RL_WINDOW:
+            hits.popleft()
+        if len(hits) >= _RL_MAX:
+            return JSONResponse(
+                {"detail": "Rate limit exceeded. Please slow down and try again shortly."},
+                status_code=429,
+                headers={"Retry-After": "30"},
+            )
+        hits.append(now)
+    return await call_next(request)
+
 # Mount routes
 from api.routes import router
 from api.websocket import ws_router
+from api.routes.mcp_remote import mcp_rpc_router
 
 app.include_router(router)
 app.include_router(ws_router)
+# Remote MCP transport — clean root URL (https://<backend>/mcp/u/<token>) so it can
+# be pasted directly as a custom connector in Claude / ChatGPT / Cursor.
+app.include_router(mcp_rpc_router)
 
 
 @app.exception_handler(Exception)
@@ -180,7 +215,9 @@ async def root():
         "name": "KAIROS",
         "tagline": "Every company forgets why. KAIROS never does.",
         "status": "running",
-        "memory_stats": memory.graph.stats() if memory else {},
+        # NOTE: no global memory_stats here — that would leak cross-tenant
+        # aggregate counts on a public, unauthenticated endpoint. Per-user
+        # stats are served (scoped) via /admin/status and the WebSocket.
     }
 
 
