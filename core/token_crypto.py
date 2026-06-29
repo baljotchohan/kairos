@@ -34,12 +34,17 @@ _ENC_PREFIX = "enc:"
 def _get_cipher():
     """Return a Fernet cipher if TOKEN_ENCRYPTION_KEY is set and valid, else None."""
     key = os.environ.get("TOKEN_ENCRYPTION_KEY")
-    if not key or Fernet is None:
+    if not key:
+        from config import config
+        if not config.DEBUG:
+            raise RuntimeError("TOKEN_ENCRYPTION_KEY environment variable is required in production mode.")
         return None
+    if Fernet is None:
+        raise RuntimeError("cryptography library not installed but TOKEN_ENCRYPTION_KEY is configured.")
     try:
         return Fernet(key.encode())
-    except Exception:
-        return None
+    except Exception as e:
+        raise RuntimeError(f"Invalid TOKEN_ENCRYPTION_KEY configured: {e}") from e
 
 
 def encrypt_token_data(data: dict) -> str:

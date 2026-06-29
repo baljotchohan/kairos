@@ -138,7 +138,6 @@ TOOLS = [
                 "person": {"type": "string"},
                 "project": {"type": "string"},
             },
-            "required": ["topic"],
         },
     },
 ]
@@ -172,7 +171,16 @@ def _tool_get_context(memory, user_id: str, query: str, limit: int = 5) -> str:
 
 def _tool_store_context(memory, user_id: str, decision: str, context: str,
                         date: str, source: str, participants=None, project: str = "General") -> str:
-    participants = participants or []
+    if participants is None:
+        participants = []
+    elif isinstance(participants, str):
+        participants = [participants]
+    else:
+        participants = [p for p in participants if p is not None]
+
+    if project is None:
+        project = "General"
+
     node = DecisionNode(
         id=str(uuid.uuid4()),
         title=decision,
@@ -194,18 +202,43 @@ def _tool_store_context(memory, user_id: str, decision: str, context: str,
     )
 
 
-def _tool_search_decisions(memory, user_id: str, topic: str, date_from=None,
+def _tool_search_decisions(memory, user_id: str, topic=None, date_from=None,
                           date_to=None, person=None, project=None) -> str:
+    if not topic and not project and not person and not date_from and not date_to:
+        return "KAIROS: Please provide at least one search filter (topic, person, project, date range)."
+
+    # Use project as an additional topic filter if provided
+    search_topic = topic
+    if project and not topic:
+        search_topic = project
+    elif project and topic:
+        search_topic = topic  # topic takes priority; project is secondary
+
     results = memory.structured_search(
-        topic=topic or project, person=person,
+        topic=search_topic, person=person,
         date_from=date_from, date_to=date_to, user_id=user_id,
     )
+
+    # Secondary filter by project if topic was also set
+    if project and topic:
+        project_results = memory.structured_search(
+            topic=project, person=person,
+            date_from=date_from, date_to=date_to, user_id=user_id,
+        )
+        seen = {n.id for n in results}
+        for n in project_results:
+            if n.id not in seen:
+                results.append(n)
+                seen.add(n.id)
+
     # Fall back to hybrid semantic recall when the exact filters matched nothing,
     # so a near-miss topic still surfaces related decisions.
-    if not results and (topic or project):
-        results = memory.hybrid_search(topic or project, n_results=8, user_id=user_id)
+    if not results and search_topic:
+        results = memory.hybrid_search(search_topic, n_results=8, user_id=user_id)
+
     if not results:
-        return f"KAIROS: No decisions found matching topic='{topic}'."
+        return "KAIROS: No decisions found matching filters."
+
     lines = [f"KAIROS: {len(results)} decision(s) found", "=" * 60]
     for i, n in enumerate(results, 1):
         participants = ", ".join(n.participants) if n.participants else "Unknown"

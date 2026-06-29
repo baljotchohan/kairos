@@ -62,6 +62,12 @@ def get_zoom_token(user_id: str) -> Optional[dict]:
     return rows[0] if rows else None
 
 
+def save_refreshed_token(user_id: str, service: str, token_data: dict):
+    """Save rotated OAuth token_data back to SQLite (encrypting it)."""
+    from api.routes.oauth import _store_token
+    _store_token(user_id, service, token_data)
+
+
 def build_connectors_for_user(user_id: str) -> dict:
     """
     Build connector instances for every source the user has connected.
@@ -82,15 +88,20 @@ def build_connectors_for_user(user_id: str) -> dict:
 
     google = get_google_token(user_id)
     if google and google.get("refresh_token"):
+        google_refresh_cb = lambda data: save_refreshed_token(user_id, "google", data)
         out["drive"] = DriveConnector(
+            access_token=google.get("access_token"),
             refresh_token=google.get("refresh_token"),
             client_id=google.get("client_id"),
             client_secret=google.get("client_secret"),
+            on_token_refresh=google_refresh_cb,
         )
         out["gmail"] = GmailConnector(
+            access_token=google.get("access_token"),
             refresh_token=google.get("refresh_token"),
             client_id=google.get("client_id"),
             client_secret=google.get("client_secret"),
+            on_token_refresh=google_refresh_cb,
         )
         out["connected"] += ["drive", "gmail"]
 
@@ -101,11 +112,15 @@ def build_connectors_for_user(user_id: str) -> dict:
 
     zoom = get_zoom_token(user_id)
     if zoom:
+        zoom_refresh_cb = lambda data: save_refreshed_token(user_id, "zoom", data)
         out["zoom"] = ZoomConnector(
             access_token=zoom.get("access_token"),
             refresh_token=zoom.get("refresh_token"),
             client_id=zoom.get("client_id") or config.ZOOM_CLIENT_ID,
             client_secret=zoom.get("client_secret") or config.ZOOM_CLIENT_SECRET,
+            expires_at=zoom.get("expires_at"),
+            allow_s2s=False,  # Enforce strict user isolation — disable global credential fallback
+            on_token_refresh=zoom_refresh_cb,
         )
         out["connected"].append("zoom")
 

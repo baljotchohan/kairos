@@ -27,6 +27,7 @@ interface DecisionGraphProps {
   edges?: GraphEdge[];
   decisionTitle: string;
   className?: string;
+  onNodeClick?: (nodeId: string) => void;
 }
 
 function getNodeIconSVG(node: GraphNode) {
@@ -190,6 +191,7 @@ export default function DecisionGraph({
   edges: edgesProp,
   decisionTitle,
   className = "",
+  onNodeClick,
 }: DecisionGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -367,34 +369,43 @@ export default function DecisionGraph({
     return () => cancelAnimationFrame(animFrame);
   }, [computedEdges]);
 
-  // Mouse wheel Zoom handler (Smooth zoom-to-mouse pointer)
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    if (!containerRef.current) return;
+  // Mouse wheel Zoom handler (Smooth zoom-to-mouse pointer) attached non-passively
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
-    const rect = containerRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
 
-    const zoomFactor = 0.08;
-    const direction = e.deltaY < 0 ? 1 : -1;
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
 
-    setZoom((prevZoom) => {
-      const factor = 1 + direction * zoomFactor;
-      const newZoom = Math.max(0.05, Math.min(15.0, prevZoom * factor));
+      const zoomFactor = 0.08;
+      const direction = e.deltaY < 0 ? 1 : -1;
 
-      setPan((prevPan) => {
-        const dx = mouseX - prevPan.x;
-        const dy = mouseY - prevPan.y;
-        return {
-          x: mouseX - dx * (newZoom / prevZoom),
-          y: mouseY - dy * (newZoom / prevZoom),
-        };
+      setZoom((prevZoom) => {
+        const factor = 1 + direction * zoomFactor;
+        const newZoom = Math.max(0.05, Math.min(15.0, prevZoom * factor));
+
+        setPan((prevPan) => {
+          const dx = mouseX - prevPan.x;
+          const dy = mouseY - prevPan.y;
+          return {
+            x: mouseX - dx * (newZoom / prevZoom),
+            y: mouseY - dy * (newZoom / prevZoom),
+          };
+        });
+
+        return newZoom;
       });
+    };
 
-      return newZoom;
-    });
-  };
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
 
   // Background Drag Pan handler
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -514,7 +525,6 @@ export default function DecisionGraph({
         backgroundPosition: `${pan.x}px ${pan.y}px`,
         backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
       }}
-      onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUpOrLeave}
@@ -649,6 +659,9 @@ export default function DecisionGraph({
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedNodeId(selectedNodeId === node.id ? null : node.id);
+                  if (onNodeClick) {
+                    onNodeClick(node.id);
+                  }
                 }}
               >
                 {/* Node circle */}

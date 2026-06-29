@@ -22,7 +22,7 @@ import os
 from datetime import datetime
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
 
 from api.auth import get_current_user, UserProfile
@@ -31,8 +31,10 @@ from core.token_crypto import encrypt_token_data, decrypt_token_data
 
 router = APIRouter(prefix="/oauth", tags=["oauth"])
 
-# Ephemeral key generated at startup for signing OAuth state parameters
-_OAUTH_SIGNING_KEY = os.urandom(32)
+# Persistent signing key derived from stable environment secret
+_OAUTH_SIGNING_KEY = hashlib.sha256(
+    (os.environ.get("TOKEN_ENCRYPTION_KEY") or os.environ.get("MCP_CONNECT_SECRET") or "kairos-oauth-state-signing-fallback").encode()
+).digest()
 
 def _generate_state_token(uid: str) -> str:
     """Generates a signed state token containing the user UID and an expiry timestamp."""
@@ -42,9 +44,9 @@ def _generate_state_token(uid: str) -> str:
     return f"{payload}:{sig}"
 
 def _verify_state_token(state: str) -> str | None:
-    """Verifies the signed state token and returns user UID if valid."""
+    """Verifies the signed state token and returns user UID if valid. Uses rsplit to handle colons in UIDs."""
     try:
-        parts = state.split(":")
+        parts = state.rsplit(":", 2)
         if len(parts) != 3:
             return None
         uid, expires_str, sig = parts
@@ -59,11 +61,15 @@ def _verify_state_token(state: str) -> str | None:
         pass
     return None
 
+
 # ── SQLite token store (piggybacks on kairos.db) ──────────────────────────────
 
 def _get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(config.SQLITE_PATH, check_same_thread=False)
+    conn = sqlite3.connect(config.SQLITE_PATH, check_same_thread=False, timeout=30.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA busy_timeout=30000;")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS oauth_tokens (
             user_uid     TEXT NOT NULL,
@@ -480,7 +486,13 @@ async def zoom_callback(code: str = None, state: str = None, error: str = None):
     if not verified_uid:
         return _popup_error("Security Check Failed: Invalid or expired OAuth state parameter.")
 
+    is_testing = "PYTEST_CURRENT_TEST" in os.environ or os.environ.get("TESTING") == "true" or os.environ.get("TESTING") == "True"
     if code == "sim-zoom-code":
+        if not config.DEBUG and not is_testing:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Simulated codes are not allowed in production mode."
+            )
         _store_token(verified_uid, "zoom", {
             "mode": "sim",
             "service": "zoom",
@@ -503,9 +515,12 @@ async def zoom_callback(code: str = None, state: str = None, error: str = None):
         if "error" in data:
             return _popup_error(data["error"])
 
+        expires_in = data.get("expires_in", 3599)
         _store_token(verified_uid, "zoom", {
             "access_token": data.get("access_token"),
             "refresh_token": data.get("refresh_token"),
+            "expires_in": expires_in,
+            "expires_at": int(time.time()) + expires_in,
             "service": "zoom",
         })
         print(f"[OAuth] ✅ Zoom connected uid={verified_uid}")

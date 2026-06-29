@@ -34,13 +34,15 @@ def _secret() -> bytes:
     explicit = os.environ.get("MCP_CONNECT_SECRET")
     if explicit:
         return explicit.encode()
+    from config import config
+    is_testing = "PYTEST_CURRENT_TEST" in os.environ or os.environ.get("TESTING") == "true" or os.environ.get("TESTING") == "True"
+    if not config.DEBUG and not is_testing:
+        raise RuntimeError("MCP_CONNECT_SECRET environment variable is required in production mode.")
     # Deterministic fallback so already-issued connect URLs keep working across
     # restarts even when MCP_CONNECT_SECRET isn't set (dev/demo). Derived from a
-    # stable existing secret; documented to be overridden in production.
-    from config import config
+    # stable existing secret.
     base = (
-        os.environ.get("MCP_CONNECT_SECRET")
-        or getattr(config, "FIREWORKS_API_KEY", "")
+        getattr(config, "FIREWORKS_API_KEY", "")
         or getattr(config, "GOOGLE_CLIENT_SECRET", "")
         or "kairos-dev-mcp-secret"
     )

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Callable
 
 import httpx
 
@@ -20,17 +20,30 @@ class ZoomConnector:
     TOKEN_URL = "https://zoom.us/oauth/token"
     API_BASE = "https://api.zoom.us/v2"
 
-    def __init__(self, access_token: str | None = None, refresh_token: str | None = None, client_id: str | None = None, client_secret: str | None = None):
+    def __init__(
+        self,
+        access_token: str | None = None,
+        refresh_token: str | None = None,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        expires_at: int | None = None,
+        allow_s2s: bool = True,
+        on_token_refresh: Callable[[dict], None] | None = None,
+    ):
         self._access_token = access_token
         self.refresh_token = refresh_token
         self.client_id = client_id or config.ZOOM_CLIENT_ID
         self.client_secret = client_secret or config.ZOOM_CLIENT_SECRET
+        self.expires_at = expires_at
+        self.allow_s2s = allow_s2s
+        self.on_token_refresh = on_token_refresh
 
     # ── Auth ───────────────────────────────────────────────────────────────────
 
     async def _get_token(self) -> str:
         """Obtain a Server-to-Server OAuth2 access token or refresh user OAuth token."""
-        if self._access_token:
+        import time
+        if self._access_token and (self.expires_at is None or time.time() < self.expires_at - 60):
             return self._access_token
 
         if self.refresh_token:
@@ -49,7 +62,25 @@ class ZoomConnector:
                 resp.raise_for_status()
                 data = resp.json()
                 self._access_token = data["access_token"]
+                if "refresh_token" in data:
+                    self.refresh_token = data["refresh_token"]
+                
+                # Calculate absolute expires_at if possible
+                expires_in = data.get("expires_in", 3599)
+                self.expires_at = int(time.time()) + expires_in
+                
+                if self.on_token_refresh:
+                    # Save rotated token back to DB
+                    self.on_token_refresh({
+                        "access_token": self._access_token,
+                        "refresh_token": self.refresh_token,
+                        "expires_in": expires_in,
+                        "expires_at": self.expires_at
+                    })
                 return self._access_token
+
+        if not self.allow_s2s:
+            raise RuntimeError("User Zoom connection expired and Server-to-Server fallback is disabled.")
 
         creds = base64.b64encode(
             f"{self.client_id}:{self.client_secret}".encode()
@@ -65,7 +96,10 @@ class ZoomConnector:
                 },
             )
             resp.raise_for_status()
-            self._access_token = resp.json()["access_token"]
+            data = resp.json()
+            self._access_token = data["access_token"]
+            expires_in = data.get("expires_in", 3599)
+            self.expires_at = int(time.time()) + expires_in
             return self._access_token
 
     # ── Public async API ───────────────────────────────────────────────────────

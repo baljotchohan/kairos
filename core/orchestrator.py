@@ -55,7 +55,7 @@ class KairosOrchestrator:
     def __init__(self, memory: KairosMemory):
         self.memory = memory
         self.user_memory = UserMemory(db_path=memory.db_path)
-        self.ingestion_lock = asyncio.Lock()
+        self.ingestion_locks = {}
 
         # Lazy imports to avoid circular dependencies
         from agents.slack_agent import SlackAgent
@@ -209,16 +209,25 @@ class KairosOrchestrator:
                     all_batches.append(item)
 
         # Cap items per cycle to respect the LLM provider's token-per-minute
-        # limit (Groq free tier is 6000 TPM). Extraction is idempotent
-        # (deterministic IDs + INSERT OR REPLACE), so successive cycles keep
-        # processing more of the backlog without duplicating.
+        # limit (Groq free tier is 6000 TPM). Successive cycles filter out
+        # previously processed items, progressively working through the backlog.
         import asyncio
         max_per_cycle = config.MAX_EXTRACT_PER_CYCLE
-        batches = all_batches[:max_per_cycle]
+        user_id = state.get("user_id")
+
+        processed_ids = self.memory.get_processed_item_ids(user_id) if user_id else set()
+        unprocessed_batches = []
+        for item in all_batches:
+            item_id = self._get_item_id(item)
+            if item_id and item_id not in processed_ids:
+                unprocessed_batches.append(item)
+            elif not item_id:
+                unprocessed_batches.append(item)
+
+        batches = unprocessed_batches[:max_per_cycle]
 
         count = 0
         errors = list(state.get("errors", []))
-        user_id = state.get("user_id")
 
         # Snapshot ALL fetched items (not just the capped extraction batch) into the
         # per-user inventory cache. No LLM — just metadata — so the LiveDataAgent can
@@ -238,18 +247,30 @@ class KairosOrchestrator:
         except Exception as e:
             print(f"[Ingestion] inventory snapshot error: {e}")
 
+        processed_item_ids = []
         for i, batch in enumerate(batches):
             try:
                 extracted = await self.synthesis_agent.extract_decisions(batch, user_id=user_id)
                 count += len(extracted)
+                batch_id = self._get_item_id(batch)
+                if batch_id:
+                    processed_item_ids.append(batch_id)
             except Exception as e:
                 errors.append(f"Synthesis: {e}")
             # Small spacing between calls to smooth out token-per-minute bursts.
             if i < len(batches) - 1:
                 await asyncio.sleep(config.EXTRACT_DELAY_SECONDS)
 
-        print(f"[Ingestion] Synthesize complete — {count} decisions from {len(batches)}/{len(all_batches)} items")
+        if user_id and processed_item_ids:
+            self.memory.mark_items_as_processed(user_id, processed_item_ids)
+
+        print(f"[Ingestion] Synthesize complete — {count} decisions from {len(batches)}/{len(unprocessed_batches)} unprocessed items (out of {len(all_batches)} total)")
         return {"decisions_extracted": count, "errors": errors, "status": "complete"}
+
+    @staticmethod
+    def _get_item_id(item: dict) -> str:
+        """Helper to extract unique item ID from raw connector data."""
+        return str(item.get("id") or item.get("source_url") or item.get("url") or "")
 
     # ── Ingestion API ──────────────────────────────────────────────────────────
 
@@ -259,7 +280,8 @@ class KairosOrchestrator:
         progress_callback: Callable[[str], Awaitable[None]] | None = None
     ) -> dict:
         """Full ingestion run. Serialized via Lock to prevent race conditions."""
-        async with self.ingestion_lock:
+        lock = self.ingestion_locks.setdefault(user_id, asyncio.Lock())
+        async with lock:
             if progress_callback:
                 await progress_callback("🚀 KAIROS ingestion started...")
 
@@ -622,13 +644,15 @@ User History:
 
     # ── Backward compatibility ────────────────────────────────────────────────
 
-    async def query(self, question: str) -> dict:
-        """Fallback to anonymous user context querying."""
-        return await self.query_with_memory(question, user_id="anonymous")
+    async def query(self, question: str, user_id: str = "anonymous", **kwargs) -> dict:
+        """Fallback to user context querying."""
+        session_id = kwargs.get("session_id")
+        return await self.query_with_memory(question, user_id=user_id, session_id=session_id)
 
-    async def query_stream(self, question: str):
-        """Streams using synthesis agent with default anonymous context."""
-        await asyncio.to_thread(self.user_memory.get_or_create_session, "anonymous")
+    async def query_stream(self, question: str, user_id: str = "anonymous", **kwargs):
+        """Streams using synthesis agent with default user context."""
+        session_id = kwargs.get("session_id") or "anonymous-session"
+        await asyncio.to_thread(self.user_memory.get_or_create_session, user_id, session_id)
         resolved_context = ResolvedContext(
             original_query=question,
             resolved_query=question,

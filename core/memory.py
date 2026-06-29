@@ -11,6 +11,7 @@ Embeddings powered by Fireworks AI (nomic-embed-text-v1.5 on AMD GPUs).
 import json
 import sqlite3
 import uuid
+import contextlib
 from typing import Optional
 
 import chromadb
@@ -35,7 +36,8 @@ class FireworksEmbeddingFunction(EmbeddingFunction):
         if self._local_fallback:
             from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
             self._local_ef = DefaultEmbeddingFunction()
-            print("[Memory] No embedding API key — using local embeddings (lower quality, fine for dev)")
+            import sys
+            print("[Memory] No embedding API key — using local embeddings (lower quality, fine for dev)", file=sys.stderr)
             return
 
         # Route to Gemini only if the key actually looks like a Google API key
@@ -50,7 +52,8 @@ class FireworksEmbeddingFunction(EmbeddingFunction):
             self.model = config.GEMINI_EMBED_MODEL
         else:
             if gemini_key and not use_gemini:
-                print("[Memory] GEMINI_API_KEY does not look like a Gemini key — using Fireworks embeddings.")
+                import sys
+                print("[Memory] GEMINI_API_KEY does not look like a Gemini key — using Fireworks embeddings.", file=sys.stderr)
             self.api_key = config.FIREWORKS_API_KEY
             self.base_url = config.FIREWORKS_BASE_URL
             self.model = config.FIREWORKS_EMBED_MODEL
@@ -74,7 +77,8 @@ class FireworksEmbeddingFunction(EmbeddingFunction):
             # Permanently switch this instance to local embeddings so every
             # subsequent call uses the same vector space (avoids dimension
             # mismatch between remote and local vectors mid-session).
-            print(f"[Memory] Embedding API failed ({e}); switching to local embeddings.")
+            import sys
+            print(f"[Memory] Embedding API failed ({e}); switching to local embeddings.", file=sys.stderr)
             from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
             if not getattr(self, "_local_ef", None):
                 self._local_ef = DefaultEmbeddingFunction()
@@ -119,44 +123,53 @@ class KairosMemory:
         if user_id:
             node.user_id = user_id
 
-        # 1. SQLite (structured queries) — durable source of truth
-        self._sqlite_upsert(node)
-
-        # 2. Graph + Obsidian — auto-links the node and writes only the changed notes
+        # 1. Graph + SQLite + Obsidian — auto-links the node, writes to SQLite, and updates Obsidian notes
         self.graph.add_decision(node, vault_path=self.obsidian_vault, user_id=node.user_id)
 
-        # 3. ChromaDB (vector search) — written LAST so a failure can't orphan a
+        # 2. ChromaDB (vector search) — written LAST so a failure can't orphan a
         #    vector whose id resolves to a missing decision (silent drop in search).
-        doc_text = f"{node.title}\n{node.summary}\n{node.outcome}\n{' '.join(node.topics)}"
-        self.collection.upsert(
-            ids=[node.id],
-            documents=[doc_text],
-            metadatas=[{
-                "title": node.title,
-                "date": node.date,
-                "source": node.source,
-                "participants": json.dumps(node.participants),
-                "topics": json.dumps(node.topics),
-                "user_id": node.user_id,
-            }],
-        )
+        try:
+            doc_text = f"{node.title}\n{node.summary}\n{node.outcome}\n{' '.join(node.topics)}"
+            self.collection.upsert(
+                ids=[node.id],
+                documents=[doc_text],
+                metadatas=[{
+                    "title": node.title,
+                    "date": node.date,
+                    "source": node.source,
+                    "participants": json.dumps(node.participants),
+                    "topics": json.dumps(node.topics),
+                    "user_id": node.user_id,
+                }],
+            )
+        except Exception as e:
+            import sys
+            print(f"[Memory] ChromaDB upsert failed ({e}) — skipped vector store but saved to SQLite/Graph.", file=sys.stderr)
 
     # ── Read ──────────────────────────────────────────────────────────────────
 
     def semantic_search(self, query: str, n_results: int = 5, user_id: Optional[str] = None) -> list[DecisionNode]:
         """Vector similarity search — best for open-ended NL queries."""
         # Fail CLOSED: never return every tenant's vectors when user_id is missing.
-        if not user_id:
-            print("[Memory] semantic_search called without user_id — returning [] (fail-closed).")
+        if user_id is None:
+            import sys
+            print("[Memory] semantic_search called without user_id — returning [] (fail-closed).", file=sys.stderr)
             return []
+        
         where_filter = {"user_id": user_id}
-        results = self.collection.query(
-            query_texts=[query], 
-            n_results=n_results,
-            where=where_filter
-        )
-        ids = results["ids"][0] if results["ids"] else []
-        return [n for i in ids if (n := self.graph.get_decision(i, user_id=user_id))]
+        try:
+            results = self.collection.query(
+                query_texts=[query], 
+                n_results=n_results,
+                where=where_filter
+            )
+            ids = results["ids"][0] if results["ids"] else []
+            return [n for i in ids if (n := self.graph.get_decision(i, user_id=user_id))]
+        except Exception as e:
+            import sys
+            print(f"[Memory] ChromaDB query failed ({e}) — falling back to structured keyword search.", file=sys.stderr)
+            # Fall back to structured topic search
+            return self.structured_search(topic=query, user_id=user_id)
 
     def structured_search(
         self,
@@ -168,8 +181,9 @@ class KairosMemory:
     ) -> list[DecisionNode]:
         """SQL-backed exact / range queries."""
         # Fail CLOSED: never return every tenant's rows when user_id is missing.
-        if not user_id:
-            print("[Memory] structured_search called without user_id — returning [] (fail-closed).")
+        if user_id is None:
+            import sys
+            print("[Memory] structured_search called without user_id — returning [] (fail-closed).", file=sys.stderr)
             return []
         clauses, params = [], []
         if topic:
@@ -202,8 +216,9 @@ class KairosMemory:
         """
         from datetime import datetime
 
-        if not user_id:
-            print("[Memory] hybrid_search called without user_id — returning [] (fail-closed).")
+        if user_id is None:
+            import sys
+            print("[Memory] hybrid_search called without user_id — returning [] (fail-closed).", file=sys.stderr)
             return []
 
         # 1. Semantic Search
@@ -278,7 +293,7 @@ class KairosMemory:
         """Return all decisions whose source contains source_keyword."""
         query = "SELECT id FROM decisions WHERE source LIKE ?"
         params = [f"%{source_keyword}%"]
-        if user_id:
+        if user_id is not None:
             query += " AND user_id = ?"
             params.append(user_id)
         query += " ORDER BY date DESC LIMIT 20"
@@ -313,7 +328,8 @@ class KairosMemory:
                 ])
                 conn.commit()
         except Exception as e:
-            print(f"[Memory] store_inventory error: {e}")
+            import sys
+            print(f"[Memory] store_inventory error: {e}", file=sys.stderr)
 
     def search_inventory(
         self, user_id: str, query: Optional[str] = None,
@@ -341,7 +357,8 @@ class KairosMemory:
                 ).fetchall()
                 return [dict(r) for r in rows]
         except Exception as e:
-            print(f"[Memory] search_inventory error: {e}")
+            import sys
+            print(f"[Memory] search_inventory error: {e}", file=sys.stderr)
             return []
 
     def inventory_counts(self, user_id: str) -> dict:
@@ -356,7 +373,8 @@ class KairosMemory:
                 ).fetchall()
                 return {r[0]: r[1] for r in rows}
         except Exception as e:
-            print(f"[Memory] inventory_counts error: {e}")
+            import sys
+            print(f"[Memory] inventory_counts error: {e}", file=sys.stderr)
             return {}
 
     def get_user_context(self, user_id: str) -> str:
@@ -383,7 +401,7 @@ class KairosMemory:
 
     def get_context(self, query: str, n_results: int = 5, user_id: Optional[str] = None) -> list[dict]:
         """MCP tool: returns serialisable list for get_context() MCP call."""
-        nodes = self.semantic_search(query, n_results=n_results, user_id=user_id)
+        nodes = self.hybrid_search(query, n_results=n_results, user_id=user_id)
         return [
             {
                 "id": n.id,
@@ -402,16 +420,19 @@ class KairosMemory:
         """Full vault rebuild — use after bulk imports or if vault gets out of sync."""
         self.graph.export_to_obsidian(self.obsidian_vault, user_id=user_id)
 
-    # ── Helpers ───────────────────────────────────────────────────────────────
-
+    @contextlib.contextmanager
     def _connect(self) -> sqlite3.Connection:
         """SQLite connection with WAL + busy timeout so concurrent async writes
-        don't raise 'database is locked' (matches graph.py / user_memory.py)."""
+        don't raise 'database is locked' (matches graph.py / user_memory.py).
+        Automatically closes connection upon context exit to prevent leaks."""
         conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous=NORMAL;")
         conn.execute("PRAGMA busy_timeout=30000;")
-        return conn
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def _init_sqlite(self):
         with self._connect() as conn:
@@ -437,9 +458,7 @@ class KairosMemory:
                 conn.execute("ALTER TABLE decisions ADD COLUMN user_id TEXT NOT NULL DEFAULT ''")
 
             # Inventory: lightweight, per-user snapshot of raw items seen during
-            # ingestion (files/emails/messages/issues/recordings). No LLM — just
-            # metadata — so the agent can answer "what do I have" instantly/offline
-            # as a cache alongside live connector lookups.
+            # Ingestion.
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS inventory (
                     user_id    TEXT NOT NULL,
@@ -454,8 +473,46 @@ class KairosMemory:
                     PRIMARY KEY (user_id, item_id)
                 )
             """)
+            
+            # Schema Migration: Safely add processed column to inventory if not exists
+            cursor = conn.execute("PRAGMA table_info(inventory)")
+            inv_columns = [info[1] for info in cursor.fetchall()]
+            if "processed" not in inv_columns:
+                conn.execute("ALTER TABLE inventory ADD COLUMN processed INTEGER NOT NULL DEFAULT 0")
+
             conn.execute("CREATE INDEX IF NOT EXISTS idx_inventory_user ON inventory(user_id, source)")
             conn.commit()
+
+    def get_processed_item_ids(self, user_id: str) -> set[str]:
+        """Return all item UIDs that have already been processed for this user."""
+        if not user_id:
+            return set()
+        try:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    "SELECT item_id FROM inventory WHERE user_id = ? AND processed = 1",
+                    (user_id,)
+                ).fetchall()
+                return {r[0] for r in rows}
+        except Exception as e:
+            import sys
+            print(f"[Memory] get_processed_item_ids error: {e}", file=sys.stderr)
+            return set()
+
+    def mark_items_as_processed(self, user_id: str, item_ids: list[str]):
+        """Mark a list of item UIDs as processed for this user."""
+        if not user_id or not item_ids:
+            return
+        try:
+            with self._connect() as conn:
+                conn.executemany(
+                    "UPDATE inventory SET processed = 1 WHERE user_id = ? AND item_id = ?",
+                    [(user_id, i) for i in item_ids]
+                )
+                conn.commit()
+        except Exception as e:
+            import sys
+            print(f"[Memory] mark_items_as_processed error: {e}", file=sys.stderr)
 
     def _sqlite_upsert(self, node: DecisionNode):
         with self._connect() as conn:

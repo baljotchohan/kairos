@@ -39,7 +39,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["Alice", "Georgia", "serif"],
+        sans: ["Inter", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
         mono: ["JetBrains Mono", "Fira Code", "monospace"],
       },
       animation: {

@@ -64,10 +64,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json({"type": "start", "question": question})
 
                 async def stream_cb(msg: dict):
-                    try:
-                        await websocket.send_json(msg)
-                    except Exception:
-                        pass
+                    await websocket.send_json(msg)
 
                 try:
                     result = await orchestrator.query_with_memory(
@@ -96,6 +93,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         "session_id": result["session_id"],
                         "user_context": result["user_context"]
                     })
+                except WebSocketDisconnect:
+                    raise
                 except Exception as e:
                     log.error("Query failed for user %s", user_id, exc_info=True)
                     try:
@@ -107,21 +106,17 @@ async def websocket_endpoint(websocket: WebSocket):
             # ── Ingest: trigger ingestion with progress updates ────────────────
             elif msg_type == "ingest":
                 async def progress(msg: str):
-                    try:
-                        await websocket.send_json({"type": "progress", "message": msg})
-                    except Exception:
-                        pass
+                    await websocket.send_json({"type": "progress", "message": msg})
 
                 try:
                     result = await orchestrator.run_ingestion(user_id=user_id, progress_callback=progress)
-                    try:
-                        await websocket.send_json({
-                            "type": "ingest_done",
-                            "decisions_extracted": result.get("decisions_extracted", 0),
-                            "errors": result.get("errors", []),
-                        })
-                    except Exception:
-                        pass
+                    await websocket.send_json({
+                        "type": "ingest_done",
+                        "decisions_extracted": result.get("decisions_extracted", 0),
+                        "errors": result.get("errors", []),
+                    })
+                except WebSocketDisconnect:
+                    raise
                 except Exception as e:
                     log.error("Ingestion failed for user %s", user_id, exc_info=True)
                     try:

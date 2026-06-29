@@ -70,12 +70,18 @@ class UserProfile(BaseModel):
     is_anonymous: bool = False
 
 
-def _map_demo_user(profile: UserProfile) -> UserProfile:
+def _map_demo_user(profile: UserProfile, email_verified: bool = False) -> UserProfile:
     """Route the dedicated demo login to the Helios demo data scope so judges see
     the sample decisions, while every real user keeps their own uid. No-op unless
     the authenticated email matches config.DEMO_LOGIN_EMAIL."""
     demo_email = (getattr(config, "DEMO_LOGIN_EMAIL", "") or "").strip().lower()
     if demo_email and (profile.email or "").strip().lower() == demo_email:
+        is_testing = "PYTEST_CURRENT_TEST" in os.environ or os.environ.get("TESTING") == "true" or os.environ.get("TESTING") == "True"
+        if not email_verified and not (config.DEBUG or is_testing):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Demo account email must be verified."
+            )
         profile.uid = config.DEMO_USER_ID
     return profile
 
@@ -99,10 +105,10 @@ def verify_token(token: str) -> UserProfile:
             google_id = token.split("sim-google-uid-")[-1] if "sim-google-uid-" in token else (token.split("-")[-1] if "-" in token else "8123")
             return _map_demo_user(UserProfile(
                 uid=f"sim-google-uid-{google_id}",
-                email="baljot@company.com",
+                email=config.DEMO_LOGIN_EMAIL or "demo@kairos.app",
                 name="Baljot Chohan",
                 is_anonymous=False
-            ))
+            ), email_verified=True)
         else:
             # Anonymous Guest
             guest_id = token.split("sim-guest-uid-")[-1] if "sim-guest-uid-" in token else (token.split("-")[-1] if "-" in token else "9999")
@@ -147,7 +153,7 @@ def verify_token(token: str) -> UserProfile:
             email=decoded_token.get("email"),
             name=decoded_token.get("name"),
             is_anonymous=is_anonymous
-        ))
+        ), email_verified=decoded_token.get("email_verified", False))
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning("Firebase token verification failed", exc_info=True)
