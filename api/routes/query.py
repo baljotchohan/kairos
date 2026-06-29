@@ -1,6 +1,10 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from api.auth import get_current_user, UserProfile
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -30,11 +34,18 @@ async def query(
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
-    result = await orchestrator.query_with_memory(
-        question=req.question,
-        user_id=current_user.uid
-    )
-    
+    try:
+        result = await orchestrator.query_with_memory(
+            question=req.question,
+            user_id=current_user.uid
+        )
+    except Exception:
+        log.error("REST /query failed for user %s", current_user.uid, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Something went wrong while processing your question. Please try again.",
+        )
+
     sources = result.get("sources", [])
     decision_ids = [s.get("id") for s in sources if s.get("id")]
     
