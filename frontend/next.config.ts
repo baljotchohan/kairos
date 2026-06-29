@@ -15,6 +15,10 @@ const nextConfig: NextConfig = {
         source: "/mcp/:path*",
         destination: `${API_URL}/mcp/:path*`,
       },
+      {
+        source: "/.well-known/:path*",
+        destination: `${API_URL}/.well-known/:path*`,
+      },
     ];
   },
 };
