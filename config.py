@@ -64,6 +64,11 @@ class Config:
     JIRA_API_TOKEN: str = os.getenv("JIRA_API_TOKEN", "")
     JIRA_CLIENT_ID: str = os.getenv("JIRA_CLIENT_ID", "")
     JIRA_CLIENT_SECRET: str = os.getenv("JIRA_CLIENT_SECRET", "")
+    # Jira has no per-user OAuth yet — its credentials are global env vars. To avoid
+    # serving the deployer's private Jira to EVERY user, the global Jira connector is
+    # only attached for this owner uid (defaults to the demo user). Other users see
+    # Jira as "not connected" until real per-user Jira OAuth lands.
+    JIRA_OWNER_UID: str = os.getenv("JIRA_OWNER_UID", "") or os.getenv("DEMO_USER_ID", "demo-helios")
 
     # ── App ────────────────────────────────────────────────────────────────────
     PORT: int = int(os.getenv("PORT", "8000"))
