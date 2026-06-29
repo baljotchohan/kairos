@@ -437,24 +437,9 @@ async def mcp_streamable_http_get(token: str, request: Request):
     )
 
 
-@mcp_rpc_router.get("/.well-known/oauth-protected-resource")
-@mcp_rpc_router.get("/mcp/u/{token}/.well-known/oauth-protected-resource")
-async def oauth_protected_resource_metadata(request: Request, token: str | None = None):
-    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
-    host = request.headers.get("x-forwarded-host", request.url.netloc)
-    base_url = f"{scheme}://{host}"
-    resource_url = f"{base_url}/mcp/u/{token}" if token else f"{base_url}/"
-    return JSONResponse({
-        "resource": resource_url,
-        "authorization_servers": [],
-        "bearer_methods_supported": ["header"]
-    })
-
-
-@mcp_rpc_router.get("/.well-known/oauth-authorization-server")
-@mcp_rpc_router.get("/mcp/u/{token}/.well-known/oauth-authorization-server")
-async def oauth_authorization_server_metadata(token: str | None = None):  # noqa: ARG001
-    return JSONResponse({"detail": "This server does not act as an OAuth authorization server."}, status_code=404)
+# No /.well-known/oauth-protected-resource endpoint — our auth is a signed token
+# embedded in the URL path (/mcp/u/{token}), not a Bearer header. Serving that
+# endpoint would cause Claude/ChatGPT to launch an OAuth flow that can never succeed.
 
 
 # (2) The connect-info endpoint — authed, mounted under /api.
