@@ -97,8 +97,8 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Natural-language question."},
-                "limit": {"type": "integer", "description": "Max decisions to return.", "default": 5},
+                "query": {"type": "string", "description": "Natural-language question to query memory with."},
+                "limit": {"type": "integer", "description": "Max decisions to return in search results.", "default": 5},
             },
             "required": ["query"],
         },
@@ -113,12 +113,12 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "decision": {"type": "string", "description": "Short decision title."},
-                "context": {"type": "string", "description": "Full context / why / trade-offs."},
-                "participants": {"type": "array", "items": {"type": "string"}, "default": []},
-                "date": {"type": "string", "description": "ISO date YYYY-MM-DD."},
-                "source": {"type": "string", "description": "Where this came from."},
-                "project": {"type": "string", "default": "General"},
+                "decision": {"type": "string", "description": "Short, clear title of the decision."},
+                "context": {"type": "string", "description": "Full background context, rationale, and trade-offs of the decision."},
+                "participants": {"type": "array", "items": {"type": "string"}, "description": "List of names of people involved in the decision.", "default": []},
+                "date": {"type": "string", "description": "ISO format date of the decision (YYYY-MM-DD)."},
+                "source": {"type": "string", "description": "Source of this information (e.g. Slack channel, meeting minutes, email)."},
+                "project": {"type": "string", "description": "Associated project name or category.", "default": "General"},
             },
             "required": ["decision", "context", "date", "source"],
         },
@@ -132,11 +132,11 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "topic": {"type": "string"},
-                "date_from": {"type": "string"},
-                "date_to": {"type": "string"},
-                "person": {"type": "string"},
-                "project": {"type": "string"},
+                "topic": {"type": "string", "description": "Topic or keyword filter."},
+                "date_from": {"type": "string", "description": "Start date for filtering decisions (YYYY-MM-DD)."},
+                "date_to": {"type": "string", "description": "End date for filtering decisions (YYYY-MM-DD)."},
+                "person": {"type": "string", "description": "Name of a participant to filter by."},
+                "project": {"type": "string", "description": "Name of the project to filter by."},
             },
         },
     },
@@ -178,92 +178,73 @@ def _tool_store_context(memory, user_id: str, decision: str, context: str,
     else:
         participants = [p for p in participants if p is not None]
 
-    if project is None:
-        project = "General"
-
-    node = DecisionNode(
-        id=str(uuid.uuid4()),
+    node = memory.add_decision(
         title=decision,
-        summary=context[:300],
+        summary=decision,
+        outcome=context,
         date=date,
-        participants=participants,
         source=source,
-        source_url="",
-        topics=[project] if project != "General" else [],
-        outcome=context[:500],
-        raw_text=context,
-        metadata={"project": project, "stored_via": "mcp_remote"},
+        participants=participants,
+        project=project,
         user_id=user_id,
+        context=context
     )
-    memory.store(node, user_id=user_id)
-    return (
-        f"KAIROS: Decision stored.\n  ID: {node.id}\n  Title: {decision}\n  Date: {date}\n"
-        f"  Source: {source}\n  Project: {project}\nAuto-linked to related decisions."
+    # Background async auto-linking (via graph DB components)
+    try:
+        memory.auto_link_decision(node.id, user_id=user_id)
+    except Exception:
+        log.warning("KAIROS auto-linking failed for node %s", node.id, exc_info=True)
+
+    return f"Successfully stored decision permanently in KAIROS memory (ID: {node.id})."
+
+
+def _tool_search_decisions(memory, user_id: str, topic: str = None, date_from: str = None,
+                           date_to: str = None, person: str = None, project: str = None) -> str:
+    # Filtered search: topic keywords, time-bounded, person-bounded, project-bounded
+    nodes = memory.search_decisions(
+        topic=topic,
+        date_from=date_from,
+        date_to=date_to,
+        person=person,
+        project=project,
+        user_id=user_id
     )
-
-
-def _tool_search_decisions(memory, user_id: str, topic=None, date_from=None,
-                          date_to=None, person=None, project=None) -> str:
-    if not topic and not project and not person and not date_from and not date_to:
-        return "KAIROS: Please provide at least one search filter (topic, person, project, date range)."
-
-    # Use project as an additional topic filter if provided
-    search_topic = topic
-    if project and not topic:
-        search_topic = project
-    elif project and topic:
-        search_topic = topic  # topic takes priority; project is secondary
-
-    results = memory.structured_search(
-        topic=search_topic, person=person,
-        date_from=date_from, date_to=date_to, user_id=user_id,
-    )
-
-    # Secondary filter by project if topic was also set
-    if project and topic:
-        project_results = memory.structured_search(
-            topic=project, person=person,
-            date_from=date_from, date_to=date_to, user_id=user_id,
-        )
-        seen = {n.id for n in results}
-        for n in project_results:
-            if n.id not in seen:
-                results.append(n)
-                seen.add(n.id)
-
-    # Fall back to hybrid semantic recall when the exact filters matched nothing,
-    # so a near-miss topic still surfaces related decisions.
-    if not results and search_topic:
-        results = memory.hybrid_search(search_topic, n_results=8, user_id=user_id)
-
-    if not results:
-        return "KAIROS: No decisions found matching filters."
-
-    lines = [f"KAIROS: {len(results)} decision(s) found", "=" * 60]
-    for i, n in enumerate(results, 1):
+    if not nodes:
+        return "KAIROS: No decisions found matching the specified search filters."
+    
+    lines = [f"KAIROS: Found {len(nodes)} decision(s) matching search criteria:", "=" * 60]
+    for i, n in enumerate(nodes, 1):
         participants = ", ".join(n.participants) if n.participants else "Unknown"
         lines.append(
-            f"\n{i}. [{n.date}] {n.title}\n   Source: {n.source}\n   Participants: {participants}\n"
-            f"   Summary: {n.summary}"
+            f"\nDECISION {i}: {n.title}\n  Date: {n.date}\n  Source: {n.source}\n"
+            f"  Participants: {participants}\n  Summary: {n.summary}\n  Outcome: {n.outcome}"
         )
     return "\n".join(lines)
 
 
 def _call_tool(memory, user_id: str, name: str, args: dict) -> str:
     if name == "get_context":
-        return _tool_get_context(memory, user_id, args.get("query", ""), int(args.get("limit", 5)))
+        return _tool_get_context(memory, user_id, args.get("query"), int(args.get("limit") or 5))
     if name == "store_context":
         return _tool_store_context(
-            memory, user_id, args.get("decision", ""), args.get("context", ""),
-            args.get("date", ""), args.get("source", ""),
-            args.get("participants", []), args.get("project", "General"),
+            memory, user_id,
+            args.get("decision"),
+            args.get("context"),
+            args.get("date"),
+            args.get("source"),
+            args.get("participants"),
+            args.get("project") or "General"
         )
     if name == "search_decisions":
         return _tool_search_decisions(
-            memory, user_id, args.get("topic", ""), args.get("date_from"),
-            args.get("date_to"), args.get("person"), args.get("project"),
+            memory, user_id,
+            args.get("topic"),
+            args.get("date_from"),
+            args.get("date_to"),
+            args.get("person"),
+            args.get("project")
         )
-    raise ValueError(f"Unknown tool: {name}")
+    raise ValueError(f"Unknown tool name: {name}")
 
 
 # ── JSON-RPC dispatch ───────────────────────────────────────────────────────────
@@ -276,7 +257,7 @@ def _error(req_id, code, message):
     return {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
 
 
-def _handle_message(msg: dict, memory, user_id: str):
+def _handle_message(msg: dict, memory, user_id: str, request: Request = None) -> dict | None:
     """Process one JSON-RPC message. Returns a response dict, or None for notifications."""
     method = msg.get("method")
     req_id = msg.get("id")
@@ -287,7 +268,13 @@ def _handle_message(msg: dict, memory, user_id: str):
         return None
 
     if method == "initialize":
-        icon_url = f"{config.BACKEND_URL.rstrip('/')}/mcp/icon.svg"
+        if request:
+            scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+            host = request.headers.get("x-forwarded-host", request.url.netloc)
+            icon_url = f"{scheme}://{host}/mcp/icon.svg"
+        else:
+            icon_url = f"{config.BACKEND_URL.rstrip('/')}/mcp/icon.svg"
+
         return _result(req_id, {
             "protocolVersion": PROTOCOL_VERSION,
             "capabilities": {"tools": {"listChanged": False}},
@@ -377,7 +364,7 @@ async def mcp_streamable_http(token: str, request: Request):
     if isinstance(body, list):
         responses = []
         for m in body:
-            resp = _handle_message(m, memory, user_id)
+            resp = _handle_message(m, memory, user_id, request)
             if resp is not None:
                 if has_sse_session:
                     await _active_sessions[session_id].put(resp)
@@ -394,7 +381,7 @@ async def mcp_streamable_http(token: str, request: Request):
         # Keep incoming or issue new session id
         extra_headers["Mcp-Session-Id"] = session_id or uuid.uuid4().hex
 
-    resp = _handle_message(body, memory, user_id)
+    resp = _handle_message(body, memory, user_id, request)
     if resp is None:
         return Response(status_code=202)  # notification — no body
 
@@ -437,7 +424,7 @@ async def mcp_bearer_http(request: Request):
     if isinstance(body, list):
         responses = []
         for m in body:
-            resp = _handle_message(m, memory, user_id)
+            resp = _handle_message(m, memory, user_id, request)
             if resp is not None:
                 if has_sse_session:
                     await _active_sessions[session_id].put(resp)
@@ -454,7 +441,7 @@ async def mcp_bearer_http(request: Request):
         # Keep incoming or issue new session id
         extra_headers["Mcp-Session-Id"] = session_id or uuid.uuid4().hex
 
-    resp = _handle_message(body, memory, user_id)
+    resp = _handle_message(body, memory, user_id, request)
     if resp is None:
         return Response(status_code=202)
 
