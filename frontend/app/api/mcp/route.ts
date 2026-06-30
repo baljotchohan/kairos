@@ -28,10 +28,18 @@ function buildTargetUrl(token: string): string {
 
 function extractToken(req: NextRequest): string | null {
   const authHeader = req.headers.get("authorization") ?? "";
-  return authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+  const parts = authHeader.trim().split(/\s+/);
+  if (parts.length === 2 && parts[0].toLowerCase() === "bearer") {
+    let token = parts[1];
+    if (token.startsWith('"') && token.endsWith('"')) {
+      token = token.slice(1, -1);
+    }
+    return token;
+  }
+  return null;
 }
 
-function unauthorized(base: string) {
+function unauthorized(base: string, rawAuthHeader: string, extractedToken: string | null) {
   const resourceMetadata = `${base}/.well-known/oauth-protected-resource`;
   return NextResponse.json(
     { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Bearer token required" } },
@@ -39,6 +47,8 @@ function unauthorized(base: string) {
       status: 401,
       headers: {
         "WWW-Authenticate": `Bearer realm="KAIROS", resource_metadata="${resourceMetadata}"`,
+        "X-Debug-Auth-Header": rawAuthHeader || "none",
+        "X-Debug-Token-Extracted": extractedToken || "none",
         ...CORS_HEADERS,
       },
     }
@@ -62,7 +72,9 @@ export async function OPTIONS() {
 // POST — Proxy MCP messages to the backend URL-token endpoint
 export async function POST(req: NextRequest) {
   const token = extractToken(req);
-  if (!token) return unauthorized(baseUrl(req));
+  if (!token) {
+    return unauthorized(baseUrl(req), req.headers.get("authorization") ?? "", token);
+  }
 
   const targetUrl = buildTargetUrl(token);
   try {
@@ -92,18 +104,24 @@ export async function POST(req: NextRequest) {
     }
 
     const responseBody = await upstream.arrayBuffer();
-    const responseHeaders: Record<string, string> = { ...CORS_HEADERS };
+    const responseHeaders: Record<string, string> = { 
+      ...CORS_HEADERS,
+      "X-Debug-Upstream-Status": String(upstream.status)
+    };
     for (const h of FORWARDED_RESPONSE_HEADERS) {
       const v = upstream.headers.get(h);
       if (v) responseHeaders[h] = v;
     }
     return new NextResponse(responseBody, { status: upstream.status, headers: responseHeaders });
-  } catch {
+  } catch (e) {
     return NextResponse.json(
       { jsonrpc: "2.0", id: null, error: { code: -32603, message: "Failed to reach KAIROS backend" } },
       { 
         status: 502,
-        headers: CORS_HEADERS,
+        headers: {
+          ...CORS_HEADERS,
+          "X-Debug-Error": e instanceof Error ? e.message : String(e),
+        },
       }
     );
   }
@@ -112,7 +130,9 @@ export async function POST(req: NextRequest) {
 // GET — Proxy the backend's long-lived SSE stream to Claude
 export async function GET(req: NextRequest) {
   const token = extractToken(req);
-  if (!token) return unauthorized(baseUrl(req));
+  if (!token) {
+    return unauthorized(baseUrl(req), req.headers.get("authorization") ?? "", token);
+  }
 
   const targetUrl = buildTargetUrl(token);
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";
@@ -133,7 +153,10 @@ export async function GET(req: NextRequest) {
     if (!upstream.ok || !upstream.body) {
       return new NextResponse(null, { 
         status: upstream.status || 502,
-        headers: CORS_HEADERS,
+        headers: {
+          ...CORS_HEADERS,
+          "X-Debug-Upstream-Status": String(upstream.status),
+        },
       });
     }
 
@@ -141,6 +164,7 @@ export async function GET(req: NextRequest) {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
       "X-Accel-Buffering": "no",
+      "X-Debug-Upstream-Status": String(upstream.status),
       ...CORS_HEADERS,
     };
 
@@ -148,10 +172,13 @@ export async function GET(req: NextRequest) {
       status: 200,
       headers: responseHeaders,
     });
-  } catch {
+  } catch (e) {
     return new NextResponse(null, { 
       status: 502,
-      headers: CORS_HEADERS,
+      headers: {
+        ...CORS_HEADERS,
+        "X-Debug-Error": e instanceof Error ? e.message : String(e),
+      },
     });
   }
 }
@@ -159,7 +186,9 @@ export async function GET(req: NextRequest) {
 // DELETE — session cleanup
 export async function DELETE(req: NextRequest) {
   const token = extractToken(req);
-  if (!token) return unauthorized(baseUrl(req));
+  if (!token) {
+    return unauthorized(baseUrl(req), req.headers.get("authorization") ?? "", token);
+  }
   return new NextResponse(null, { 
     status: 204,
     headers: CORS_HEADERS,
