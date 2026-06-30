@@ -98,8 +98,12 @@ class SlackAgent(BaseAgent):
                 rows = conn.execute("SELECT token_data FROM oauth_tokens WHERE service = 'slack'").fetchall()
 
             for r in rows:
-                data = json.loads(r["token_data"])
-                if data.get("bot_token") and not data.get("disconnected"):
+                try:
+                    from core.token_crypto import decrypt_token_data
+                    data = decrypt_token_data(r["token_data"])
+                except Exception:
+                    continue
+                if data.get("bot_token") and not data.get("disconnected") and data.get("team_id") != "T-SIMULATED":
                     tokens.append(data["bot_token"])
             conn.close()
         except Exception as e:

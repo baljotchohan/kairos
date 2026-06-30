@@ -830,46 +830,48 @@ export default function Home() {
     }
   };
 
-  const triggerSync = (platform: string) => {
+  const triggerSync = async (platform: string) => {
     setSyncStatus((prev) => ({ ...prev, [platform]: "syncing" }));
     const startTimestamp = new Date().toLocaleTimeString();
     setLogs((prev) => [...prev, `[${startTimestamp}] INFO: Triggering sync on platform connector: [${platform}]`]);
-    
-    setTimeout(() => {
-      setSyncStatus((prev) => ({ ...prev, [platform]: "synced" }));
+
+    if (!token) {
+      // Demo mode — simulate locally
+      setTimeout(() => {
+        setSyncStatus((prev) => ({ ...prev, [platform]: "synced" }));
+        const doneTimestamp = new Date().toLocaleTimeString();
+        setLogs((prev) => [...prev, `[${doneTimestamp}] DEMO: Sync simulated (sign in to ingest real data)`]);
+      }, 1200);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/v1/ingest", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ sources: [platform], lookback_days: 30 }),
+      });
       const doneTimestamp = new Date().toLocaleTimeString();
-      const count = Math.floor(Math.random() * 3) + 1;
-      setLogs((prev) => [
-        ...prev,
-        `[${doneTimestamp}] SUCCESS: Synchronized platform connector: [${platform}]`,
-        `[${doneTimestamp}] INFO: Scraped and extracted ${count} decision nodes.`
-      ]);
-
-      if (!isConnected) {
-        setSimulatedStats((prev) => ({
+      if (res.ok) {
+        setSyncStatus((prev) => ({ ...prev, [platform]: "synced" }));
+        setLogs((prev) => [
           ...prev,
-          total_decisions: prev.total_decisions + count,
-          total_relations: prev.total_relations + count * 3,
-        }));
-
-        let platformDecId = "";
-        if (platform === "slack") platformDecId = "dec-2";
-        else if (platform === "drive") platformDecId = "dec-1";
-        else if (platform === "jira") platformDecId = "dec-4";
-        else if (platform === "gmail") platformDecId = "dec-5";
-        else if (platform === "zoom") platformDecId = "dec-3";
-
-        if (platformDecId) {
-          const decObj = explorerDecisions.find(d => d.id === platformDecId);
-          if (decObj) {
-            setActiveSimulationDecisions(prev => {
-              if (prev.some(d => d.id === platformDecId)) return prev;
-              return [...prev, decObj];
-            });
-          }
-        }
+          `[${doneTimestamp}] SUCCESS: Ingestion started for [${platform}] — decisions will appear shortly`,
+        ]);
+        // Refresh graph after a short delay to pick up new decisions
+        setTimeout(() => fetchRealDecisions(), 15000);
+      } else {
+        setSyncStatus((prev) => ({ ...prev, [platform]: "error" }));
+        setLogs((prev) => [...prev, `[${doneTimestamp}] ERROR: Ingest failed for [${platform}]: ${res.status}`]);
       }
-    }, 1500);
+    } catch (e) {
+      setSyncStatus((prev) => ({ ...prev, [platform]: "error" }));
+      const errTimestamp = new Date().toLocaleTimeString();
+      setLogs((prev) => [...prev, `[${errTimestamp}] ERROR: Network error triggering sync for [${platform}]`]);
+    }
   };
 
   const exportDecisionIndex = () => {

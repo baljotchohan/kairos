@@ -4,7 +4,6 @@ Drive Agent — fetches Google Drive documents for synthesis.
 
 from __future__ import annotations
 
-import json
 from config import config
 
 
@@ -24,8 +23,12 @@ class DriveAgent:
                 rows = conn.execute("SELECT token_data FROM oauth_tokens WHERE service = 'google'").fetchall()
 
             for r in rows:
-                data = json.loads(r["token_data"])
-                if not data.get("disconnected"):
+                try:
+                    from core.token_crypto import decrypt_token_data
+                    data = decrypt_token_data(r["token_data"])
+                except Exception:
+                    continue
+                if not data.get("disconnected") and data.get("refresh_token") != "sim-google-refresh-token":
                     tokens.append(data)
             conn.close()
         except Exception as e:

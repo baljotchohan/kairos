@@ -76,14 +76,28 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET — per MCP Streamable HTTP spec §3.2.1, returning 405 signals POST-only mode.
-// Claude.ai and ChatGPT both fall back to stateless POST request-response automatically.
+// GET — Claude.ai and ChatGPT use the HTTP+SSE transport: they GET first to
+// receive an `endpoint` event, then POST all MCP messages to that URL.
+// Returning 405 here prevents the endpoint event from ever reaching the client,
+// which is why OAuth-authenticated connections fail ("kairos returned an error
+// when connecting") while direct URL-token connections work (the backend's own
+// GET /mcp/u/{token} sends the event directly).
+// Fix: send a synthetic SSE response with the endpoint URL pointing to the
+// URL-token path. Responses come directly in the POST body (stateless backend),
+// not via the SSE stream, so the stream can close immediately after the event.
 export async function GET(req: NextRequest) {
   const token = extractToken(req);
   if (!token) return unauthorized(baseUrl(req));
-  return new NextResponse(null, {
-    status: 405,
-    headers: { "Allow": "POST, DELETE" },
+
+  const base = baseUrl(req);
+  const endpointUrl = `${base}/mcp/u/${token}`;
+  return new NextResponse(`event: endpoint\ndata: ${endpointUrl}\n\n`, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      "X-Accel-Buffering": "no",
+    },
   });
 }
 
