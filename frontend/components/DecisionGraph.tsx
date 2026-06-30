@@ -30,160 +30,59 @@ interface DecisionGraphProps {
   onNodeClick?: (nodeId: string) => void;
 }
 
-function getNodeIconSVG(node: GraphNode) {
+// Helpers for CSS variables parsing
+const parseCSSVar = (varName: string, fallback: string) => {
+  if (typeof window === "undefined") return fallback;
+  const val = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  if (!val) return fallback;
+  if (/^\d+\s+\d+\s+\d+$/.test(val)) {
+    return `rgb(${val.split(/\s+/).join(",")})`;
+  }
+  if (/^\d+,\s*\d+,\s*\d+$/.test(val)) {
+    return `rgb(${val})`;
+  }
+  return val;
+};
+
+const getThemeColors = () => {
+  const bg = parseCSSVar("--bg", "#080808");
+  const text = parseCSSVar("--text-primary", "#ececec");
+  const muted = parseCSSVar("--text-muted", "#9ca3af");
+  const border = parseCSSVar("--border", "#372850");
+  const accent = parseCSSVar("--accent", "#7c3aed");
+  const accentMuted = accent.replace(")", ", 0.2)").replace("rgb", "rgba");
+
+  return { bg, text, muted, border, accent, accentMuted };
+};
+
+// Node Emojis Mapping
+function getNodeIconEmoji(node: GraphNode) {
   const label = (node.label || "").toLowerCase();
   const type = node.type;
   const icon = (node.icon || "").toLowerCase();
   const info = (node.info || "").toLowerCase();
 
-  // React
-  if (label.includes("react") || icon.includes("⚛️")) {
-    return (
-      <svg viewBox="0 0 24 24" className="w-5 h-5 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <ellipse rx="10" ry="4.5" transform="translate(12 12) rotate(0)" />
-        <ellipse rx="10" ry="4.5" transform="translate(12 12) rotate(60)" />
-        <ellipse rx="10" ry="4.5" transform="translate(12 12) rotate(120)" />
-        <circle cx="12" cy="12" r="2" fill="currentColor" />
-      </svg>
-    );
-  }
-
-  // Vue
-  if (label.includes("vue") || icon.includes("💚")) {
-    return (
-      <svg viewBox="0 0 24 24" className="w-5 h-5 transition-transform hover:scale-110" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 22L24 1.5H18.5L12 13L5.5 1.5H0L12 22Z" fill="#41B883" />
-        <path d="M12 13L18.5 1.5H14L12 5L10 1.5H5.5L12 13Z" fill="#35495E" />
-      </svg>
-    );
-  }
-
-  // Slack
-  if (label.includes("slack") || icon.includes("💬") || icon.includes("slack")) {
-    return (
-      <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z" fill="#E01E5A"/>
-        <path d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z" fill="#36C5F0"/>
-        <path d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zm-1.27 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.163 0a2.528 2.528 0 0 1 2.523 2.522v6.312z" fill="#2EB67D"/>
-        <path d="M15.163 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.163 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zm0-1.27a2.527 2.527 0 0 1-2.52-2.523 2.527 2.527 0 0 1 2.52-2.52h6.315A2.528 2.528 0 0 1 24 15.163a2.528 2.528 0 0 1-2.522 2.523h-6.315z" fill="#ECB22E"/>
-      </svg>
-    );
-  }
-
-  // Google Drive
-  if (label.includes("drive") || label.includes("google drive") || icon.includes("📄") || info.includes("drive") || info.includes("workspace")) {
-    return (
-      <svg viewBox="0 0 87.3 78" className="w-4 h-4 transition-transform hover:scale-110">
-        <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066DA"/>
-        <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-20.4 35.3c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00AC47"/>
-        <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.5l5.85 13.95z" fill="#EA4335"/>
-        <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832D"/>
-        <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684FC"/>
-        <path d="m73.4 26.5-10.1-17.5c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 23.5h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#FFBA00"/>
-      </svg>
-    );
-  }
-
-  // Jira
-  if (label.includes("jira") || icon.includes("🔧") || info.includes("jira")) {
-    return (
-      <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110">
-        <path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005z" fill="#0052CC"/>
-        <path d="M17.294 5.757H5.723a5.215 5.215 0 0 0 5.215 5.214h2.129v2.058a5.218 5.218 0 0 0 5.215 5.214V6.758a1.001 1.001 0 0 0-1.001-1.001z" fill="#0065FF"/>
-        <path d="M23.013 0H11.455a5.215 5.215 0 0 0-5.215 5.215h2.129v2.057a5.215 5.215 0 0 0 5.215 5.215V1.001A1.001 1.001 0 0 0 12.636 0z" fill="#4C9AFF"/>
-      </svg>
-    );
-  }
-
-  // Gmail / Email
-  if (label.includes("gmail") || label.includes("email") || label.includes("mail") || icon.includes("✉️") || icon.includes("envelope")) {
-    return (
-      <svg viewBox="52 42 88 66" className="w-4 h-4 transition-transform hover:scale-110">
-        <path fill="#4285f4" d="M58 108h14V74L52 59v43c0 3.32 2.69 6 6 6"/>
-        <path fill="#34a853" d="M120 108h14c3.32 0 6-2.69 6-6V59l-20 15"/>
-        <path fill="#fbbc04" d="M120 48v26l20-15v-8c0-7.42-8.47-11.65-14.4-7.2L120 48"/>
-        <path fill="#ea4335" d="M72 74V48l24 18 24-18v26L96 92z"/>
-        <path fill="#c5221f" d="M52 59l20 15V48l-20 11"/>
-      </svg>
-    );
-  }
-
-  // Zoom
-  if (label.includes("zoom") || icon.includes("📹") || info.includes("zoom") || info.includes("meeting")) {
-    return (
-      <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none">
-        <rect width="24" height="24" rx="6" fill="#2D8CFF"/>
-        <path d="M4 9.333C4 8.597 4.597 8 5.333 8H13.334C14.07 8 14.667 8.597 14.667 9.333v5.334C14.667 15.403 14.07 16 13.334 16H5.333C4.597 16 4 15.403 4 14.667V9.333z" fill="white"/>
-        <path d="M15.667 10.4L19.333 8.267A.5.5 0 0 1 20 8.7v6.6a.5.5 0 0 1-.667.433L15.667 13.6V10.4z" fill="white"/>
-      </svg>
-    );
-  }
-
-  // Calendar / Date
-  if (type === "date" || icon.includes("📅") || label.includes("calendar") || label.includes("date")) {
-    return (
-      <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-        <line x1="16" y1="2" x2="16" y2="6" />
-        <line x1="8" y1="2" x2="8" y2="6" />
-        <line x1="3" y1="10" x2="21" y2="10" />
-      </svg>
-    );
-  }
-
-  // Person
-  if (type === "person" || icon.includes("👤") || icon.includes("👥")) {
-    return (
-      <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-      </svg>
-    );
-  }
-
-  // Outcome
+  if (label.includes("react") || icon.includes("⚛️")) return "⚛️";
+  if (label.includes("vue") || icon.includes("💚")) return "💚";
+  if (label.includes("slack") || icon.includes("💬") || icon.includes("slack")) return "💬";
+  if (label.includes("drive") || label.includes("google drive") || icon.includes("📄") || info.includes("drive") || info.includes("workspace")) return "📄";
+  if (label.includes("jira") || icon.includes("🔧") || info.includes("jira")) return "🔧";
+  if (label.includes("gmail") || label.includes("email") || label.includes("mail") || icon.includes("✉️") || icon.includes("envelope")) return "✉️";
+  if (label.includes("zoom") || icon.includes("📹") || info.includes("zoom") || info.includes("meeting")) return "📹";
+  if (type === "date" || icon.includes("📅") || label.includes("calendar") || label.includes("date")) return "📅";
+  if (type === "person" || icon.includes("👤") || icon.includes("👥")) return "👤";
+  
   if (type === "outcome") {
     const isSuccess = icon.includes("✅") || icon.includes("success") || label.toLowerCase().includes("scale") || label.toLowerCase().includes("hire") || label.toLowerCase().includes("success");
     const isError = icon.includes("❌") || icon.includes("error") || label.toLowerCase().includes("write-off") || label.toLowerCase().includes("fail") || label.toLowerCase().includes("terminate");
-
-    if (isSuccess) {
-      return (
-        <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      );
-    }
-    if (isError) {
-      return (
-        <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      );
-    }
-    // Warning by default
-    return (
-      <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-        <line x1="12" y1="9" x2="12" y2="13" />
-        <line x1="12" y1="17" x2="12.01" y2="17" />
-      </svg>
-    );
+    if (isSuccess) return "✅";
+    if (isError) return "❌";
+    return "⚠️";
   }
 
-  // Decision (default)
-  if (type === "decision") {
-    return (
-      <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform hover:scale-110" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10" />
-        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-        <line x1="12" y1="17" x2="12.01" y2="17" />
-      </svg>
-    );
-  }
+  if (type === "decision") return "💡";
 
-  // Fallback to text icon or first character
-  return <span className="text-[10px] font-bold select-none">{node.icon || node.label.charAt(0)}</span>;
+  return node.icon || node.label.charAt(0).toUpperCase();
 }
 
 export default function DecisionGraph({
@@ -194,26 +93,100 @@ export default function DecisionGraph({
   onNodeClick,
 }: DecisionGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // States
-  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  // States for UI
+  const [zoom, setZoomState] = useState(0.95);
+  const [pan, setPanState] = useState({ x: 0, y: 0 });
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [zoom, setZoom] = useState<number>(0.95);
-  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+
+  // Custom Settings
+  const [settings, setSettings] = useState({
+    showLabels: "all",
+    showIcons: false,
+    showGrid: false,
+    nodeRadius: 4.5,
+    linkOpacity: 0.22,
+    particleSpeed: 0,
+    charge: 1200,
+    linkDistance: 90,
+    linkStrength: 0.04,
+    gravity: 0.012,
+  });
+
+  // State update helpers (updating both ref and state to avoid frame lag)
+  const zoomRef = useRef(zoom);
+  const setZoom = (newZoom: number) => {
+    zoomRef.current = newZoom;
+    setZoomState(newZoom);
+  };
+
+  const panRef = useRef(pan);
+  const setPan = (newPan: { x: number; y: number }) => {
+    panRef.current = newPan;
+    setPanState(newPan);
+  };
+
+  const settingsRef = useRef(settings);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+
+  const updateSetting = (key: string, value: any) => {
+    setSettings((prev) => ({ ...prev, [key]: value }));
+    alphaRef.current = 1.0; // reheat simulation on adjustment
+  };
+
+  const resetSettings = () => {
+    setSettings({
+      showLabels: "all",
+      showIcons: false,
+      showGrid: false,
+      nodeRadius: 4.5,
+      linkOpacity: 0.22,
+      particleSpeed: 0,
+      charge: 1200,
+      linkDistance: 90,
+      linkStrength: 0.04,
+      gravity: 0.012,
+    });
+    alphaRef.current = 1.0;
+  };
+
+  // Theme observer
+  const themeRef = useRef({
+    bg: "#080808",
+    text: "#ececec",
+    muted: "#9ca3af",
+    border: "#372850",
+    accent: "#7c3aed",
+    accentMuted: "rgba(124, 58, 237, 0.2)"
+  });
+
+  useEffect(() => {
+    const updateTheme = () => {
+      themeRef.current = getThemeColors();
+    };
+    updateTheme();
+    
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-theme"] });
+    return () => observer.disconnect();
+  }, []);
 
   // Physics Simulation Coordinates
   const physicsNodesRef = useRef<PhysicsNode[]>([]);
-  const activeDragIdRef = useRef<string | null>(null);
-  const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  // Stable random durations for edge particle animations — computed once per edge set
-  const edgeDurationsRef = useRef<Map<string, number>>(new Map());
-  const [renderTrigger, setRenderTrigger] = useState(0);
+  const alphaRef = useRef(1.0); // simulation cooling parameter
+  const draggedNodeRef = useRef<PhysicsNode | null>(null);
+  const isPanningRef = useRef(false);
+  const panStartRef = useRef({ x: 0, y: 0 });
 
-  // Build edges: if edgesProp provided, use them; otherwise fallback to star topology
+  // Build edges: fallback to star topology if not provided
   const computedEdges: GraphEdge[] = React.useMemo(() => {
     if (edgesProp && edgesProp.length > 0) return edgesProp;
-    // Fallback: star topology from first decision node to all others
     const center = nodes.find((n) => n.type === "decision") || nodes[0];
     if (!center) return [];
     return nodes
@@ -221,7 +194,18 @@ export default function DecisionGraph({
       .map((n) => ({ source: center.id, target: n.id }));
   }, [nodes, edgesProp]);
 
-  // Synchronize incoming nodes to physics simulator
+  // Compute node degrees (for size scaling)
+  const nodeDegrees = React.useMemo(() => {
+    const degrees = new Map<string, number>();
+    nodes.forEach((node) => degrees.set(node.id, 0));
+    computedEdges.forEach((edge) => {
+      degrees.set(edge.source, (degrees.get(edge.source) || 0) + 1);
+      degrees.set(edge.target, (degrees.get(edge.target) || 0) + 1);
+    });
+    return degrees;
+  }, [nodes, computedEdges]);
+
+  // Sync nodes to simulation
   useEffect(() => {
     if (nodes.length === 0) {
       physicsNodesRef.current = [];
@@ -239,9 +223,8 @@ export default function DecisionGraph({
         return { ...node, x: existing.x, y: existing.y, vx: existing.vx, vy: existing.vy };
       }
 
-      // New nodes: spread around canvas center
       const angle = (idx / nodes.length) * 2 * Math.PI + Math.random() * 0.5;
-      const dist = 60 + Math.random() * 80;
+      const dist = 50 + Math.random() * 70;
       return {
         ...node,
         x: cx + Math.cos(angle) * dist,
@@ -250,199 +233,475 @@ export default function DecisionGraph({
         vy: 0,
       };
     });
+
+    alphaRef.current = 1.0; // reheat
   }, [nodes]);
 
-  // Main physics loop (Coulomb repulsion + Hooke spring along edges)
-  useEffect(() => {
-    let animFrame: number;
-
-    const runFrame = () => {
-      const pNodes = physicsNodesRef.current;
-      if (pNodes.length === 0) {
-        animFrame = requestAnimationFrame(runFrame);
-        return;
-      }
-
-      const width = containerRef.current?.clientWidth || 400;
-      const height = containerRef.current?.clientHeight || 350;
-      const cx = width / 2;
-      const cy = height / 2;
-
-      const repelConstant = 2000;
-      const springConstant = 0.035;
-      const springLength = 120;
-      const centerPull = 0.006;
-      const friction = 0.82;
-
-      // 1. Coulomb repulsion between ALL nodes
-      for (let i = 0; i < pNodes.length; i++) {
-        for (let j = i + 1; j < pNodes.length; j++) {
-          const n1 = pNodes[i];
-          const n2 = pNodes[j];
-          const dx = n2.x - n1.x;
-          const dy = n2.y - n1.y;
-          // Soften and cap minimum distance to prevent huge repelling force at close range
-          const dist = Math.max(30, Math.sqrt(dx * dx + dy * dy));
-
-          if (dist < 250) {
-            const force = repelConstant / (dist * dist + 400); // 400 softening factor
-            const fx = (dx / dist) * force;
-            const fy = (dy / dist) * force;
-
-            n1.vx -= fx;
-            n1.vy -= fy;
-            n2.vx += fx;
-            n2.vy += fy;
-          }
-        }
-      }
-
-      // 2. Spring attraction along edges
-      computedEdges.forEach((edge) => {
-        const srcNode = pNodes.find((n) => n.id === edge.source);
-        const tgtNode = pNodes.find((n) => n.id === edge.target);
-        if (!srcNode || !tgtNode) return;
-
-        const dx = tgtNode.x - srcNode.x;
-        const dy = tgtNode.y - srcNode.y;
-        const dist = Math.max(30, Math.sqrt(dx * dx + dy * dy));
-
-        const delta = dist - springLength;
-        const force = delta * springConstant;
-        const fx = (dx / dist) * force;
-        const fy = (dy / dist) * force;
-
-        srcNode.vx += fx;
-        srcNode.vy += fy;
-        tgtNode.vx -= fx;
-        tgtNode.vy -= fy;
-      });
-
-      // 3. Gravity center pull
-      pNodes.forEach((node) => {
-        const dx = cx - node.x;
-        const dy = cy - node.y;
-        node.vx += dx * centerPull;
-        node.vy += dy * centerPull;
-      });
-
-      // 4. Update coordinates
-      pNodes.forEach((node) => {
-        if (node.id === activeDragIdRef.current) {
-          node.vx = 0;
-          node.vy = 0;
-          return;
-        }
-
-        // Apply friction
-        node.vx *= friction;
-        node.vy *= friction;
-
-        // Cap maximum velocity to prevent massive explosions
-        const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
-        const maxSpeed = 8;
-        if (speed > maxSpeed) {
-          node.vx = (node.vx / speed) * maxSpeed;
-          node.vy = (node.vy / speed) * maxSpeed;
-        }
-
-        // Apply a threshold below which velocity is rounded to 0 (prevents shaking)
-        const threshold = 0.05;
-        if (Math.abs(node.vx) > threshold || Math.abs(node.vy) > threshold) {
-          node.x += node.vx;
-          node.y += node.vy;
-        } else {
-          node.vx = 0;
-          node.vy = 0;
-        }
-
-        // Keep inside canvas bounds - disabled for Obsidian-style infinite canvas
-        // node.x = Math.max(40, Math.min(width - 40, node.x));
-        // node.y = Math.max(40, Math.min(height - 40, node.y));
-      });
-
-      setRenderTrigger((prev) => prev + 1);
-      animFrame = requestAnimationFrame(runFrame);
-    };
-
-    animFrame = requestAnimationFrame(runFrame);
-    return () => cancelAnimationFrame(animFrame);
-  }, [computedEdges]);
-
-  // Mouse wheel Zoom handler (Smooth zoom-to-mouse pointer) attached non-passively
+  // Resize observer
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setDimensions({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height,
+        });
+        alphaRef.current = 1.0; // reheat simulation on resize
+      }
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  // Run Physics forces
+  const runPhysics = (width: number, height: number) => {
+    const pNodes = physicsNodesRef.current;
+    if (pNodes.length === 0) return;
+
+    const cx = width / 2;
+    const cy = height / 2;
+
+    const charge = settingsRef.current.charge;
+    const strength = settingsRef.current.linkStrength;
+    const distance = settingsRef.current.linkDistance;
+    const gravity = settingsRef.current.gravity;
+    const damping = 0.85;
+
+    // 1. Repulsion force between all nodes (Coulomb)
+    for (let i = 0; i < pNodes.length; i++) {
+      const n1 = pNodes[i];
+      for (let j = i + 1; j < pNodes.length; j++) {
+        const n2 = pNodes[j];
+        const dx = n2.x - n1.x;
+        const dy = n2.y - n1.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
+
+        if (dist < 400) {
+          const force = charge / (dist * dist + 150);
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+
+          n1.vx -= fx;
+          n1.vy -= fy;
+          n2.vx += fx;
+          n2.vy += fy;
+        }
+      }
+    }
+
+    // 2. Link force along connected edges (Spring)
+    computedEdges.forEach((edge) => {
+      const src = pNodes.find((n) => n.id === edge.source);
+      const tgt = pNodes.find((n) => n.id === edge.target);
+      if (!src || !tgt) return;
+
+      const dx = tgt.x - src.x;
+      const dy = tgt.y - src.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
+
+      const force = (dist - distance) * strength;
+      const fx = (dx / dist) * force;
+      const fy = (dy / dist) * force;
+
+      src.vx += fx;
+      src.vy += fy;
+      tgt.vx -= fx;
+      tgt.vy -= fy;
+    });
+
+    // 3. Gravity force (pull to center)
+    pNodes.forEach((node) => {
+      const dx = cx - node.x;
+      const dy = cy - node.y;
+      node.vx += dx * gravity;
+      node.vy += dy * gravity;
+    });
+
+    // 4. Update coordinates & apply damping
+    pNodes.forEach((node) => {
+      if (node.id === draggedNodeRef.current?.id) {
+        node.vx = 0;
+        node.vy = 0;
+        return;
+      }
+
+      node.vx *= damping;
+      node.vy *= damping;
+
+      const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
+      const maxSpeed = 10;
+      if (speed > maxSpeed) {
+        node.vx = (node.vx / speed) * maxSpeed;
+        node.vy = (node.vy / speed) * maxSpeed;
+      }
+
+      node.x += node.vx * alphaRef.current;
+      node.y += node.vy * alphaRef.current;
+    });
+  };
+
+  // Node Color Hex Mapping
+  const getNodeColorHex = (type: GraphNode["type"]) => {
+    const isLight = themeRef.current.bg === "rgb(249,249,249)" || themeRef.current.bg === "#f9f9f9";
+    if (isLight) {
+      switch (type) {
+        case "decision": return "#4f46e5"; // indigo-600
+        case "person": return "#059669"; // emerald-600
+        case "source": return "#0891b2"; // cyan-600
+        case "date": return "#d97706"; // amber-600
+        case "outcome": return "#e11d48"; // rose-600
+        default: return "#475569"; // slate-600
+      }
+    } else {
+      switch (type) {
+        case "decision": return "#818cf8"; // indigo-400
+        case "person": return "#34d399"; // emerald-400
+        case "source": return "#22d3ee"; // cyan-400
+        case "date": return "#fbbf24"; // amber-400
+        case "outcome": return "#fb7185"; // rose-400
+        default: return "#94a3b8"; // slate-400
+      }
+    }
+  };
+
+  // Dynamic Drawing Loop
+  const draw = (canvas: HTMLCanvasElement, width: number, height: number) => {
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const theme = themeRef.current;
+    const currentSettings = settingsRef.current;
+
+    ctx.clearRect(0, 0, width, height);
+
+    const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+    ctx.save();
+    ctx.scale(dpr, dpr);
+
+    const zoom = zoomRef.current;
+    const pan = panRef.current;
+    const pNodes = physicsNodesRef.current;
+
+    // 1. Draw Grid Background (if enabled)
+    if (currentSettings.showGrid) {
+      const spacing = 28 * zoom;
+      const startX = pan.x % spacing;
+      const startY = pan.y % spacing;
+      ctx.beginPath();
+      for (let x = startX; x < width; x += spacing) {
+        for (let y = startY; y < height; y += spacing) {
+          ctx.arc(x, y, 1.0 * Math.min(zoom, 1.4), 0, 2 * Math.PI);
+        }
+      }
+      ctx.fillStyle = theme.border === "rgb(229,229,229)" || theme.border === "#e5e5e5" 
+        ? "rgba(0, 0, 0, 0.05)" 
+        : "rgba(255, 255, 255, 0.06)";
+      ctx.fill();
+    }
+
+    const activeFocusId = selectedNodeId || hoveredNodeId;
+    const isFocusActive = activeFocusId !== null;
+
+    // Connectivity masking helper
+    const isNodeConnected = (nodeId: string) => {
+      if (!isFocusActive) return true;
+      if (nodeId === activeFocusId) return true;
+      return computedEdges.some(
+        (e) =>
+          (e.source === activeFocusId && e.target === nodeId) ||
+          (e.target === activeFocusId && e.source === nodeId)
+      );
+    };
+
+    // 2. Draw Connections (Links)
+    computedEdges.forEach((edge, edgeIdx) => {
+      const src = pNodes.find((n) => n.id === edge.source);
+      const tgt = pNodes.find((n) => n.id === edge.target);
+      if (!src || !tgt) return;
+
+      const sx = src.x * zoom + pan.x;
+      const sy = src.y * zoom + pan.y;
+      const tx = tgt.x * zoom + pan.x;
+      const ty = tgt.y * zoom + pan.y;
+
+      const isSourceActive = activeFocusId === edge.source;
+      const isTargetActive = activeFocusId === edge.target;
+      const isActiveLink = isSourceActive || isTargetActive;
+
+      let opacity = currentSettings.linkOpacity;
+      if (isFocusActive) {
+        opacity = isActiveLink ? Math.min(opacity * 2.2, 0.85) : 0.03;
+      }
+
+      ctx.strokeStyle = isActiveLink ? theme.accent : theme.muted;
+      ctx.lineWidth = isActiveLink ? 1.6 : 0.75;
+      ctx.globalAlpha = opacity;
+
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+
+      // Flow particle along link
+      if (currentSettings.particleSpeed > 0 && (!isFocusActive || isActiveLink)) {
+        ctx.globalAlpha = isActiveLink ? 0.9 : opacity * 0.6;
+        const speed = currentSettings.particleSpeed;
+        const time = performance.now() * 0.0008 * speed;
+        const edgeOffset = (edgeIdx * 0.19) % 1.0;
+        const t = (time + edgeOffset) % 1.0;
+
+        const px = sx + (tx - sx) * t;
+        const py = sy + (ty - sy) * t;
+
+        ctx.fillStyle = theme.accent;
+        ctx.beginPath();
+        ctx.arc(px, py, 2.0, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    });
+
+    ctx.globalAlpha = 1.0;
+
+    // 3. Draw Nodes
+    pNodes.forEach((node) => {
+      const nx = node.x * zoom + pan.x;
+      const ny = node.y * zoom + pan.y;
+
+      const degree = nodeDegrees.get(node.id) || 0;
+      const baseRadius = currentSettings.nodeRadius;
+      const radius = baseRadius + Math.sqrt(degree) * 1.5;
+
+      const isHovered = hoveredNodeId === node.id;
+      const isSelected = selectedNodeId === node.id;
+      const isFocused = isHovered || isSelected;
+
+      let opacity = 1.0;
+      if (isFocusActive && !isNodeConnected(node.id)) {
+        opacity = 0.12;
+      }
+
+      ctx.globalAlpha = opacity;
+      const color = getNodeColorHex(node.type);
+
+      ctx.save();
+      
+      // Shadow glow for focused node
+      if (isFocused) {
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 12;
+      }
+
+      // Border stroke
+      if (isFocused) {
+        ctx.strokeStyle = theme.text;
+        ctx.lineWidth = 1.8;
+      } else {
+        ctx.strokeStyle = theme.border;
+        ctx.lineWidth = 0.9;
+      }
+
+      // Draw dot
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(nx, ny, radius, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      // Show Logo Emojis inside nodes (if enabled)
+      if (currentSettings.showIcons) {
+        const emoji = getNodeIconEmoji(node);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = `bold ${Math.max(8, radius * 0.95)}px system-ui`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(emoji, nx, ny);
+      }
+
+      // 4. Draw Labels
+      const labelSetting = currentSettings.showLabels;
+      let shouldDrawLabel = false;
+      if (labelSetting === "all") {
+        shouldDrawLabel = zoom > 0.48 || isFocused;
+      } else if (labelSetting === "hover") {
+        shouldDrawLabel = isFocused;
+      }
+
+      if (shouldDrawLabel) {
+        ctx.font = `500 ${isFocused ? 9.5 : 8.5}px Inter, system-ui, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+
+        const textY = ny + radius + 4.5;
+
+        // Draw shadow stroke background to make text readable over lines
+        ctx.strokeStyle = theme.bg;
+        ctx.lineWidth = 3.5;
+        ctx.lineJoin = "round";
+        ctx.strokeText(node.label, nx, textY);
+
+        ctx.fillStyle = isFocused ? theme.text : theme.muted;
+        ctx.fillText(node.label, nx, textY);
+      }
+
+      ctx.globalAlpha = 1.0;
+    });
+
+    ctx.restore();
+  };
+
+  // Set up game loop
+  useEffect(() => {
+    let animFrameId: number;
+
+    const tick = () => {
+      const canvas = canvasRef.current;
+      const container = containerRef.current;
+      if (!canvas || !container) {
+        animFrameId = requestAnimationFrame(tick);
+        return;
+      }
+
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      if (alphaRef.current > 0.005) {
+        runPhysics(width, height);
+        alphaRef.current *= 0.985;
+      } else {
+        alphaRef.current = 0;
+      }
+
+      draw(canvas, width, height);
+
+      animFrameId = requestAnimationFrame(tick);
+    };
+
+    animFrameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animFrameId);
+  }, [computedEdges, nodeDegrees]);
+
+  // Zoom wheel event handler (attaches directly to bypass passive listener limits)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
 
-      const rect = container.getBoundingClientRect();
+      const rect = canvas.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
 
       const zoomFactor = 0.08;
       const direction = e.deltaY < 0 ? 1 : -1;
 
-      setZoom((prevZoom) => {
-        const factor = 1 + direction * zoomFactor;
-        const newZoom = Math.max(0.05, Math.min(15.0, prevZoom * factor));
+      const prevZoom = zoomRef.current;
+      const factor = 1 + direction * zoomFactor;
+      const newZoom = Math.max(0.08, Math.min(10.0, prevZoom * factor));
 
-        setPan((prevPan) => {
-          const dx = mouseX - prevPan.x;
-          const dy = mouseY - prevPan.y;
-          return {
-            x: mouseX - dx * (newZoom / prevZoom),
-            y: mouseY - dy * (newZoom / prevZoom),
-          };
-        });
+      const worldX = (mouseX - panRef.current.x) / prevZoom;
+      const worldY = (mouseY - panRef.current.y) / prevZoom;
 
-        return newZoom;
+      setPan({
+        x: mouseX - worldX * newZoom,
+        y: mouseY - worldY * newZoom,
       });
+      setZoom(newZoom);
+      alphaRef.current = 1.0; // reheat simulation
     };
 
-    container.addEventListener("wheel", handleWheel, { passive: false });
+    canvas.addEventListener("wheel", handleWheel, { passive: false });
     return () => {
-      container.removeEventListener("wheel", handleWheel);
+      canvas.removeEventListener("wheel", handleWheel);
     };
   }, []);
 
-  // Background Drag Pan handler
-  const handleMouseDown = (e: React.MouseEvent) => {
-    const isNode = (e.target as HTMLElement).closest(".physics-node");
-    if (!isNode && containerRef.current) {
-      setIsPanning(true);
-      panStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+  // Mouse handlers
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+
+    const worldX = (screenX - panRef.current.x) / zoomRef.current;
+    const worldY = (screenY - panRef.current.y) / zoomRef.current;
+
+    // Check if clicked a node
+    const clickedNode = physicsNodesRef.current.find((node) => {
+      const degree = nodeDegrees.get(node.id) || 0;
+      const radius = settings.nodeRadius + Math.sqrt(degree) * 1.5;
+      const dist = Math.sqrt((node.x - worldX) ** 2 + (node.y - worldY) ** 2);
+      return dist <= radius + 8;
+    });
+
+    if (clickedNode) {
+      draggedNodeRef.current = clickedNode;
+      setSelectedNodeId(clickedNode.id === selectedNodeId ? null : clickedNode.id);
+      
+      clickedNode.vx = 0;
+      clickedNode.vy = 0;
+      alphaRef.current = 1.0;
+
+      if (onNodeClick) {
+        onNodeClick(clickedNode.id);
+      }
+    } else {
+      isPanningRef.current = true;
+      panStartRef.current = { x: e.clientX - panRef.current.x, y: e.clientY - panRef.current.y };
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isPanning) {
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+
+    const worldX = (screenX - panRef.current.x) / zoomRef.current;
+    const worldY = (screenY - panRef.current.y) / zoomRef.current;
+
+    if (isPanningRef.current) {
       setPan({
         x: e.clientX - panStartRef.current.x,
         y: e.clientY - panStartRef.current.y,
       });
-    } else if (activeDragIdRef.current && containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const mouseX = (e.clientX - rect.left - pan.x) / zoom;
-      const mouseY = (e.clientY - rect.top - pan.y) / zoom;
+      return;
+    }
 
-      const dragNode = physicsNodesRef.current.find((n) => n.id === activeDragIdRef.current);
-      if (dragNode) {
-        dragNode.x = mouseX;
-        dragNode.y = mouseY;
-      }
+    if (draggedNodeRef.current) {
+      draggedNodeRef.current.x = worldX;
+      draggedNodeRef.current.y = worldY;
+      draggedNodeRef.current.vx = 0;
+      draggedNodeRef.current.vy = 0;
+      alphaRef.current = 1.0;
+      return;
+    }
+
+    // Hover detection
+    const hovered = physicsNodesRef.current.find((node) => {
+      const degree = nodeDegrees.get(node.id) || 0;
+      const radius = settings.nodeRadius + Math.sqrt(degree) * 1.5;
+      const dist = Math.sqrt((node.x - worldX) ** 2 + (node.y - worldY) ** 2);
+      return dist <= radius + 8;
+    });
+
+    if (hovered?.id !== hoveredNodeId) {
+      setHoveredNodeId(hovered ? hovered.id : null);
+      alphaRef.current = 1.0; // reheat to update highlight frame
     }
   };
 
-  const handleMouseUpOrLeave = () => {
-    activeDragIdRef.current = null;
-    setIsPanning(false);
+  const handleMouseUp = () => {
+    draggedNodeRef.current = null;
+    isPanningRef.current = false;
   };
 
-  // RESET = fit-to-view: frame the whole node cluster in the viewport.
-  // (Previously just snapped to a fixed zoom/pan, which did nothing visible
-  // once the physics sim had spread nodes out — so it read as "not working".)
+  // Frame cluster viewport helper
   const resetViewport = () => {
     const container = containerRef.current;
     const pNodes = physicsNodesRef.current;
@@ -455,7 +714,6 @@ export default function DecisionGraph({
     const width = container.clientWidth;
     const height = container.clientHeight;
 
-    // Bounding box of all nodes in world coordinates
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const n of pNodes) {
       if (n.x < minX) minX = n.x;
@@ -464,72 +722,53 @@ export default function DecisionGraph({
       if (n.y > maxY) maxY = n.y;
     }
 
-    const padding = 80; // px of breathing room around the cluster
+    const padding = 90;
     const bboxW = Math.max(maxX - minX, 1);
     const bboxH = Math.max(maxY - minY, 1);
 
-    // Zoom to fit, capped so a tiny/single-node graph doesn't over-zoom
     const fitZoom = Math.min(
       (width - padding * 2) / bboxW,
       (height - padding * 2) / bboxH
     );
-    const newZoom = Math.max(0.2, Math.min(1.4, fitZoom));
+    const newZoom = Math.max(0.18, Math.min(1.3, fitZoom));
 
-    // Center the bbox center in the viewport: screen = pan + world * zoom
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
+
     setZoom(newZoom);
     setPan({
       x: width / 2 - centerX * newZoom,
       y: height / 2 - centerY * newZoom,
     });
+    
+    alphaRef.current = 1.0;
   };
 
-  const pNodes = physicsNodesRef.current;
-
-  // Active hover/selection ID
   const activeFocusId = selectedNodeId || hoveredNodeId;
-
-  // Node connection masking helper
-  const isNodeConnected = (nodeId: string) => {
-    if (!activeFocusId) return true;
-    if (nodeId === activeFocusId) return true;
-    // Check if nodeId has a direct edge with activeFocusId
-    return computedEdges.some(
-      (e) =>
-        (e.source === activeFocusId && e.target === nodeId) ||
-        (e.target === activeFocusId && e.source === nodeId)
-    );
-  };
-
-  // Classy type color coding
-  const getNodeColor = (type: GraphNode["type"]) => {
-    switch (type) {
-      case "decision": return "bg-indigo-500/20 border-indigo-500/50 text-indigo-400 backdrop-blur-sm";
-      case "person": return "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 backdrop-blur-sm";
-      case "source": return "bg-cyan-500/20 border-cyan-500/50 text-cyan-400 backdrop-blur-sm";
-      case "date": return "bg-amber-500/20 border-amber-500/50 text-amber-400 backdrop-blur-sm";
-      case "outcome": return "bg-rose-500/20 border-rose-500/50 text-rose-400 backdrop-blur-sm";
-      default: return "bg-zinc-500/20 border-zinc-500/50 text-zinc-400 backdrop-blur-sm";
-    }
-  };
-
   const activeNodeInfo = nodes.find((n) => n.id === activeFocusId);
+
+  const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+  const canvasWidth = dimensions.width * dpr;
+  const canvasHeight = dimensions.height * dpr;
 
   return (
     <div
       ref={containerRef}
       className={`relative w-full h-full bg-[rgb(var(--bg))] select-none overflow-hidden theme-transition ${className}`}
-      style={{
-        backgroundImage: "radial-gradient(rgba(128, 128, 128, 0.15) 1.2px, transparent 1.2px)",
-        backgroundPosition: `${pan.x}px ${pan.y}px`,
-        backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
-      }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUpOrLeave}
-      onMouseLeave={handleMouseUpOrLeave}
     >
+      {/* HTML5 Retina-ready Drawing Surface */}
+      <canvas
+        ref={canvasRef}
+        width={canvasWidth}
+        height={canvasHeight}
+        style={{ width: "100%", height: "100%", display: "block" }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        className="cursor-grab active:cursor-grabbing"
+      />
+
       {/* 1. FLOATING CONTROL PILL (Top Right) */}
       <div className="absolute top-3 right-3 flex items-center gap-2 z-20 bg-[rgb(var(--surface))]/70 backdrop-blur-md border border-[rgb(var(--border))]/50 px-2.5 py-1.5 rounded-xl shadow-lg transition-all">
         <button
@@ -542,9 +781,210 @@ export default function DecisionGraph({
         <span className="text-[9px] font-mono font-bold text-[rgb(var(--text-muted))] select-none min-w-[32px] text-center">
           {Math.round(zoom * 100)}%
         </span>
+        <span className="text-[10px] text-[rgb(var(--border))]/70">|</span>
+        <button
+          onClick={() => setShowSettings(!showSettings)}
+          className={`p-1 hover:bg-[rgb(var(--surface-hover))]/80 rounded-lg transition-all ${
+            showSettings ? "text-[rgb(var(--accent))]" : "text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))]"
+          }`}
+          title="Graph Settings"
+        >
+          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-none stroke-current" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
       </div>
 
-      {/* 2. FLOATING CONTEXT CARD (Bottom Left) */}
+      {/* 2. FLOATING SETTINGS MENU (Top Right, under Pill) */}
+      {showSettings && (
+        <div className="absolute top-14 right-3 w-72 max-h-[calc(100%-70px)] overflow-y-auto z-20 bg-[rgb(var(--surface))]/85 backdrop-blur-lg border border-[rgb(var(--border))]/55 p-4 rounded-2xl shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-top-4 font-sans">
+          <div className="flex items-center justify-between mb-3 border-b border-[rgb(var(--border))]/40 pb-2">
+            <span className="text-xs font-bold tracking-wider uppercase text-[rgb(var(--text-primary))]">
+              Graph Settings
+            </span>
+            <button
+              onClick={() => setShowSettings(false)}
+              className="text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] transition-all text-xs"
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="space-y-4 text-left">
+            {/* Display Settings */}
+            <div>
+              <span className="text-[10px] font-bold text-[rgb(var(--accent))] uppercase tracking-widest block mb-2 font-mono">
+                Display
+              </span>
+              <div className="space-y-2.5">
+                <label className="flex items-center justify-between text-xs text-[rgb(var(--text-muted))] cursor-pointer">
+                  <span>Show Labels</span>
+                  <select
+                    value={settings.showLabels}
+                    onChange={(e) => updateSetting("showLabels", e.target.value)}
+                    className="bg-[rgb(var(--bg))]/55 border border-[rgb(var(--border))]/45 text-[10px] text-[rgb(var(--text-primary))] rounded px-1.5 py-0.5 outline-none font-sans font-medium"
+                  >
+                    <option value="all">All Nodes</option>
+                    <option value="hover">Hover / Select</option>
+                    <option value="none">None</option>
+                  </select>
+                </label>
+
+                <label className="flex items-center justify-between text-xs text-[rgb(var(--text-muted))] cursor-pointer">
+                  <span>Show Logo Icons</span>
+                  <input
+                    type="checkbox"
+                    checked={settings.showIcons}
+                    onChange={(e) => updateSetting("showIcons", e.target.checked)}
+                    className="accent-[rgb(var(--accent))] cursor-pointer text-xs"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between text-xs text-[rgb(var(--text-muted))] cursor-pointer">
+                  <span>Grid Background</span>
+                  <input
+                    type="checkbox"
+                    checked={settings.showGrid}
+                    onChange={(e) => updateSetting("showGrid", e.target.checked)}
+                    className="accent-[rgb(var(--accent))] cursor-pointer"
+                  />
+                </label>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] text-[rgb(var(--text-muted))]">
+                    <span>Base Node Size</span>
+                    <span className="font-mono">{settings.nodeRadius}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="2"
+                    max="10"
+                    step="0.5"
+                    value={settings.nodeRadius}
+                    onChange={(e) => updateSetting("nodeRadius", parseFloat(e.target.value))}
+                    className="w-full h-1 bg-[rgb(var(--bg))] rounded-lg appearance-none cursor-pointer accent-[rgb(var(--accent))]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] text-[rgb(var(--text-muted))]">
+                    <span>Link Opacity</span>
+                    <span className="font-mono">{Math.round(settings.linkOpacity * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.05"
+                    max="0.8"
+                    step="0.05"
+                    value={settings.linkOpacity}
+                    onChange={(e) => updateSetting("linkOpacity", parseFloat(e.target.value))}
+                    className="w-full h-1 bg-[rgb(var(--bg))] rounded-lg appearance-none cursor-pointer accent-[rgb(var(--accent))]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] text-[rgb(var(--text-muted))]">
+                    <span>Flow Particle Speed</span>
+                    <span className="font-mono">{settings.particleSpeed === 0 ? "Off" : `${settings.particleSpeed}x`}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="4"
+                    step="0.5"
+                    value={settings.particleSpeed}
+                    onChange={(e) => updateSetting("particleSpeed", parseFloat(e.target.value))}
+                    className="w-full h-1 bg-[rgb(var(--bg))] rounded-lg appearance-none cursor-pointer accent-[rgb(var(--accent))]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Physics Forces */}
+            <div className="border-t border-[rgb(var(--border))]/40 pt-3">
+              <span className="text-[10px] font-bold text-[rgb(var(--accent))] uppercase tracking-widest block mb-2 font-mono">
+                Physics Forces
+              </span>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] text-[rgb(var(--text-muted))]">
+                    <span>Repulsion (Charge)</span>
+                    <span className="font-mono">{settings.charge}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="200"
+                    max="3000"
+                    step="100"
+                    value={settings.charge}
+                    onChange={(e) => updateSetting("charge", parseInt(e.target.value))}
+                    className="w-full h-1 bg-[rgb(var(--bg))] rounded-lg appearance-none cursor-pointer accent-[rgb(var(--accent))]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] text-[rgb(var(--text-muted))]">
+                    <span>Link Distance</span>
+                    <span className="font-mono">{settings.linkDistance}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="40"
+                    max="200"
+                    step="5"
+                    value={settings.linkDistance}
+                    onChange={(e) => updateSetting("linkDistance", parseInt(e.target.value))}
+                    className="w-full h-1 bg-[rgb(var(--bg))] rounded-lg appearance-none cursor-pointer accent-[rgb(var(--accent))]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] text-[rgb(var(--text-muted))]">
+                    <span>Link Strength</span>
+                    <span className="font-mono">{Math.round(settings.linkStrength * 1000) / 10}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.005"
+                    max="0.15"
+                    step="0.005"
+                    value={settings.linkStrength}
+                    onChange={(e) => updateSetting("linkStrength", parseFloat(e.target.value))}
+                    className="w-full h-1 bg-[rgb(var(--bg))] rounded-lg appearance-none cursor-pointer accent-[rgb(var(--accent))]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] text-[rgb(var(--text-muted))]">
+                    <span>Center Gravity</span>
+                    <span className="font-mono">{Math.round(settings.gravity * 1000) / 10}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.001"
+                    max="0.06"
+                    step="0.002"
+                    value={settings.gravity}
+                    onChange={(e) => updateSetting("gravity", parseFloat(e.target.value))}
+                    className="w-full h-1 bg-[rgb(var(--bg))] rounded-lg appearance-none cursor-pointer accent-[rgb(var(--accent))]"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            {/* Reset Button */}
+            <button
+              onClick={resetSettings}
+              className="w-full py-1.5 mt-2 bg-[rgb(var(--surface-hover))]/65 border border-[rgb(var(--border))]/40 hover:bg-[rgb(var(--surface-hover))] text-[10px] font-sans font-bold text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] rounded-xl transition-all"
+            >
+              RESET TO DEFAULTS
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3. FLOATING CONTEXT CARD (Bottom Left) */}
       <div className="absolute bottom-3 left-3 right-3 md:right-auto md:max-w-[280px] z-20 bg-[rgb(var(--surface))]/80 backdrop-blur-md border border-[rgb(var(--border))]/50 p-3 rounded-2xl shadow-xl transition-all duration-300 pointer-events-auto">
         {activeNodeInfo ? (
           <div className="animate-[fadeIn_0.15s_ease-out]">
@@ -571,127 +1011,6 @@ export default function DecisionGraph({
             <span>Scroll to zoom · drag canvas · click nodes</span>
           </div>
         )}
-      </div>
-
-      {/* 3. GRAPH CANVAS AREA */}
-      <div
-        style={{
-          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-          transformOrigin: "0 0",
-        }}
-        className="absolute inset-0 origin-top-left pointer-events-none"
-      >
-        {/* SVG Edge Connectors */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
-          {computedEdges.map((edge, edgeIdx) => {
-            const srcNode = pNodes.find((n) => n.id === edge.source);
-            const tgtNode = pNodes.find((n) => n.id === edge.target);
-            if (!srcNode || !tgtNode) return null;
-
-            const isSourceHovered = hoveredNodeId === edge.source;
-            const isTargetHovered = hoveredNodeId === edge.target;
-            const isSourceSelected = selectedNodeId === edge.source;
-            const isTargetSelected = selectedNodeId === edge.target;
-
-            const isActive = isSourceHovered || isTargetHovered || isSourceSelected || isTargetSelected;
-            const pathId = `edge-${edgeIdx}`;
-
-            const isMasked = activeFocusId !== null && !isNodeConnected(edge.source) && !isNodeConnected(edge.target);
-            const strokeOpacity = isMasked ? 0.03 : isActive ? 0.8 : 0.25;
-
-            return (
-              <g key={pathId} className="transition-opacity duration-300" style={{ opacity: strokeOpacity }}>
-                <path
-                  id={pathId}
-                  d={`M ${srcNode.x} ${srcNode.y} L ${tgtNode.x} ${tgtNode.y}`}
-                  stroke={isActive ? "rgb(var(--accent))" : "rgb(var(--text-muted))"}
-                  strokeWidth={isActive ? "1.5" : "0.75"}
-                  fill="none"
-                />
-                {/* Flow Particle */}
-                {!isMasked && (
-                  <circle r="1.5" fill="rgb(var(--accent))">
-                    <animateMotion
-                      dur={`${(() => {
-                        if (!edgeDurationsRef.current.has(pathId)) {
-                          edgeDurationsRef.current.set(pathId, 2.5 + Math.random() * 1.5);
-                        }
-                        return edgeDurationsRef.current.get(pathId);
-                      })()}s`}
-                      repeatCount="indefinite"
-                    >
-                      <mpath href={`#${pathId}`} />
-                    </animateMotion>
-                  </circle>
-                )}
-              </g>
-            );
-          })}
-        </svg>
-
-        {/* Physics Nodes */}
-        <div className="absolute inset-0 z-10 pointer-events-none">
-          {pNodes.map((node) => {
-            const isCenter = node.type === "decision";
-            const isHovered = hoveredNodeId === node.id;
-            const isSelected = selectedNodeId === node.id;
-
-            const isDimmed = activeFocusId !== null && !isNodeConnected(node.id);
-            const themeColorClass = getNodeColor(node.type);
-
-            return (
-              <div
-                key={node.id}
-                className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-grab active:cursor-grabbing flex flex-col items-center justify-center physics-node group"
-                style={{
-                  left: node.x,
-                  top: node.y,
-                  transform: `translate(-50%, -50%) scale(${isHovered || isSelected ? 1.12 : 1})`,
-                  opacity: isDimmed ? 0.15 : 1,
-                  transition: "opacity 0.3s ease, transform 0.2s ease",
-                }}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                  activeDragIdRef.current = node.id;
-                }}
-                onMouseEnter={() => setHoveredNodeId(node.id)}
-                onMouseLeave={() => setHoveredNodeId(null)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedNodeId(selectedNodeId === node.id ? null : node.id);
-                  if (onNodeClick) {
-                    onNodeClick(node.id);
-                  }
-                }}
-              >
-                {/* Node circle */}
-                <div
-                  className={`flex items-center justify-center rounded-full transition-all border ${
-                    isCenter
-                      ? "w-9 h-9 ring-4 ring-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.35)]"
-                      : "w-6 h-6 shadow-md"
-                  } ${themeColorClass} border-[rgb(var(--border))]/30 overflow-hidden`}
-                >
-                  {getNodeIconSVG(node)}
-                </div>
-
-                {/* Obsidian-style Canvas Label (Permanently visible) */}
-                <div
-                  className={`mt-1.5 text-[8.5px] font-sans font-medium tracking-wide whitespace-nowrap select-none transition-all ${
-                    isHovered || isSelected
-                      ? "text-[rgb(var(--text-primary))] font-bold scale-105"
-                      : "text-[rgb(var(--text-muted))]/80"
-                  }`}
-                  style={{
-                    textShadow: isHovered || isSelected ? "0 1px 4px rgba(0,0,0,0.5)" : "none",
-                  }}
-                >
-                  {node.label}
-                </div>
-              </div>
-            );
-          })}
-        </div>
       </div>
     </div>
   );
