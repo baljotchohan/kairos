@@ -40,7 +40,7 @@ from api.auth import get_current_user, UserProfile
 
 log = logging.getLogger(__name__)
 
-PROTOCOL_VERSION = "2025-03-26"
+PROTOCOL_VERSION = "2024-11-05"
 
 # KAIROS brand logo (the node-constellation "K") served at /mcp/icon.svg and
 # advertised in serverInfo.icons so Claude/connector UIs show the real logo

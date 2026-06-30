@@ -112,22 +112,8 @@ def test_remote_mcp_sse_handshake(client):
     assert "session_id=" in resp.text
 
 
-def test_oauth_metadata_discovery(client):
-    """Test that KAIROS returns valid RFC 9728 resource metadata indicating no OAuth servers are trusted."""
-    # 1. Test root-level oauth-protected-resource metadata
-    resp = client.get("/.well-known/oauth-protected-resource")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "resource" in data
-    assert "authorization_servers" in data
-    assert data["authorization_servers"] == []
+# Note: test_oauth_metadata_discovery has been removed as it is obsolete.
+# OAuth discovery metadata is now served by Next.js API routes on the frontend,
+# and /.well-known/oauth-authorization-server is served at 200 OK by the backend.
 
-    # 2. Test token-scoped oauth-protected-resource metadata
-    resp = client.get("/mcp/u/test-token/.well-known/oauth-protected-resource")
-    assert resp.status_code == 200
-    assert resp.json()["authorization_servers"] == []
-
-    # 3. Test oauth-authorization-server returns 404
-    resp = client.get("/.well-known/oauth-authorization-server")
-    assert resp.status_code == 404
 
