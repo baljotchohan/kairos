@@ -45,7 +45,7 @@ const nextConfig: NextConfig = {
       afterFiles: [
         // All other API and MCP URL-token calls go to the backend
         {
-          source: "/api/:path*",
+          source: "/api/:path((?!oauth|mcp).*)",
           destination: `${API_URL}/api/:path*`,
         },
         {
