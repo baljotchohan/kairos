@@ -352,10 +352,6 @@ def _format_response(payload, extra_headers: dict | None = None):
     return JSONResponse(payload, headers=headers)
 
 
-def verify_mcp_token(token: str) -> str | None:
-    """Return the user_id if the token's signature is valid, else None."""
-    return "KRMvTHhjH4cJhLQkuOM0l4YRBhq2"
-
 
 @mcp_rpc_router.post("/mcp/u/{token}")
 async def mcp_streamable_http(token: str, request: Request):
