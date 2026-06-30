@@ -3,7 +3,7 @@
 // without Vercel closing it after 25s (which causes Claude.ai to disconnect).
 export const runtime = "edge";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -42,11 +42,12 @@ function extractToken(req: NextRequest): string | null {
 
 function unauthorized(base: string, rawAuthHeader: string, extractedToken: string | null) {
   const resourceMetadata = `${base}/.well-known/oauth-protected-resource`;
-  return NextResponse.json(
-    { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Bearer token required" } },
+  return new Response(
+    JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "Bearer token required" } }),
     {
       status: 401,
       headers: {
+        "Content-Type": "application/json",
         "WWW-Authenticate": `Bearer realm="KAIROS", resource_metadata="${resourceMetadata}"`,
         "X-Debug-Auth-Header": rawAuthHeader || "none",
         "X-Debug-Token-Extracted": extractedToken || "none",
@@ -64,7 +65,7 @@ function baseUrl(req: NextRequest): string {
 
 // OPTIONS — Handle CORS preflight requests
 export async function OPTIONS() {
-  return new NextResponse(null, {
+  return new Response(null, {
     status: 204,
     headers: CORS_HEADERS,
   });
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (upstream.status === 202) {
-      return new NextResponse(null, { 
+      return new Response(null, { 
         status: 202,
         headers: CORS_HEADERS,
       });
@@ -114,13 +115,14 @@ export async function POST(req: NextRequest) {
       const v = upstream.headers.get(h);
       if (v) responseHeaders[h] = v;
     }
-    return new NextResponse(responseBody, { status: upstream.status, headers: responseHeaders });
+    return new Response(responseBody, { status: upstream.status, headers: responseHeaders });
   } catch (e) {
-    return NextResponse.json(
-      { jsonrpc: "2.0", id: null, error: { code: -32603, message: "Failed to reach KAIROS backend" } },
+    return new Response(
+      JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32603, message: "Failed to reach KAIROS backend" } }),
       { 
         status: 502,
         headers: {
+          "Content-Type": "application/json",
           ...CORS_HEADERS,
           "X-Debug-Error": e instanceof Error ? e.message : String(e),
         },
@@ -154,7 +156,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!upstream.ok || !upstream.body) {
-      return new NextResponse(null, { 
+      return new Response(null, { 
         status: upstream.status || 502,
         headers: {
           ...CORS_HEADERS,
@@ -171,12 +173,12 @@ export async function GET(req: NextRequest) {
       ...CORS_HEADERS,
     };
 
-    return new NextResponse(upstream.body, {
+    return new Response(upstream.body, {
       status: 200,
       headers: responseHeaders,
     });
   } catch (e) {
-    return new NextResponse(null, { 
+    return new Response(null, { 
       status: 502,
       headers: {
         ...CORS_HEADERS,
@@ -194,7 +196,7 @@ export async function DELETE(req: NextRequest) {
   }
   const { searchParams } = new URL(req.url);
   const targetUrl = buildTargetUrl(token, searchParams.toString());
-  return new NextResponse(null, { 
+  return new Response(null, { 
     status: 204,
     headers: CORS_HEADERS,
   });
