@@ -120,7 +120,7 @@ function lerpColor(a: typeof SECTION_COLORS[0], b: typeof SECTION_COLORS[0], t: 
 
 function sectionColor(y: number, totalH: number) {
   if (!totalH) return SECTION_COLORS[0];
-  const pct = Math.min(1, y / totalH) * (SECTION_COLORS.length - 1);
+  const pct = Math.max(0, Math.min(1, y / totalH)) * (SECTION_COLORS.length - 1);
   const i = Math.floor(pct);
   const t = pct - i;
   const a = SECTION_COLORS[Math.min(i, SECTION_COLORS.length - 1)];
@@ -408,13 +408,12 @@ const Logos = {
     </svg>
   ),
   gmail: (
-    <svg viewBox="0 0 48 48" className="w-8 h-8">
-      <rect width="48" height="48" rx="6" fill="white"/>
-      <path fill="#4caf50" d="M45 16.2l-5 2.75-5 4.75V40h7a3 3 0 003-3V16.2z"/>
-      <path fill="#1e88e5" d="M3 16.2l3.7 2.75L13 23.7V40H6a3 3 0 01-3-3V16.2z"/>
-      <polygon fill="#e53935" points="35,11.2 24,19.45 13,11.2 12,8 24,16.25 36,8"/>
-      <path fill="#c62828" d="M3 12.298V16.2l10 7.5V11.2L9.24 9.27C8.009 8.394 6.476 8.313 5.18 8.91 3.7 9.6 3 11.25 3 12.298z"/>
-      <path fill="#fbc02d" d="M45 12.298V16.2l-10 7.5V11.2l3.76-1.93c1.231-.876 2.764-.957 4.06-.36 1.48.69 2.18 2.34 2.18 3.388z"/>
+    <svg viewBox="52 42 88 66" className="w-8 h-8">
+      <path fill="#4285f4" d="M58 108h14V74L52 59v43c0 3.32 2.69 6 6 6"/>
+      <path fill="#34a853" d="M120 108h14c3.32 0 6-2.69 6-6V59l-20 15"/>
+      <path fill="#fbbc04" d="M120 48v26l20-15v-8c0-7.42-8.47-11.65-14.4-7.2"/>
+      <path fill="#ea4335" d="M72 74V48l24 18 24-18v26L96 92"/>
+      <path fill="#c5221f" d="M52 51v8l20 15V48l-5.6-4.2c-5.94-4.45-14.4-.22-14.4 7.2"/>
     </svg>
   ),
   drive: (
@@ -428,20 +427,10 @@ const Logos = {
     </svg>
   ),
   jira: (
-    <svg viewBox="0 0 32 32" className="w-8 h-8">
-      <defs>
-        <linearGradient id="jbg-lp" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#2684FF"/>
-          <stop offset="100%" stopColor="#0052CC"/>
-        </linearGradient>
-        <linearGradient id="jfg-lp" x1="1" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#fff" stopOpacity="0.9"/>
-          <stop offset="100%" stopColor="#cfe2ff"/>
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="6" fill="url(#jbg-lp)"/>
-      <path d="M15.43 15.35H4.67a6.96 6.96 0 006.97 6.95h2.84V25.2a6.95 6.95 0 006.96 6.95v-15.4a1.34 1.34 0 00-1.34-1.34z" fill="url(#jfg-lp)" transform="scale(0.87) translate(1.8 -0.5)"/>
-      <path d="M23.06 7.68H12.3a6.96 6.96 0 006.95 6.96h2.84v2.9a6.96 6.96 0 006.96 6.95V9.02a1.34 1.34 0 00-1.34-1.34z" fill="url(#jfg-lp)" transform="scale(0.87) translate(1.8 -0.5)" opacity="0.85"/>
+    <svg viewBox="0 0 24 24" className="w-8 h-8">
+      <path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005z" fill="#0052CC"/>
+      <path d="M17.294 5.757H5.723a5.215 5.215 0 0 0 5.215 5.214h2.129v2.058a5.218 5.218 0 0 0 5.215 5.214V6.758a1.001 1.001 0 0 0-1.001-1.001z" fill="#0065FF"/>
+      <path d="M23.013 0H11.455a5.215 5.215 0 0 0 5.215 5.215h2.129v2.057A5.215 5.215 0 0 0 24 12.483V1.005A1.001 1.001 0 0 0 23.013 0z" fill="#4C9AFF"/>
     </svg>
   ),
   zoom: (
