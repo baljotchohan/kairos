@@ -25,11 +25,11 @@ const SIMULATED_RESPONSES = [
       { id: "s3", title: "Google Drive: Vendor_Agreement_Final_Signed.pdf", date: "2019-11-15", source: "drive", source_url: "#" }
     ] as Source[],
     graph: [
-      { id: "d1", label: "Approve Vendor Contract", type: "decision", info: "Software contract approval for $2.3M/year", icon: "🤝" },
-      { id: "p1", label: "John Smith", type: "person", info: "IT Director (Signed contract, left 2022)", icon: "👤" },
-      { id: "t1", label: "Nov 2019", type: "date", info: "Execution date with auto-renew", icon: "📅" },
-      { id: "sr1", label: "Drive: Agreement PDF", type: "source", info: "Signed document in Workspace", icon: "📄" },
-      { id: "o1", label: "Auto-renewed 3x", type: "outcome", info: "Status: Unmanaged payments active", icon: "⚠️" }
+      { id: "dec-1", label: "Approve Vendor Contract", type: "decision", info: "Software contract approval for $2.3M/year", icon: "🤝" },
+      { id: "person-john-smith", label: "John Smith", type: "person", info: "IT Director (Signed contract, left 2022)", icon: "👤" },
+      { id: "date-nov-2019", label: "Nov 2019", type: "date", info: "Execution date with auto-renew", icon: "📅" },
+      { id: "source-drive", label: "Drive: Agreement PDF", type: "source", info: "Signed document in Workspace", icon: "📄" },
+      { id: "outcome-dec-1", label: "Auto-renewed 3x", type: "outcome", info: "Status: Unmanaged payments active", icon: "⚠️" }
     ] as GraphNode[]
   },
   {
@@ -42,11 +42,11 @@ const SIMULATED_RESPONSES = [
       { id: "s6", title: "Google Drive: Framework_Evaluation_2022.docx", date: "2022-08-01", source: "drive", source_url: "#" }
     ] as Source[],
     graph: [
-      { id: "d2", label: "React Chosen over Vue", type: "decision", info: "Frontend technology selection", icon: "⚛️" },
-      { id: "p2", label: "Priya Sharma", type: "person", info: "Senior Frontend Engineer (Vue advocate)", icon: "👤" },
-      { id: "t2", label: "Aug 2022", type: "date", info: "Decided in Q3 team sync", icon: "📅" },
-      { id: "sr2", label: "Slack #frontend", type: "source", info: "Vote results (4-2) and polling thread", icon: "💬" },
-      { id: "o2", label: "Reduced Time-to-Hire", type: "outcome", info: "Outcome: Successful scaling of web team", icon: "✅" }
+      { id: "dec-2", label: "React Chosen over Vue", type: "decision", info: "Frontend technology selection", icon: "⚛️" },
+      { id: "person-priya-sharma", label: "Priya Sharma", type: "person", info: "Senior Frontend Engineer (Vue advocate)", icon: "👤" },
+      { id: "date-aug-2022", label: "Aug 2022", type: "date", info: "Decided in Q3 team sync", icon: "📅" },
+      { id: "source-slack", label: "Slack #frontend", type: "source", info: "Vote results (4-2) and polling thread", icon: "💬" },
+      { id: "outcome-dec-2", label: "Reduced Time-to-Hire", type: "outcome", info: "Outcome: Successful scaling of web team", icon: "✅" }
     ] as GraphNode[]
   },
   {
@@ -59,11 +59,11 @@ const SIMULATED_RESPONSES = [
       { id: "s9", title: "Drive: Project_Phoenix_Retrospective.pdf", date: "2021-03-15", source: "drive", source_url: "#" }
     ] as Source[],
     graph: [
-      { id: "d3", label: "Terminate Project Phoenix", type: "decision", info: "Decision to stop mobile app development", icon: "📱" },
-      { id: "p3", label: "Board of Directors", type: "person", info: "Cancelled project during quarterly review", icon: "👥" },
-      { id: "t3", label: "March 2021", type: "date", info: "Project cancelled", icon: "📅" },
-      { id: "sr3", label: "Jira MOB-100", type: "source", info: "Epic details and code repository checkins", icon: "🔧" },
-      { id: "o3", label: "₹40L Write-off", type: "outcome", info: "Resulted in write-down & redirect to web app", icon: "❌" }
+      { id: "dec-3", label: "Terminate Project Phoenix", type: "decision", info: "Decision to stop mobile app development", icon: "📱" },
+      { id: "person-board-of-directors", label: "Board of Directors", type: "person", info: "Cancelled project during quarterly review", icon: "👥" },
+      { id: "date-march-2021", label: "March 2021", type: "date", info: "Project cancelled", icon: "📅" },
+      { id: "source-jira", label: "Jira MOB-100", type: "source", info: "Epic details and code repository checkins", icon: "🔧" },
+      { id: "outcome-dec-3", label: "₹40L Write-off", type: "outcome", info: "Resulted in write-down & redirect to web app", icon: "❌" }
     ] as GraphNode[]
   }
 ];
