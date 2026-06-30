@@ -193,7 +193,6 @@ export default function Home() {
   const [currentGraphNodes, setCurrentGraphNodes] = useState<GraphNode[]>([]);
   const [currentGraphEdges, setCurrentGraphEdges] = useState<GraphEdge[]>([]);
   const [currentGraphTitle, setCurrentGraphTitle] = useState("");
-  const [isGraphLoading, setIsGraphLoading] = useState(false);
   
   // Custom states for simulated interface
   const [simulatedMessages, setSimulatedMessages] = useState<any[]>([]);
@@ -522,15 +521,11 @@ export default function Home() {
   // Fetch single decision detail and compile its local star graph
   const fetchDecisionGraphData = useCallback(async (decisionId: string) => {
     if (!token) return;
-    setIsGraphLoading(true);
     try {
       const res = await fetch(`/api/decisions/${decisionId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!res.ok) {
-        setIsGraphLoading(false);
-        return;
-      }
+      if (!res.ok) return;
       const data = await res.json();
       if (data) {
         const nodes: GraphNode[] = [];
@@ -617,8 +612,6 @@ export default function Home() {
       }
     } catch (e) {
       console.error("Error compiling local star graph", e);
-    } finally {
-      setIsGraphLoading(false);
     }
   }, [token]);
 
@@ -1833,7 +1826,6 @@ export default function Home() {
                       nodes={currentGraphNodes}
                       edges={currentGraphEdges}
                       decisionTitle={currentGraphTitle}
-                      isLoading={isGraphLoading}
                       onNodeClick={async (nodeId) => {
                         if (nodeId && !nodeId.includes("-person-") && !nodeId.includes("-date") && !nodeId.includes("-source") && !nodeId.includes("-outcome")) {
                           if (token) {
@@ -1841,17 +1833,13 @@ export default function Home() {
                           } else {
                             const match = SIMULATED_RESPONSES.find((r) => r.graph.some((n) => n.id === nodeId));
                             if (match) {
-                              setIsGraphLoading(true);
-                              setTimeout(() => {
-                                const edges = match.graph.slice(1).map((node) => ({
-                                  source: match.graph[0].id,
-                                  target: node.id
-                                }));
-                                setCurrentGraphNodes(match.graph);
-                                setCurrentGraphEdges(edges);
-                                setCurrentGraphTitle(match.question);
-                                setIsGraphLoading(false);
-                              }, 650);
+                              const edges = match.graph.slice(1).map((node) => ({
+                                source: match.graph[0].id,
+                                target: node.id
+                              }));
+                              setCurrentGraphNodes(match.graph);
+                              setCurrentGraphEdges(edges);
+                              setCurrentGraphTitle(match.question);
                             }
                           }
                         }
