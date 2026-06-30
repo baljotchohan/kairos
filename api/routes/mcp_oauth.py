@@ -24,11 +24,15 @@ import sqlite3
 import uuid
 from datetime import datetime
 
+import logging
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from config import config
 from core.mcp_auth import mint_mcp_token
+
+log = logging.getLogger(__name__)
 
 # Public routes mounted at root: /.well-known/*, /oauth/*
 mcp_oauth_public_router = APIRouter(tags=["mcp-oauth"])
@@ -142,9 +146,14 @@ async def oauth_authorize(request: Request):
     req_id = uuid.uuid4().hex
     c = _conn()
     try:
+        # Strip base64url padding from code_challenge (RFC 7636 §4.2 requires no padding,
+        # but some OAuth clients — including older Claude.ai builds — include "=" chars).
+        # Storing normalised (no padding) ensures the server-side SHA256 computation
+        # (which also strips padding) always matches on compare.
+        code_challenge = p.get("code_challenge", "").rstrip("=")
         c.execute(
             "INSERT INTO mcp_oauth_requests (req_id, client_id, redirect_uri, code_challenge, state, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (req_id, p.get("client_id", ""), redirect_uri, p.get("code_challenge", ""), p.get("state", ""), datetime.utcnow().isoformat()),
+            (req_id, p.get("client_id", ""), redirect_uri, code_challenge, p.get("state", ""), datetime.utcnow().isoformat()),
         )
         c.commit()
     finally:
@@ -241,22 +250,35 @@ async def oauth_token(request: Request):
         if (datetime.utcnow() - created_at).total_seconds() > 600:
             return JSONResponse({"error": "invalid_grant", "error_description": "Authorization code expired"}, status_code=400)
 
-        # Verify PKCE
-        if row["code_challenge"] and code_verifier:
+        # Verify PKCE — normalise both sides to no-padding base64url so that
+        # clients that sent code_challenge WITH "=" padding (stored normalised above)
+        # and clients that sent it WITHOUT padding all verify correctly.
+        stored_challenge = (row["code_challenge"] or "").rstrip("=")
+        if stored_challenge and code_verifier:
             challenge = base64.urlsafe_b64encode(
                 hashlib.sha256(code_verifier.encode()).digest()
             ).decode().rstrip("=")
-            if not hmac.compare_digest(challenge, row["code_challenge"]):
+            if not hmac.compare_digest(challenge, stored_challenge):
                 return JSONResponse({"error": "invalid_grant", "error_description": "PKCE verification failed"}, status_code=400)
 
         c.execute("UPDATE mcp_oauth_codes SET used = 1 WHERE code = ?", (code,))
         c.commit()
         user_id = row["user_id"]
+        log.info("oauth_token: issuing token for user_id=%r client_id=%r", user_id, row["client_id"])
     finally:
         c.close()
 
     # Issue access token — same HMAC format as URL tokens, verified by verify_mcp_token()
-    access_token = mint_mcp_token(user_id)
+    try:
+        access_token = mint_mcp_token(user_id)
+    except Exception as exc:
+        log.error("oauth_token: mint_mcp_token failed for user_id=%r: %s", user_id, exc, exc_info=True)
+        return JSONResponse(
+            {"error": "server_error", "error_description": "Failed to issue access token"},
+            status_code=500,
+        )
+
+    log.info("oauth_token: issued token uid_prefix=%r", access_token[:10])
 
     return JSONResponse({
         "access_token": access_token,
