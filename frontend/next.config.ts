@@ -43,9 +43,18 @@ const nextConfig: NextConfig = {
         },
       ],
       afterFiles: [
+        // Exclude local API routes from being proxied to the backend
+        {
+          source: "/api/oauth/:path*",
+          destination: "/api/oauth/:path*",
+        },
+        {
+          source: "/api/mcp",
+          destination: "/api/mcp",
+        },
         // All other API and MCP URL-token calls go to the backend
         {
-          source: "/api/:path((?!oauth|mcp).*)",
+          source: "/api/:path*",
           destination: `${API_URL}/api/:path*`,
         },
         {
