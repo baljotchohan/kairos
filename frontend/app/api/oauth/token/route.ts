@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifyPayload } from "@/lib/mcp-auth";
 import crypto from "crypto";
-import { verifyPayload, mintMcpToken } from "@/lib/mcp-auth";
 
 interface AuthCodePayload {
   uid: string;
+  mcp_token: string;
   redirect_uri: string;
   code_challenge: string;
   state: string;
@@ -48,9 +49,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!code || !code_verifier) {
+  if (!code) {
     return NextResponse.json(
-      { error: "invalid_request", error_description: "code and code_verifier are required" },
+      { error: "invalid_request", error_description: "code is required" },
       { status: 400 }
     );
   }
@@ -71,23 +72,25 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Verify PKCE: SHA256(code_verifier) base64url (no padding) must match stored code_challenge
-  const computed = stripPadding(
-    crypto.createHash("sha256").update(code_verifier).digest("base64url")
-  );
-  const stored = stripPadding(payload.code_challenge);
-
-  if (computed !== stored) {
-    return NextResponse.json(
-      { error: "invalid_grant", error_description: "PKCE verification failed" },
-      { status: 400 }
+  // Verify PKCE when code_verifier is present.
+  // SHA256(code_verifier) base64url (no padding) must match stored code_challenge.
+  if (payload.code_challenge && code_verifier) {
+    const computed = stripPadding(
+      crypto.createHash("sha256").update(code_verifier).digest("base64url")
     );
+    const stored = stripPadding(payload.code_challenge);
+    if (computed !== stored) {
+      return NextResponse.json(
+        { error: "invalid_grant", error_description: "PKCE verification failed" },
+        { status: 400 }
+      );
+    }
   }
 
-  const access_token = mintMcpToken(payload.uid);
-
+  // The MCP token was pre-minted by the backend (which holds MCP_CONNECT_SECRET).
+  // No cross-system secret needed here.
   return NextResponse.json({
-    access_token,
+    access_token: payload.mcp_token,
     token_type: "bearer",
     expires_in: 31536000,
   });

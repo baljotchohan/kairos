@@ -1,9 +1,27 @@
 import crypto from "crypto";
 
-function secret(): string {
-  const s = process.env.MCP_CONNECT_SECRET;
-  if (!s) throw new Error("MCP_CONNECT_SECRET not set");
-  return s;
+/**
+ * Returns the signing key for MCP tokens and OAuth session JWTs.
+ *
+ * Mirrors core/mcp_auth.py _secret() exactly so tokens minted here are
+ * verifiable by the Python backend and vice-versa:
+ *   1. If MCP_CONNECT_SECRET is set → use it directly (both sides must match)
+ *   2. Otherwise → derive from FIREWORKS_API_KEY | GOOGLE_CLIENT_SECRET | hardcoded
+ *      via SHA-256("kairos-mcp::{base}") — same formula as the Python fallback
+ *
+ * Set MCP_CONNECT_SECRET explicitly in Vercel env vars (same value as HF Space)
+ * for production. Without it the fallback is used, which works as long as
+ * FIREWORKS_API_KEY or GOOGLE_CLIENT_SECRET match the HF Space values.
+ */
+function secret(): Buffer {
+  const explicit = process.env.MCP_CONNECT_SECRET;
+  if (explicit) return Buffer.from(explicit);
+
+  const base =
+    process.env.FIREWORKS_API_KEY ||
+    process.env.GOOGLE_CLIENT_SECRET ||
+    "kairos-dev-mcp-secret";
+  return crypto.createHash("sha256").update(`kairos-mcp::${base}`).digest();
 }
 
 export function mintMcpToken(userId: string): string {

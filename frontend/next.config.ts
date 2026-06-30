@@ -18,28 +18,31 @@ const nextConfig: NextConfig = {
           source: "/.well-known/oauth-protected-resource",
           destination: "/api/oauth/protected-resource",
         },
-        // Client registration: served by Next.js (no secrets needed)
+        // Client registration: served by Next.js (stateless, no SQLite)
         {
           source: "/oauth/register",
           destination: "/api/oauth/register",
         },
-        // MCP Bearer proxy: served by Next.js (proxies to backend URL-token endpoint)
+        // Authorization + token: served by Next.js stateless JWT routes.
+        // These used to go to the HF Space backend (which has SQLite state), but that
+        // caused "kairos returned an error when connecting" every time we pushed to HF
+        // because the rebuild wipes SQLite — any in-flight code was gone by the time
+        // Claude exchanged it for a token. Stateless signed JWTs have no such race.
+        {
+          source: "/oauth/authorize",
+          destination: "/api/oauth/authorize",
+        },
+        {
+          source: "/oauth/token",
+          destination: "/api/oauth/token",
+        },
+        // MCP Bearer proxy: served by Next.js Edge function (proxies SSE to backend)
         {
           source: "/mcp",
           destination: "/api/mcp",
         },
       ],
       afterFiles: [
-        // authorize + token go to backend — backend has MCP_CONNECT_SECRET + SQLite state
-        // so we don't need to set MCP_CONNECT_SECRET in Vercel at all.
-        {
-          source: "/oauth/authorize",
-          destination: `${API_URL}/oauth/authorize`,
-        },
-        {
-          source: "/oauth/token",
-          destination: `${API_URL}/oauth/token`,
-        },
         // All other API and MCP URL-token calls go to the backend
         {
           source: "/api/:path*",
