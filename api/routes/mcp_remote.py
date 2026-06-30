@@ -428,17 +428,40 @@ async def mcp_bearer_http(request: Request):
         body = await request.json()
     except Exception:
         return JSONResponse(_error(None, -32700, "Parse error"), status_code=400)
+
+    # Resolve SSE session if active
+    session_id = request.query_params.get("session_id") or request.headers.get("Mcp-Session-Id")
+    has_sse_session = session_id and session_id in _active_sessions
+
     if isinstance(body, list):
-        responses = [r for m in body if (r := _handle_message(m, memory, user_id)) is not None]
+        responses = []
+        for m in body:
+            resp = _handle_message(m, memory, user_id)
+            if resp is not None:
+                if has_sse_session:
+                    await _active_sessions[session_id].put(resp)
+                else:
+                    responses.append(resp)
+        if has_sse_session:
+            return Response(status_code=202)  # Response routed via SSE
         if not responses:
             return Response(status_code=202)
         return _format_response(responses)
+
     extra_headers = {}
     if body.get("method") == "initialize":
-        extra_headers["Mcp-Session-Id"] = uuid.uuid4().hex
+        # Keep incoming or issue new session id
+        extra_headers["Mcp-Session-Id"] = session_id or uuid.uuid4().hex
+
     resp = _handle_message(body, memory, user_id)
     if resp is None:
         return Response(status_code=202)
+
+    if has_sse_session:
+        # Route response message back to client via the active SSE stream queue
+        await _active_sessions[session_id].put(resp)
+        return Response(status_code=202)
+
     return _format_response(resp, extra_headers)
 
 
@@ -456,10 +479,8 @@ async def mcp_streamable_http_get(token: str, request: Request):
 
     async def sse_generator():
         # Push the endpoint configuration event immediately
-        scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
-        host = request.headers.get("x-forwarded-host", request.url.netloc)
-        base_url = f"{scheme}://{host}"
-        endpoint_url = f"{base_url}/mcp/u/{token}?session_id={session_id}"
+        # Yield a relative URL path to comply with client-side origin/SSRF restrictions.
+        endpoint_url = f"/mcp/u/{token}?session_id={session_id}"
         yield f"event: endpoint\ndata: {endpoint_url}\n\n"
 
         if getattr(request.app.state, "testing", False):
