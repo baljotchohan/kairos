@@ -1,8 +1,12 @@
+// Edge Runtime: no serverless timeout, supports long-lived SSE streaming.
+// Required so the GET handler can proxy the backend's keepalive SSE stream
+// without Vercel closing it after 25s (which causes Claude.ai to disconnect).
+export const runtime = "edge";
+
 import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-// Headers the backend sends that Claude.ai / ChatGPT need to see
 const FORWARDED_RESPONSE_HEADERS = [
   "content-type",
   "mcp-session-id",
@@ -38,6 +42,7 @@ function baseUrl(req: NextRequest): string {
   return `${proto}://${host}`;
 }
 
+// POST — proxy MCP messages from Claude.ai to the backend URL-token endpoint.
 export async function POST(req: NextRequest) {
   const token = extractToken(req);
   if (!token) return unauthorized(baseUrl(req));
@@ -67,8 +72,7 @@ export async function POST(req: NextRequest) {
       if (v) responseHeaders[h] = v;
     }
     return new NextResponse(responseBody, { status: upstream.status, headers: responseHeaders });
-  } catch (err) {
-    console.error("[/api/mcp POST] upstream fetch failed:", err);
+  } catch {
     return NextResponse.json(
       { jsonrpc: "2.0", id: null, error: { code: -32603, message: "Failed to reach KAIROS backend" } },
       { status: 502 }
@@ -76,32 +80,62 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET — Claude.ai and ChatGPT use the HTTP+SSE transport: they GET first to
-// receive an `endpoint` event, then POST all MCP messages to that URL.
-// Returning 405 here prevents the endpoint event from ever reaching the client,
-// which is why OAuth-authenticated connections fail ("kairos returned an error
-// when connecting") while direct URL-token connections work (the backend's own
-// GET /mcp/u/{token} sends the event directly).
-// Fix: send a synthetic SSE response with the endpoint URL pointing to the
-// URL-token path. Responses come directly in the POST body (stateless backend),
-// not via the SSE stream, so the stream can close immediately after the event.
+// GET — proxy the backend's long-lived SSE stream to Claude.ai.
+//
+// Claude.ai uses HTTP+SSE transport: it sends GET first to establish the SSE
+// channel, reads the `endpoint` event (the URL to POST messages to), then keeps
+// the SSE open for server-initiated messages and keepalive pings.
+//
+// The backend's GET /mcp/u/{token} sends:
+//   event: endpoint
+//   data: https://kairos-coral-nine.vercel.app/mcp/u/{token}?session_id=XXX
+// then `: ping` every 15 s.
+//
+// Why this broke before:
+//  - Returning 405 → Claude never got the endpoint URL → "error when connecting"
+//  - Synthetic SSE that closes immediately → Claude saw the SSE drop → disconnected
+//  - Edge Runtime is required so the stream is not killed by the 25 s serverless timeout
 export async function GET(req: NextRequest) {
   const token = extractToken(req);
   if (!token) return unauthorized(baseUrl(req));
 
-  const base = baseUrl(req);
-  const endpointUrl = `${base}/mcp/u/${token}`;
-  return new NextResponse(`event: endpoint\ndata: ${endpointUrl}\n\n`, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      "X-Accel-Buffering": "no",
-    },
-  });
+  const targetUrl = buildTargetUrl(token);
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";
+  const proto = req.headers.get("x-forwarded-proto") ?? "https";
+
+  try {
+    const upstream = await fetch(targetUrl, {
+      method: "GET",
+      headers: {
+        "Accept": "text/event-stream",
+        "Cache-Control": "no-cache",
+        // Pass forwarding headers so the backend builds the correct endpoint URL
+        // (uses kairos-coral-nine.vercel.app, not baljot07-kairos-backend.hf.space)
+        "x-forwarded-host": host,
+        "x-forwarded-proto": proto,
+      },
+    });
+
+    if (!upstream.ok || !upstream.body) {
+      return new NextResponse(null, { status: upstream.status || 502 });
+    }
+
+    // Stream the SSE body directly — Edge Runtime has no timeout so the connection
+    // stays alive as long as Claude.ai keeps it open.
+    return new NextResponse(upstream.body, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        "X-Accel-Buffering": "no",
+      },
+    });
+  } catch {
+    return new NextResponse(null, { status: 502 });
+  }
 }
 
-// DELETE for session cleanup (some MCP clients)
+// DELETE — session cleanup (some MCP clients send this on disconnect)
 export async function DELETE(req: NextRequest) {
   const token = extractToken(req);
   if (!token) return unauthorized(baseUrl(req));
