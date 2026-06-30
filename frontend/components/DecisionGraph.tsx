@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 
 export interface GraphNode {
   id: string;
@@ -28,6 +28,7 @@ interface DecisionGraphProps {
   decisionTitle: string;
   className?: string;
   onNodeClick?: (nodeId: string) => void;
+  isLoading?: boolean;
 }
 
 // Helpers for CSS variables parsing
@@ -91,9 +92,14 @@ export default function DecisionGraph({
   decisionTitle,
   className = "",
   onNodeClick,
+  isLoading = false,
 }: DecisionGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const requestFrameRef = useRef<() => void>(() => {});
+  const requestFrame = useCallback(() => {
+    requestFrameRef.current();
+  }, []);
 
   // States for UI
   const [zoom, setZoomState] = useState(0.95);
@@ -138,6 +144,7 @@ export default function DecisionGraph({
   const updateSetting = (key: string, value: any) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
     alphaRef.current = 1.0; // reheat simulation on adjustment
+    requestFrame();
   };
 
   const resetSettings = () => {
@@ -154,6 +161,7 @@ export default function DecisionGraph({
       gravity: 0.012,
     });
     alphaRef.current = 1.0;
+    requestFrame();
   };
 
   // Theme observer
@@ -166,9 +174,11 @@ export default function DecisionGraph({
     accentMuted: "rgba(124, 58, 237, 0.2)"
   });
 
+  // Theme observer
   useEffect(() => {
     const updateTheme = () => {
       themeRef.current = getThemeColors();
+      requestFrame();
     };
     updateTheme();
     
@@ -180,9 +190,10 @@ export default function DecisionGraph({
   // Physics Simulation Coordinates
   const physicsNodesRef = useRef<PhysicsNode[]>([]);
   const alphaRef = useRef(1.0); // simulation cooling parameter
-  const draggedNodeRef = useRef<PhysicsNode | null>(null);
+  const draggedNodeIdRef = useRef<string | null>(null);
   const isPanningRef = useRef(false);
   const panStartRef = useRef({ x: 0, y: 0 });
+  const isLoopActiveRef = useRef(false);
 
   // Build edges: fallback to star topology if not provided
   const computedEdges: GraphEdge[] = React.useMemo(() => {
@@ -235,6 +246,7 @@ export default function DecisionGraph({
     });
 
     alphaRef.current = 1.0; // reheat
+    requestFrame();
   }, [nodes]);
 
   // Resize observer
@@ -249,6 +261,7 @@ export default function DecisionGraph({
           height: entry.contentRect.height,
         });
         alphaRef.current = 1.0; // reheat simulation on resize
+        requestFrame();
       }
     });
     observer.observe(container);
@@ -321,7 +334,7 @@ export default function DecisionGraph({
 
     // 4. Update coordinates & apply damping
     pNodes.forEach((node) => {
-      if (node.id === draggedNodeRef.current?.id) {
+      if (node.id === draggedNodeIdRef.current) {
         node.vx = 0;
         node.vy = 0;
         return;
@@ -387,38 +400,53 @@ export default function DecisionGraph({
     // 1. Draw Grid Background (if enabled)
     if (currentSettings.showGrid) {
       const spacing = 28 * zoom;
-      const startX = pan.x % spacing;
-      const startY = pan.y % spacing;
-      ctx.beginPath();
-      for (let x = startX; x < width; x += spacing) {
-        for (let y = startY; y < height; y += spacing) {
-          ctx.arc(x, y, 1.0 * Math.min(zoom, 1.4), 0, 2 * Math.PI);
+      // LEVEL OF DETAIL GRID OPTIMIZATION:
+      // If spacing is too small, skip drawing the grid to prevent browser freeze.
+      if (spacing >= 14) {
+        const startX = pan.x % spacing;
+        const startY = pan.y % spacing;
+        ctx.beginPath();
+        for (let x = startX; x < width; x += spacing) {
+          for (let y = startY; y < height; y += spacing) {
+            ctx.arc(x, y, 1.0 * Math.min(zoom, 1.4), 0, 2 * Math.PI);
+          }
         }
+        ctx.fillStyle = theme.border === "rgb(229,229,229)" || theme.border === "#e5e5e5" 
+          ? "rgba(0, 0, 0, 0.05)" 
+          : "rgba(255, 255, 255, 0.06)";
+        ctx.fill();
       }
-      ctx.fillStyle = theme.border === "rgb(229,229,229)" || theme.border === "#e5e5e5" 
-        ? "rgba(0, 0, 0, 0.05)" 
-        : "rgba(255, 255, 255, 0.06)";
-      ctx.fill();
     }
 
     const activeFocusId = selectedNodeId || hoveredNodeId;
     const isFocusActive = activeFocusId !== null;
 
-    // Connectivity masking helper
+    // 2. Precompute lookups for performance optimization:
+    // Create a map from nodeId -> PhysicsNode to make edge connections O(1)
+    const nodeMap = new Map<string, PhysicsNode>();
+    pNodes.forEach(node => {
+      nodeMap.set(node.id, node);
+    });
+
+    // Create a set of connected node IDs to make isNodeConnected check O(1)
+    const connectedNodeIds = new Set<string>();
+    if (isFocusActive) {
+      connectedNodeIds.add(activeFocusId);
+      computedEdges.forEach((e) => {
+        if (e.source === activeFocusId) connectedNodeIds.add(e.target);
+        if (e.target === activeFocusId) connectedNodeIds.add(e.source);
+      });
+    }
+
     const isNodeConnected = (nodeId: string) => {
       if (!isFocusActive) return true;
-      if (nodeId === activeFocusId) return true;
-      return computedEdges.some(
-        (e) =>
-          (e.source === activeFocusId && e.target === nodeId) ||
-          (e.target === activeFocusId && e.source === nodeId)
-      );
+      return connectedNodeIds.has(nodeId);
     };
 
-    // 2. Draw Connections (Links)
+    // 3. Draw Connections (Links)
     computedEdges.forEach((edge, edgeIdx) => {
-      const src = pNodes.find((n) => n.id === edge.source);
-      const tgt = pNodes.find((n) => n.id === edge.target);
+      const src = nodeMap.get(edge.source);
+      const tgt = nodeMap.get(edge.target);
       if (!src || !tgt) return;
 
       const sx = src.x * zoom + pan.x;
@@ -552,36 +580,58 @@ export default function DecisionGraph({
     ctx.restore();
   };
 
-  // Set up game loop
-  useEffect(() => {
-    let animFrameId: number;
+  // Define tick and demand-driven rendering functions
+  const tick = useCallback(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) {
+      isLoopActiveRef.current = false;
+      return;
+    }
 
-    const tick = () => {
-      const canvas = canvasRef.current;
-      const container = containerRef.current;
-      if (!canvas || !container) {
-        animFrameId = requestAnimationFrame(tick);
-        return;
-      }
+    const width = container.clientWidth;
+    const height = container.clientHeight;
 
-      const width = container.clientWidth;
-      const height = container.clientHeight;
+    let needsMoreFrames = false;
 
-      if (alphaRef.current > 0.005) {
-        runPhysics(width, height);
-        alphaRef.current *= 0.985;
-      } else {
-        alphaRef.current = 0;
-      }
+    if (alphaRef.current > 0.005) {
+      runPhysics(width, height);
+      alphaRef.current *= 0.985;
+      needsMoreFrames = true;
+    } else {
+      alphaRef.current = 0;
+    }
 
-      draw(canvas, width, height);
+    if (draggedNodeIdRef.current || isPanningRef.current) {
+      needsMoreFrames = true;
+    }
 
-      animFrameId = requestAnimationFrame(tick);
-    };
+    draw(canvas, width, height);
 
-    animFrameId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(animFrameId);
+    if (needsMoreFrames) {
+      requestAnimationFrame(tick);
+    } else {
+      isLoopActiveRef.current = false;
+    }
   }, [computedEdges, nodeDegrees]);
+
+  const requestFrameImpl = useCallback(() => {
+    if (!isLoopActiveRef.current) {
+      isLoopActiveRef.current = true;
+      requestAnimationFrame(tick);
+    }
+  }, [tick]);
+
+  // Expose requestFrameImpl to the ref so other hooks can access it
+  useEffect(() => {
+    requestFrameRef.current = requestFrameImpl;
+  });
+
+  // Bootstrap/restart loop on topology or layout updates
+  useEffect(() => {
+    alphaRef.current = 1.0;
+    requestFrameImpl();
+  }, [computedEdges, nodeDegrees, requestFrameImpl]);
 
   // Zoom wheel event handler (attaches directly to bypass passive listener limits)
   useEffect(() => {
@@ -611,13 +661,14 @@ export default function DecisionGraph({
       });
       setZoom(newZoom);
       alphaRef.current = 1.0; // reheat simulation
+      requestFrame();
     };
 
     canvas.addEventListener("wheel", handleWheel, { passive: false });
     return () => {
       canvas.removeEventListener("wheel", handleWheel);
     };
-  }, []);
+  }, [requestFrame]);
 
   // Mouse handlers
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -639,12 +690,13 @@ export default function DecisionGraph({
     });
 
     if (clickedNode) {
-      draggedNodeRef.current = clickedNode;
+      draggedNodeIdRef.current = clickedNode.id;
       setSelectedNodeId(clickedNode.id === selectedNodeId ? null : clickedNode.id);
       
       clickedNode.vx = 0;
       clickedNode.vy = 0;
       alphaRef.current = 1.0;
+      requestFrame();
 
       if (onNodeClick) {
         onNodeClick(clickedNode.id);
@@ -652,6 +704,7 @@ export default function DecisionGraph({
     } else {
       isPanningRef.current = true;
       panStartRef.current = { x: e.clientX - panRef.current.x, y: e.clientY - panRef.current.y };
+      requestFrame();
     }
   };
 
@@ -670,15 +723,21 @@ export default function DecisionGraph({
         x: e.clientX - panStartRef.current.x,
         y: e.clientY - panStartRef.current.y,
       });
+      requestFrame();
       return;
     }
 
-    if (draggedNodeRef.current) {
-      draggedNodeRef.current.x = worldX;
-      draggedNodeRef.current.y = worldY;
-      draggedNodeRef.current.vx = 0;
-      draggedNodeRef.current.vy = 0;
-      alphaRef.current = 1.0;
+    const draggedNodeId = draggedNodeIdRef.current;
+    if (draggedNodeId) {
+      const node = physicsNodesRef.current.find((n) => n.id === draggedNodeId);
+      if (node) {
+        node.x = worldX;
+        node.y = worldY;
+        node.vx = 0;
+        node.vy = 0;
+        alphaRef.current = 1.0;
+        requestFrame();
+      }
       return;
     }
 
@@ -693,11 +752,12 @@ export default function DecisionGraph({
     if (hovered?.id !== hoveredNodeId) {
       setHoveredNodeId(hovered ? hovered.id : null);
       alphaRef.current = 1.0; // reheat to update highlight frame
+      requestFrame();
     }
   };
 
   const handleMouseUp = () => {
-    draggedNodeRef.current = null;
+    draggedNodeIdRef.current = null;
     isPanningRef.current = false;
   };
 
@@ -1012,6 +1072,17 @@ export default function DecisionGraph({
           </div>
         )}
       </div>
+      {/* Loading Overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[rgb(var(--bg))]/40 backdrop-blur-[2px] z-30 transition-all duration-300">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 border-2 border-[rgb(var(--accent))]/30 border-t-[rgb(var(--accent))] rounded-full animate-spin" />
+            <span className="text-[10px] font-sans font-medium tracking-wider text-[rgb(var(--text-muted))] uppercase">
+              Mapping context...
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
