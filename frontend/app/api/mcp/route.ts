@@ -22,8 +22,9 @@ const CORS_HEADERS = {
   "Access-Control-Max-Age": "86400",
 };
 
-function buildTargetUrl(token: string): string {
-  return `${BACKEND_URL}/mcp/u/${token}`;
+function buildTargetUrl(token: string, searchParamsString: string): string {
+  const query = searchParamsString ? `?${searchParamsString}` : "";
+  return `${BACKEND_URL}/mcp/u/${token}${query}`;
 }
 
 function extractToken(req: NextRequest): string | null {
@@ -76,7 +77,8 @@ export async function POST(req: NextRequest) {
     return unauthorized(baseUrl(req), req.headers.get("authorization") ?? "", token);
   }
 
-  const targetUrl = buildTargetUrl(token);
+  const { searchParams } = new URL(req.url);
+  const targetUrl = buildTargetUrl(token, searchParams.toString());
   try {
     const bodyText = await req.text();
     const reqHeaders: Record<string, string> = {
@@ -134,7 +136,8 @@ export async function GET(req: NextRequest) {
     return unauthorized(baseUrl(req), req.headers.get("authorization") ?? "", token);
   }
 
-  const targetUrl = buildTargetUrl(token);
+  const { searchParams } = new URL(req.url);
+  const targetUrl = buildTargetUrl(token, searchParams.toString());
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";
   const proto = req.headers.get("x-forwarded-proto") ?? "https";
 
@@ -189,6 +192,8 @@ export async function DELETE(req: NextRequest) {
   if (!token) {
     return unauthorized(baseUrl(req), req.headers.get("authorization") ?? "", token);
   }
+  const { searchParams } = new URL(req.url);
+  const targetUrl = buildTargetUrl(token, searchParams.toString());
   return new NextResponse(null, { 
     status: 204,
     headers: CORS_HEADERS,
