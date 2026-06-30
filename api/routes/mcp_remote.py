@@ -178,37 +178,40 @@ def _tool_store_context(memory, user_id: str, decision: str, context: str,
     else:
         participants = [p for p in participants if p is not None]
 
-    node = memory.add_decision(
+    from core.memory import KairosMemory
+    node_id = KairosMemory.make_id(title=decision, user_id=user_id)
+    node = DecisionNode(
+        id=node_id,
         title=decision,
         summary=decision,
         outcome=context,
-        date=date,
-        source=source,
+        date=date or "",
+        source=source or "MCP",
+        source_url="",
         participants=participants,
-        project=project,
+        topics=[project] if project else [],
         user_id=user_id,
-        context=context
+        metadata={"context": context, "project": project},
     )
-    # Background async auto-linking (via graph DB components)
-    try:
-        memory.auto_link_decision(node.id, user_id=user_id)
-    except Exception:
-        log.warning("KAIROS auto-linking failed for node %s", node.id, exc_info=True)
+    memory.store(node, user_id=user_id)
 
     return f"Successfully stored decision permanently in KAIROS memory (ID: {node.id})."
 
 
 def _tool_search_decisions(memory, user_id: str, topic: str = None, date_from: str = None,
                            date_to: str = None, person: str = None, project: str = None) -> str:
-    # Filtered search: topic keywords, time-bounded, person-bounded, project-bounded
-    nodes = memory.search_decisions(
+    # Use the real KairosMemory API — structured_search supports topic, person, date range.
+    nodes = memory.structured_search(
         topic=topic,
         date_from=date_from,
         date_to=date_to,
         person=person,
-        project=project,
-        user_id=user_id
+        user_id=user_id,
     )
+    # Client-side project filter (structured_search doesn't have a project column filter)
+    if project:
+        nodes = [n for n in nodes if getattr(n, "project", None) == project]
+
     if not nodes:
         return "KAIROS: No decisions found matching the specified search filters."
     
