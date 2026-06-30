@@ -8,10 +8,10 @@ import { NextRequest } from "next/server";
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const FORWARDED_RESPONSE_HEADERS = [
-  "content-type",
-  "mcp-session-id",
-  "cache-control",
-  "x-request-id",
+  "Content-Type",
+  "Mcp-Session-Id",
+  "Cache-Control",
+  "X-Request-Id",
 ];
 
 const CORS_HEADERS = {
