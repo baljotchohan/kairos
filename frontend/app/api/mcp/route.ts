@@ -28,6 +28,16 @@ function buildTargetUrl(token: string, searchParamsString: string): string {
 }
 
 function extractToken(req: NextRequest): string | null {
+  // 1. Try to extract token from original URL path (for direct Token-in-URL clients)
+  const urlObj = new URL(req.url);
+  const pathParts = urlObj.pathname.split("/");
+  const uIndex = pathParts.indexOf("u");
+  if (uIndex !== -1 && uIndex < pathParts.length - 1) {
+    const token = pathParts[uIndex + 1];
+    if (token) return token;
+  }
+
+  // 2. Fall back to Authorization: Bearer header
   const authHeader = req.headers.get("authorization") ?? "";
   const parts = authHeader.trim().split(/\s+/);
   if (parts.length === 2 && parts[0].toLowerCase() === "bearer") {

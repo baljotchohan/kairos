@@ -24,10 +24,6 @@ const nextConfig: NextConfig = {
           destination: "/api/oauth/register",
         },
         // Authorization + token: served by Next.js stateless JWT routes.
-        // These used to go to the HF Space backend (which has SQLite state), but that
-        // caused "kairos returned an error when connecting" every time we pushed to HF
-        // because the rebuild wipes SQLite — any in-flight code was gone by the time
-        // Claude exchanged it for a token. Stateless signed JWTs have no such race.
         {
           source: "/oauth/authorize",
           destination: "/api/oauth/authorize",
@@ -36,9 +32,13 @@ const nextConfig: NextConfig = {
           source: "/oauth/token",
           destination: "/api/oauth/token",
         },
-        // MCP Bearer proxy: served by Next.js Edge function (proxies SSE to backend)
+        // MCP Bearer and URL-token proxy: served by Next.js Edge function (proxies SSE to backend)
         {
           source: "/mcp",
+          destination: "/api/mcp",
+        },
+        {
+          source: "/mcp/:path*",
           destination: "/api/mcp",
         },
       ],
@@ -52,14 +52,10 @@ const nextConfig: NextConfig = {
           source: "/api/mcp",
           destination: "/api/mcp",
         },
-        // All other API and MCP URL-token calls go to the backend
+        // All other API calls go to the backend
         {
           source: "/api/:path*",
           destination: `${API_URL}/api/:path*`,
-        },
-        {
-          source: "/mcp/:path*",
-          destination: `${API_URL}/mcp/:path*`,
         },
       ],
       fallback: [],
