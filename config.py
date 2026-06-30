@@ -15,13 +15,13 @@ class Config:
     FIREWORKS_BASE_URL: str = "https://api.fireworks.ai/inference/v1"
     FIREWORKS_MODEL: str = os.getenv(
         "FIREWORKS_MODEL",
-        "accounts/fireworks/models/qwen2p5-72b-instruct"
+        "accounts/fireworks/models/qwen3p7-plus"
     )
     # Cheap/fast Fireworks model for high-volume ingestion extraction — keeps
     # cost + latency down vs. running the 72B on every Slack/email/Drive item.
     FIREWORKS_MODEL_FAST: str = os.getenv(
         "FIREWORKS_MODEL_FAST",
-        "accounts/fireworks/models/llama-v3p1-8b-instruct"
+        "accounts/fireworks/models/llama-v3p3-70b-instruct"
     )
     FIREWORKS_EMBED_MODEL: str = "nomic-ai/nomic-embed-text-v1.5"
 

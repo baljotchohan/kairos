@@ -501,6 +501,35 @@ class KairosOrchestrator:
         if profile.total_queries > 0 and profile.total_queries % 5 == 0:
             asyncio.create_task(self._trigger_profile_update(user_id))
 
+        # Also store the Q&A exchange as a DecisionNode so it is searchable via
+        # MCP get_context (which queries the decision graph, not UserMemory sessions).
+        # This ensures Claude/ChatGPT can find past KAIROS conversations.
+        if answer and intent.intent not in ("greeting",):
+            try:
+                from core.graph import DecisionNode
+                from datetime import datetime as _dt
+                qa_node = DecisionNode(
+                    id=self.memory.make_id(
+                        title=question[:100],
+                        source_url=f"kairos://session/{session_id}",
+                        user_id=user_id,
+                    ),
+                    title=question[:200],
+                    summary=f"Q: {question[:300]}\nA: {answer[:300]}",
+                    date=_dt.utcnow().strftime("%Y-%m-%d"),
+                    source="KAIROS Chat",
+                    source_url=f"kairos://session/{session_id}",
+                    participants=[],
+                    topics=["KAIROS Conversation", intent.intent],
+                    outcome=answer[:500],
+                    raw_text=f"Question: {question}\n\nAnswer: {answer}",
+                    metadata={"session_id": session_id, "intent": intent.intent, "confidence": confidence},
+                    user_id=user_id,
+                )
+                await asyncio.to_thread(self.memory.store, qa_node, user_id)
+            except Exception as _e:
+                log.warning("Failed to index Q&A to decision graph: %s", _e)
+
         return {
             "answer": answer,
             "sources": sources,

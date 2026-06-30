@@ -300,6 +300,7 @@ class LiveDataAgent(BaseAgent):
                     source_url=src["source_url"],
                     topics=[src["source"]],
                     participants=[],
+                    outcome=f"Retrieved from {src['source']}: {src['title']}",
                     user_id=self._current_user_id or "",
                 )
                 self.memory.store(node, user_id=self._current_user_id)
