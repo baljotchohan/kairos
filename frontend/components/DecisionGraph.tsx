@@ -20,7 +20,6 @@ interface PhysicsNode extends GraphNode {
   y: number;
   vx: number;
   vy: number;
-  emoji?: string;
 }
 
 interface DecisionGraphProps {
@@ -96,14 +95,6 @@ export default function DecisionGraph({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Physics Simulation Coordinates & lazy rendering refs
-  const physicsNodesRef = useRef<PhysicsNode[]>([]);
-  const alphaRef = useRef(1.0); // simulation cooling parameter
-  const draggedNodeRef = useRef<PhysicsNode | null>(null);
-  const isPanningRef = useRef(false);
-  const panStartRef = useRef({ x: 0, y: 0 });
-  const isLoopingRef = useRef(false);
-
   // States for UI
   const [zoom, setZoomState] = useState(0.95);
   const [pan, setPanState] = useState({ x: 0, y: 0 });
@@ -147,7 +138,6 @@ export default function DecisionGraph({
   const updateSetting = (key: string, value: any) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
     alphaRef.current = 1.0; // reheat simulation on adjustment
-    startLoop();
   };
 
   const resetSettings = () => {
@@ -164,7 +154,6 @@ export default function DecisionGraph({
       gravity: 0.012,
     });
     alphaRef.current = 1.0;
-    startLoop();
   };
 
   // Theme observer
@@ -188,7 +177,12 @@ export default function DecisionGraph({
     return () => observer.disconnect();
   }, []);
 
-  // Physics refs relocated to top of component body
+  // Physics Simulation Coordinates
+  const physicsNodesRef = useRef<PhysicsNode[]>([]);
+  const alphaRef = useRef(1.0); // simulation cooling parameter
+  const draggedNodeRef = useRef<PhysicsNode | null>(null);
+  const isPanningRef = useRef(false);
+  const panStartRef = useRef({ x: 0, y: 0 });
 
   // Build edges: fallback to star topology if not provided
   const computedEdges: GraphEdge[] = React.useMemo(() => {
@@ -225,9 +219,8 @@ export default function DecisionGraph({
 
     physicsNodesRef.current = nodes.map((node, idx) => {
       const existing = physicsNodesRef.current.find((n) => n.id === node.id);
-      const emoji = getNodeIconEmoji(node);
       if (existing) {
-        return { ...node, x: existing.x, y: existing.y, vx: existing.vx, vy: existing.vy, emoji };
+        return { ...node, x: existing.x, y: existing.y, vx: existing.vx, vy: existing.vy };
       }
 
       const angle = (idx / nodes.length) * 2 * Math.PI + Math.random() * 0.5;
@@ -238,13 +231,11 @@ export default function DecisionGraph({
         y: cy + Math.sin(angle) * dist,
         vx: 0,
         vy: 0,
-        emoji,
       };
     });
 
     alphaRef.current = 1.0; // reheat
-    startLoop();
-  }, [nodes, computedEdges]);
+  }, [nodes]);
 
   // Resize observer
   useEffect(() => {
@@ -258,7 +249,6 @@ export default function DecisionGraph({
           height: entry.contentRect.height,
         });
         alphaRef.current = 1.0; // reheat simulation on resize
-        startLoop();
       }
     });
     observer.observe(container);
@@ -279,18 +269,17 @@ export default function DecisionGraph({
     const gravity = settingsRef.current.gravity;
     const damping = 0.85;
 
-    // 1. Repulsion force between all nodes (Coulomb) - optimized with distSq check to skip sqrt
+    // 1. Repulsion force between all nodes (Coulomb)
     for (let i = 0; i < pNodes.length; i++) {
       const n1 = pNodes[i];
       for (let j = i + 1; j < pNodes.length; j++) {
         const n2 = pNodes[j];
         const dx = n2.x - n1.x;
         const dy = n2.y - n1.y;
-        const distSq = dx * dx + dy * dy;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
 
-        if (distSq < 160000) { // 400^2
-          const dist = Math.sqrt(distSq) || 0.1;
-          const force = charge / (distSq + 150);
+        if (dist < 400) {
+          const force = charge / (dist * dist + 150);
           const fx = (dx / dist) * force;
           const fy = (dy / dist) * force;
 
@@ -302,14 +291,10 @@ export default function DecisionGraph({
       }
     }
 
-    // Create lookup map for O(1) physics node resolution
-    const nodeMap = new Map<string, PhysicsNode>();
-    pNodes.forEach((node) => nodeMap.set(node.id, node));
-
-    // 2. Link force along connected edges (Spring) - optimized with lookup map
+    // 2. Link force along connected edges (Spring)
     computedEdges.forEach((edge) => {
-      const src = nodeMap.get(edge.source);
-      const tgt = nodeMap.get(edge.target);
+      const src = pNodes.find((n) => n.id === edge.source);
+      const tgt = pNodes.find((n) => n.id === edge.target);
       if (!src || !tgt) return;
 
       const dx = tgt.x - src.x;
@@ -381,7 +366,7 @@ export default function DecisionGraph({
     }
   };
 
-  // Dynamic Drawing Loop - optimized with Set connectivity lookup and text state caching
+  // Dynamic Drawing Loop
   const draw = (canvas: HTMLCanvasElement, width: number, height: number) => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -419,23 +404,16 @@ export default function DecisionGraph({
     const activeFocusId = selectedNodeId || hoveredNodeId;
     const isFocusActive = activeFocusId !== null;
 
-    // Pre-calculate connected nodes for the active focus node to avoid O(E) search per node draw
-    const connectedNodeIds = new Set<string>();
-    if (activeFocusId !== null) {
-      connectedNodeIds.add(activeFocusId);
-      computedEdges.forEach((e) => {
-        if (e.source === activeFocusId) connectedNodeIds.add(e.target);
-        if (e.target === activeFocusId) connectedNodeIds.add(e.source);
-      });
-    }
-
+    // Connectivity masking helper
     const isNodeConnected = (nodeId: string) => {
       if (!isFocusActive) return true;
-      return connectedNodeIds.has(nodeId);
+      if (nodeId === activeFocusId) return true;
+      return computedEdges.some(
+        (e) =>
+          (e.source === activeFocusId && e.target === nodeId) ||
+          (e.target === activeFocusId && e.source === nodeId)
+      );
     };
-
-    // Set text alignment once for all texts drawn inside the loop
-    ctx.textAlign = "center";
 
     // 2. Draw Connections (Links)
     computedEdges.forEach((edge, edgeIdx) => {
@@ -532,11 +510,12 @@ export default function DecisionGraph({
       ctx.stroke();
       ctx.restore();
 
-      // Show Logo Emojis inside nodes (if enabled) - uses cached emojis
+      // Show Logo Emojis inside nodes (if enabled)
       if (currentSettings.showIcons) {
-        const emoji = node.emoji || getNodeIconEmoji(node);
+        const emoji = getNodeIconEmoji(node);
         ctx.fillStyle = "#ffffff";
         ctx.font = `bold ${Math.max(8, radius * 0.95)}px system-ui`;
+        ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(emoji, nx, ny);
       }
@@ -552,6 +531,7 @@ export default function DecisionGraph({
 
       if (shouldDrawLabel) {
         ctx.font = `500 ${isFocused ? 9.5 : 8.5}px Inter, system-ui, sans-serif`;
+        ctx.textAlign = "center";
         ctx.textBaseline = "top";
 
         const textY = ny + radius + 4.5;
@@ -572,47 +552,36 @@ export default function DecisionGraph({
     ctx.restore();
   };
 
-  // Set up demand-based (lazy) rendering game loop
-  const startLoop = () => {
-    if (isLoopingRef.current) return;
-    isLoopingRef.current = true;
+  // Set up game loop
+  useEffect(() => {
+    let animFrameId: number;
 
     const tick = () => {
       const canvas = canvasRef.current;
       const container = containerRef.current;
       if (!canvas || !container) {
-        isLoopingRef.current = false;
+        animFrameId = requestAnimationFrame(tick);
         return;
       }
 
       const width = container.clientWidth;
       const height = container.clientHeight;
 
-      let keepRunning = false;
-
       if (alphaRef.current > 0.005) {
         runPhysics(width, height);
         alphaRef.current *= 0.985;
-        keepRunning = true;
       } else {
         alphaRef.current = 0;
       }
 
-      if (draggedNodeRef.current || isPanningRef.current) {
-        keepRunning = true;
-      }
-
       draw(canvas, width, height);
 
-      if (keepRunning) {
-        requestAnimationFrame(tick);
-      } else {
-        isLoopingRef.current = false;
-      }
+      animFrameId = requestAnimationFrame(tick);
     };
 
-    requestAnimationFrame(tick);
-  };
+    animFrameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animFrameId);
+  }, [computedEdges, nodeDegrees]);
 
   // Zoom wheel event handler (attaches directly to bypass passive listener limits)
   useEffect(() => {
@@ -642,7 +611,6 @@ export default function DecisionGraph({
       });
       setZoom(newZoom);
       alphaRef.current = 1.0; // reheat simulation
-      startLoop();
     };
 
     canvas.addEventListener("wheel", handleWheel, { passive: false });
@@ -651,7 +619,7 @@ export default function DecisionGraph({
     };
   }, []);
 
-  // Mouse handlers with screen-space node collision detection
+  // Mouse handlers
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -659,18 +627,14 @@ export default function DecisionGraph({
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
 
-    const zoomVal = zoomRef.current;
-    const panVal = panRef.current;
+    const worldX = (screenX - panRef.current.x) / zoomRef.current;
+    const worldY = (screenY - panRef.current.y) / zoomRef.current;
 
-    // Check if clicked a node in screen coordinates
+    // Check if clicked a node
     const clickedNode = physicsNodesRef.current.find((node) => {
       const degree = nodeDegrees.get(node.id) || 0;
       const radius = settings.nodeRadius + Math.sqrt(degree) * 1.5;
-      
-      const nodeScreenX = node.x * zoomVal + panVal.x;
-      const nodeScreenY = node.y * zoomVal + panVal.y;
-      
-      const dist = Math.sqrt((nodeScreenX - screenX) ** 2 + (nodeScreenY - screenY) ** 2);
+      const dist = Math.sqrt((node.x - worldX) ** 2 + (node.y - worldY) ** 2);
       return dist <= radius + 8;
     });
 
@@ -681,7 +645,6 @@ export default function DecisionGraph({
       clickedNode.vx = 0;
       clickedNode.vy = 0;
       alphaRef.current = 1.0;
-      startLoop();
 
       if (onNodeClick) {
         onNodeClick(clickedNode.id);
@@ -689,7 +652,6 @@ export default function DecisionGraph({
     } else {
       isPanningRef.current = true;
       panStartRef.current = { x: e.clientX - panRef.current.x, y: e.clientY - panRef.current.y };
-      startLoop();
     }
   };
 
@@ -700,17 +662,14 @@ export default function DecisionGraph({
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
 
-    const zoomVal = zoomRef.current;
-    const panVal = panRef.current;
-    const worldX = (screenX - panVal.x) / zoomVal;
-    const worldY = (screenY - panVal.y) / zoomVal;
+    const worldX = (screenX - panRef.current.x) / zoomRef.current;
+    const worldY = (screenY - panRef.current.y) / zoomRef.current;
 
     if (isPanningRef.current) {
       setPan({
         x: e.clientX - panStartRef.current.x,
         y: e.clientY - panStartRef.current.y,
       });
-      startLoop();
       return;
     }
 
@@ -720,26 +679,20 @@ export default function DecisionGraph({
       draggedNodeRef.current.vx = 0;
       draggedNodeRef.current.vy = 0;
       alphaRef.current = 1.0;
-      startLoop();
       return;
     }
 
-    // Hover detection in screen coordinates
+    // Hover detection
     const hovered = physicsNodesRef.current.find((node) => {
       const degree = nodeDegrees.get(node.id) || 0;
       const radius = settings.nodeRadius + Math.sqrt(degree) * 1.5;
-      
-      const nodeScreenX = node.x * zoomVal + panVal.x;
-      const nodeScreenY = node.y * zoomVal + panVal.y;
-      
-      const dist = Math.sqrt((nodeScreenX - screenX) ** 2 + (nodeScreenY - screenY) ** 2);
+      const dist = Math.sqrt((node.x - worldX) ** 2 + (node.y - worldY) ** 2);
       return dist <= radius + 8;
     });
 
     if (hovered?.id !== hoveredNodeId) {
       setHoveredNodeId(hovered ? hovered.id : null);
-      alphaRef.current = 1.0; // reheat
-      startLoop();
+      alphaRef.current = 1.0; // reheat to update highlight frame
     }
   };
 
@@ -789,7 +742,6 @@ export default function DecisionGraph({
     });
     
     alphaRef.current = 1.0;
-    startLoop();
   };
 
   const activeFocusId = selectedNodeId || hoveredNodeId;
