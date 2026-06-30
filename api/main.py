@@ -171,8 +171,9 @@ class _MCPCORSMiddleware:
 
     _CORS = [
         (b"access-control-allow-origin", b"*"),
-        (b"access-control-allow-methods", b"GET, POST, OPTIONS"),
-        (b"access-control-allow-headers", b"content-type, accept, mcp-session-id"),
+        (b"access-control-allow-methods", b"GET, POST, OPTIONS, DELETE"),
+        (b"access-control-allow-headers", b"content-type, accept, authorization, mcp-session-id, mcp-protocol-version"),
+        (b"access-control-expose-headers", b"mcp-session-id"),
         (b"access-control-max-age", b"86400"),
     ]
 

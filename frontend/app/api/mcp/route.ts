@@ -14,6 +14,14 @@ const FORWARDED_RESPONSE_HEADERS = [
   "x-request-id",
 ];
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS, DELETE",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, Mcp-Session-Id, Mcp-Protocol-Version",
+  "Access-Control-Expose-Headers": "Mcp-Session-Id",
+  "Access-Control-Max-Age": "86400",
+};
+
 function buildTargetUrl(token: string): string {
   return `${BACKEND_URL}/mcp/u/${token}`;
 }
@@ -31,6 +39,7 @@ function unauthorized(base: string) {
       status: 401,
       headers: {
         "WWW-Authenticate": `Bearer realm="KAIROS", resource_metadata="${resourceMetadata}"`,
+        ...CORS_HEADERS,
       },
     }
   );
@@ -42,7 +51,15 @@ function baseUrl(req: NextRequest): string {
   return `${proto}://${host}`;
 }
 
-// POST — proxy MCP messages from Claude.ai to the backend URL-token endpoint.
+// OPTIONS — Handle CORS preflight requests
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
+}
+
+// POST — Proxy MCP messages to the backend URL-token endpoint
 export async function POST(req: NextRequest) {
   const token = extractToken(req);
   if (!token) return unauthorized(baseUrl(req));
@@ -57,16 +74,25 @@ export async function POST(req: NextRequest) {
     const sessionId = req.headers.get("mcp-session-id");
     if (sessionId) reqHeaders["Mcp-Session-Id"] = sessionId;
 
+    const protocolVersion = req.headers.get("mcp-protocol-version");
+    if (protocolVersion) reqHeaders["Mcp-Protocol-Version"] = protocolVersion;
+
     const upstream = await fetch(targetUrl, {
       method: "POST",
       headers: reqHeaders,
       body: bodyText.length > 0 ? bodyText : undefined,
+      cache: "no-store",
     });
 
-    if (upstream.status === 202) return new NextResponse(null, { status: 202 });
+    if (upstream.status === 202) {
+      return new NextResponse(null, { 
+        status: 202,
+        headers: CORS_HEADERS,
+      });
+    }
 
     const responseBody = await upstream.arrayBuffer();
-    const responseHeaders: Record<string, string> = {};
+    const responseHeaders: Record<string, string> = { ...CORS_HEADERS };
     for (const h of FORWARDED_RESPONSE_HEADERS) {
       const v = upstream.headers.get(h);
       if (v) responseHeaders[h] = v;
@@ -75,26 +101,15 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json(
       { jsonrpc: "2.0", id: null, error: { code: -32603, message: "Failed to reach KAIROS backend" } },
-      { status: 502 }
+      { 
+        status: 502,
+        headers: CORS_HEADERS,
+      }
     );
   }
 }
 
-// GET — proxy the backend's long-lived SSE stream to Claude.ai.
-//
-// Claude.ai uses HTTP+SSE transport: it sends GET first to establish the SSE
-// channel, reads the `endpoint` event (the URL to POST messages to), then keeps
-// the SSE open for server-initiated messages and keepalive pings.
-//
-// The backend's GET /mcp/u/{token} sends:
-//   event: endpoint
-//   data: https://kairos-coral-nine.vercel.app/mcp/u/{token}?session_id=XXX
-// then `: ping` every 15 s.
-//
-// Why this broke before:
-//  - Returning 405 → Claude never got the endpoint URL → "error when connecting"
-//  - Synthetic SSE that closes immediately → Claude saw the SSE drop → disconnected
-//  - Edge Runtime is required so the stream is not killed by the 25 s serverless timeout
+// GET — Proxy the backend's long-lived SSE stream to Claude
 export async function GET(req: NextRequest) {
   const token = extractToken(req);
   if (!token) return unauthorized(baseUrl(req));
@@ -109,35 +124,44 @@ export async function GET(req: NextRequest) {
       headers: {
         "Accept": "text/event-stream",
         "Cache-Control": "no-cache",
-        // Pass forwarding headers so the backend builds the correct endpoint URL
-        // (uses kairos-coral-nine.vercel.app, not baljot07-kairos-backend.hf.space)
         "x-forwarded-host": host,
         "x-forwarded-proto": proto,
       },
+      cache: "no-store", // CRITICAL: Prevents Next.js from caching the SSE stream
     });
 
     if (!upstream.ok || !upstream.body) {
-      return new NextResponse(null, { status: upstream.status || 502 });
+      return new NextResponse(null, { 
+        status: upstream.status || 502,
+        headers: CORS_HEADERS,
+      });
     }
 
-    // Stream the SSE body directly — Edge Runtime has no timeout so the connection
-    // stays alive as long as Claude.ai keeps it open.
+    const responseHeaders = {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      "X-Accel-Buffering": "no",
+      ...CORS_HEADERS,
+    };
+
     return new NextResponse(upstream.body, {
       status: 200,
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache, no-transform",
-        "X-Accel-Buffering": "no",
-      },
+      headers: responseHeaders,
     });
   } catch {
-    return new NextResponse(null, { status: 502 });
+    return new NextResponse(null, { 
+      status: 502,
+      headers: CORS_HEADERS,
+    });
   }
 }
 
-// DELETE — session cleanup (some MCP clients send this on disconnect)
+// DELETE — session cleanup
 export async function DELETE(req: NextRequest) {
   const token = extractToken(req);
   if (!token) return unauthorized(baseUrl(req));
-  return new NextResponse(null, { status: 204 });
+  return new NextResponse(null, { 
+    status: 204,
+    headers: CORS_HEADERS,
+  });
 }
