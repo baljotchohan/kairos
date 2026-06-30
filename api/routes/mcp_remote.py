@@ -480,8 +480,10 @@ async def mcp_streamable_http_get(token: str, request: Request):
 
     async def sse_generator():
         # Push the endpoint configuration event immediately
-        # Yield a relative URL path to comply with client-side origin/SSRF restrictions.
-        endpoint_url = f"/mcp/u/{token}?session_id={session_id}"
+        scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+        host = request.headers.get("x-forwarded-host", request.url.netloc)
+        base_url = f"{scheme}://{host}"
+        endpoint_url = f"{base_url}/mcp/u/{token}?session_id={session_id}"
         yield f"event: endpoint\ndata: {endpoint_url}\n\n"
 
         if getattr(request.app.state, "testing", False):
