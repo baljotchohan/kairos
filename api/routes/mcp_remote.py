@@ -280,13 +280,7 @@ def _handle_message(msg: dict, memory, user_id: str, request: Request = None) ->
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": {
                 "name": "KAIROS",
-                "title": "KAIROS — Organizational Memory",
                 "version": "1.0.0",
-                "websiteUrl": config.FRONTEND_URL,
-                # MCP icon advertisement so connector UIs show the real logo.
-                "icons": [
-                    {"src": icon_url, "mimeType": "image/svg+xml", "sizes": "any"},
-                ],
             },
             "instructions": (
                 "KAIROS is your company's organizational memory. Call get_context before "
