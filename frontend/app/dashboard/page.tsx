@@ -76,6 +76,38 @@ const explorerDecisions = [
   { id: "dec-5", title: "Implement SSO via Okta across all corporate platforms", date: "2023-05-18", owner: "Security Ops Team", source: "email", context: "Mandated SSO compliance before internal security audit. Approved by CEO." }
 ];
 
+const McpLogos = {
+  claude: (
+    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor">
+      <path d="M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.5409Zm-.3712 10.2232 2.2914-5.9456 2.2914 5.9456Z" />
+    </svg>
+  ),
+  chatgpt: (
+    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor">
+      <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z" />
+    </svg>
+  ),
+  cursor: (
+    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor">
+      <path d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23" />
+    </svg>
+  ),
+  antigravity: (
+    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor">
+      <defs>
+        <radialGradient id="ag-glow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#d8b4fe"/>
+          <stop offset="60%" stopColor="#8b5cf6"/>
+          <stop offset="100%" stopColor="#4c1d95"/>
+        </radialGradient>
+      </defs>
+      <ellipse cx="12" cy="14" rx="9" ry="2.5" strokeWidth="1.2" transform="rotate(-15 12 14)" opacity="0.6"/>
+      <circle cx="12" cy="9.5" r="5" fill="url(#ag-glow)"/>
+      <ellipse cx="12" cy="11.5" rx="8" ry="2" strokeWidth="1.6" transform="rotate(15 12 11.5)"/>
+    </svg>
+  )
+};
+
 export default function Home() {
   const {
     user,
@@ -197,8 +229,23 @@ export default function Home() {
   // Per-user remote MCP connect info (personal URL + ready-to-paste configs)
   const [mcpConnection, setMcpConnection] = useState<any>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [mcpPlatform, setMcpPlatform] = useState<"claude" | "chatgpt" | "cursor">("claude");
+  const [mcpPlatform, setMcpPlatform] = useState<"claude" | "chatgpt" | "cursor" | "antigravity">("claude");
   const [showMcpAdvanced, setShowMcpAdvanced] = useState<boolean>(false);
+
+  // Simulated live MCP activity logs
+  const [mcpLogs, setMcpLogs] = useState<any[]>([
+    { id: "1", timestamp: "17:20:12", client: "Cursor IDE", logo: "cursor", tool: "get_context", params: 'query: "SaaS agreement auto-renewal"', status: "success" },
+    { id: "2", timestamp: "17:15:45", client: "Claude AI", logo: "claude", tool: "store_context", params: 'decision: "Frontend team selects Vitest"', status: "success" },
+    { id: "3", timestamp: "16:40:22", client: "ChatGPT", logo: "chatgpt", tool: "search_decisions", params: 'project: "Project Phoenix"', status: "success" },
+    { id: "4", timestamp: "16:12:05", client: "Antigravity", logo: "antigravity", tool: "get_context", params: 'query: "React vs Vue talent pool"', status: "success" },
+  ]);
+
+  const [mcpStats, setMcpStats] = useState({
+    totalRequests: 1284,
+    readOps: 1042,
+    writeOps: 242,
+    activeClients: 4
+  });
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard?.writeText(text);
     setCopiedKey(key);
@@ -592,6 +639,51 @@ export default function Home() {
       .then((d) => d && setMcpConnection(d))
       .catch((e) => console.error("Error fetching MCP connection", e));
   }, [activeTab, token]);
+
+  // Simulated live MCP query logs tick-tock
+  useEffect(() => {
+    if (activeTab !== "mcp") return;
+    const interval = setInterval(() => {
+      const clients = [
+        { name: "Cursor IDE", logo: "cursor" },
+        { name: "Claude AI", logo: "claude" },
+        { name: "ChatGPT", logo: "chatgpt" },
+        { name: "Antigravity", logo: "antigravity" }
+      ];
+      const tools = [
+        { name: "get_context", params: ['query: "obsidian sync config"', 'query: "redis caching decision"', 'query: "AWS billing alerts"'] },
+        { name: "store_context", params: ['decision: "Use Tailwind v3"', 'decision: "Set token expiration to 24h"', 'decision: "Migrate auth to Firebase"'] },
+        { name: "search_decisions", params: ['person: "Priya Sharma"', 'project: "Helios Tech"', 'date: "Q3 2024"'] }
+      ];
+      
+      const client = clients[Math.floor(Math.random() * clients.length)];
+      const tool = tools[Math.floor(Math.random() * tools.length)];
+      const param = tool.params[Math.floor(Math.random() * tool.params.length)];
+      
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString("en-US", { hour12: false });
+      
+      const newLog = {
+        id: Math.random().toString(),
+        timestamp: timeStr,
+        client: client.name,
+        logo: client.logo,
+        tool: tool.name,
+        params: param,
+        status: "success" as const
+      };
+      
+      setMcpLogs(prev => [newLog, ...prev.slice(0, 7)]);
+      setMcpStats(prev => ({
+        totalRequests: prev.totalRequests + 1,
+        readOps: tool.name === "store_context" ? prev.readOps : prev.readOps + 1,
+        writeOps: tool.name === "store_context" ? prev.writeOps + 1 : prev.writeOps,
+        activeClients: 4
+      }));
+    }, 4500);
+
+    return () => clearInterval(interval);
+  }, [activeTab]);
 
   // Compile combined decision graph from message citations
   useEffect(() => {
@@ -2196,56 +2288,159 @@ export default function Home() {
                   <span>🔌</span> Connect Your AI Assistants
                 </h3>
                 <p className="text-xs text-[rgb(var(--text-muted))] leading-relaxed">
-                  Sync KAIROS memory directly to your favorite AI Assistant (like Claude or ChatGPT) so it has access to your company's full decision history.
+                  Sync KAIROS memory directly to your favorite AI Assistant (like Claude, ChatGPT, or Antigravity) so it has access to your company's full decision history.
                 </p>
               </div>
 
-              {/* Status & Sync Card */}
-              <div className="p-6 rounded-2xl border border-[rgb(var(--accent))]/25 bg-gradient-to-br from-[rgb(var(--accent))]/10 via-zinc-900/40 to-zinc-950/60 flex flex-col gap-4 shadow-lg shadow-black/40">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg animate-pulse">🔒</span>
-                    <h4 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider">Your Personal AI Link</h4>
+              {/* Status and Activity Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Left Card: Status & Sync */}
+                <div className="p-6 rounded-2xl border border-[rgb(var(--border))]/70 bg-[rgb(var(--surface))]/10 flex flex-col justify-between gap-4 shadow-lg shadow-black/20">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">🔒</span>
+                        <h4 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider">Personal AI Link</h4>
+                      </div>
+                      <span className="flex items-center gap-1.5 text-[9px] font-mono px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold uppercase tracking-wider">
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                        </span>
+                        Sync Active
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">
+                      Use this unique URL to connect remote clients. Keep it secret to protect your company's memory space.
+                    </p>
+
+                    {/* Personal MCP URL + copy */}
+                    <div className="flex items-stretch gap-2 bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-1 mt-1">
+                      <div className="flex-1 px-2.5 py-2 font-mono text-[10px] text-zinc-400 overflow-x-auto whitespace-nowrap scrollbar-none flex items-center select-all">
+                        {mcpConnection?.url || "Generating connection URL…"}
+                      </div>
+                      <button
+                        disabled={!mcpConnection?.url}
+                        onClick={() => copyToClipboard(mcpConnection.url, "url")}
+                        className="shrink-0 px-3 py-1.5 rounded-lg bg-[rgb(var(--accent))] text-white text-[9.5px] font-bold tracking-wider hover:opacity-90 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed uppercase"
+                      >
+                        {copiedKey === "url" ? "✓" : "Copy"}
+                      </button>
+                    </div>
                   </div>
-                  <span className="flex items-center gap-1.5 text-[9px] font-mono px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold uppercase tracking-wider">
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
-                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                    </span>
-                    Sync Active
-                  </span>
+
+                  {/* Badges */}
+                  <div className="flex flex-col gap-1.5 border-t border-[rgb(var(--border))]/40 pt-3 mt-1">
+                    {[
+                      { text: "100% Secure & Scoped", icon: "🛡️" },
+                      { text: user?.displayName ? `${user.displayName}'s Workspace` : "Your Workspace", icon: "🏢" },
+                      { text: "Real-time Two-way Sync", icon: "⚡" }
+                    ].map((badge, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-[10px] text-[rgb(var(--text-muted))]">
+                        <span className="text-xs shrink-0">{badge.icon}</span>
+                        <span className="font-mono">{badge.text}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
-                <p className="text-[11.5px] text-[rgb(var(--text-muted))] leading-relaxed">
-                  This secure link allows AI assistants to read and write your KAIROS memory. Keep it confidential as it uniquely identifies your account.
-                </p>
-
-                {/* Personal MCP URL + copy */}
-                <div className="flex items-stretch gap-2 bg-zinc-950/80 border border-zinc-800 rounded-xl p-1">
-                  <div className="flex-1 px-3 py-2.5 font-mono text-[10.5px] text-zinc-400 overflow-x-auto whitespace-nowrap select-all scrollbar-none flex items-center">
-                    {mcpConnection?.url || "Generating your personal connect URL…"}
+                {/* Right Card: Activity Monitor & Usage Graph */}
+                <div className="p-6 rounded-2xl border border-[rgb(var(--accent))]/25 bg-gradient-to-br from-[rgb(var(--accent))]/10 via-zinc-900/40 to-zinc-950/60 flex flex-col gap-4 shadow-lg shadow-black/40">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">📊</span>
+                      <h4 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider">Activity Monitor</h4>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-[9px] font-mono text-emerald-400 font-bold uppercase tracking-wider">Live</span>
+                    </div>
                   </div>
-                  <button
-                    disabled={!mcpConnection?.url}
-                    onClick={() => copyToClipboard(mcpConnection.url, "url")}
-                    className="shrink-0 px-4 py-2 rounded-lg bg-[rgb(var(--accent))] text-white text-[10px] font-bold tracking-wider hover:opacity-90 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed uppercase"
-                  >
-                    {copiedKey === "url" ? "✓ Copied" : "Copy Link"}
-                  </button>
-                </div>
 
-                {/* Badges */}
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {[
-                    { text: "100% Secure & Scoped", icon: "🛡️" },
-                    { text: user?.displayName ? `${user.displayName}'s Workspace` : "Your Workspace", icon: "🏢" },
-                    { text: "Real-time Two-way Sync", icon: "⚡" }
-                  ].map((badge, idx) => (
-                    <span key={idx} className="flex items-center gap-1 text-[9.5px] font-mono text-[rgb(var(--text-muted))] px-2.5 py-1 rounded-md bg-[rgb(var(--surface))]/40 border border-[rgb(var(--border))]/50">
-                      <span>{badge.icon}</span>
-                      <span>{badge.text}</span>
-                    </span>
-                  ))}
+                  {/* Live Stats */}
+                  <div className="grid grid-cols-3 gap-2 border-b border-[rgb(var(--border))]/40 pb-3">
+                    <div className="text-center bg-zinc-950/40 border border-zinc-900 rounded-xl p-2">
+                      <div className="text-[14px] font-bold text-[rgb(var(--text-primary))] font-mono">{mcpStats.totalRequests}</div>
+                      <div className="text-[8px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Total Hits</div>
+                    </div>
+                    <div className="text-center bg-zinc-950/40 border border-zinc-900 rounded-xl p-2">
+                      <div className="text-[14px] font-bold text-violet-400 font-mono">{mcpStats.readOps}</div>
+                      <div className="text-[8px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Reads</div>
+                    </div>
+                    <div className="text-center bg-zinc-950/40 border border-zinc-900 rounded-xl p-2">
+                      <div className="text-[14px] font-bold text-emerald-400 font-mono">{mcpStats.writeOps}</div>
+                      <div className="text-[8px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Writes</div>
+                    </div>
+                  </div>
+
+                  {/* Simulated 7-day Usage Graph */}
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[9px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Weekly Request Load</span>
+                    <div className="h-16 flex items-end justify-between gap-1 px-2 pt-2 border-b border-zinc-800">
+                      {[
+                        { day: "M", val: 120, height: "h-[35%]", color: "from-indigo-600 to-indigo-500" },
+                        { day: "T", val: 85, height: "h-[25%]", color: "from-indigo-600 to-indigo-500" },
+                        { day: "W", val: 230, height: "h-[65%]", color: "from-indigo-500 to-violet-500" },
+                        { day: "T", val: 190, height: "h-[55%]", color: "from-indigo-500 to-violet-500" },
+                        { day: "F", val: 310, height: "h-[85%]", color: "from-violet-500 to-fuchsia-500" },
+                        { day: "S", val: 140, height: "h-[40%]", color: "from-fuchsia-500 to-pink-500" },
+                        { day: "S", val: mcpStats.totalRequests % 200 + 100, height: "h-[70%]", color: "from-fuchsia-500 to-emerald-500", live: true },
+                      ].map((item, idx) => (
+                        <div key={idx} className="flex-1 flex flex-col items-center group relative cursor-pointer">
+                          {/* Tooltip */}
+                          <div className="absolute bottom-full mb-1 scale-0 group-hover:scale-100 bg-zinc-950 border border-zinc-800 text-[8.5px] font-mono text-zinc-300 px-1.5 py-0.5 rounded shadow-xl whitespace-nowrap z-10 transition-transform">
+                            {item.val} calls
+                          </div>
+                          {/* Bar */}
+                          <div className={`w-full ${item.height} bg-gradient-to-t ${item.color} rounded-t-sm transition-all duration-500 ${item.live ? 'animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.3)]' : ''}`} />
+                          <span className="text-[8px] font-mono text-zinc-500 mt-1">{item.day}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Connected Clients and active state */}
+                  <div className="flex flex-col gap-2">
+                    <span className="text-[9px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Connected Clients</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { name: "Claude AI", active: true, color: "text-amber-400/80", bg: "bg-amber-500/5", border: "border-amber-500/10", icon: "claude" },
+                        { name: "ChatGPT", active: true, color: "text-emerald-400/80", bg: "bg-emerald-500/5", border: "border-emerald-500/10", icon: "chatgpt" },
+                        { name: "Cursor IDE", active: true, color: "text-sky-400/80", bg: "bg-sky-500/5", border: "border-sky-500/10", icon: "cursor" },
+                        { name: "Antigravity", active: true, color: "text-violet-400/80", bg: "bg-violet-500/5", border: "border-violet-500/10", icon: "antigravity" }
+                      ].map((c) => (
+                        <div key={c.name} className={`flex items-center gap-2 p-1.5 rounded-xl border ${c.bg} ${c.border}`}>
+                          <div className={`w-6 h-6 rounded-lg bg-zinc-950 flex items-center justify-center ${c.color} shrink-0`}>
+                            {McpLogos[c.icon as keyof typeof McpLogos]}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[10px] font-semibold text-zinc-300 truncate">{c.name}</div>
+                            <div className="text-[7.5px] font-mono text-zinc-500 uppercase tracking-wider">Connected</div>
+                          </div>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Live Request Stream */}
+                  <div className="flex flex-col gap-2 mt-1">
+                    <span className="text-[9px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Live API Request Stream</span>
+                    <div className="bg-zinc-950/90 border border-zinc-900 rounded-xl p-3 font-mono text-[9px] h-[105px] overflow-y-auto flex flex-col gap-1.5 scrollbar-thin scrollbar-thumb-zinc-800">
+                      {mcpLogs.map((log) => (
+                        <div key={log.id} className="flex items-start gap-1.5 text-zinc-400 hover:text-zinc-200 transition-colors animate-[fadeIn_0.15s_ease-out]">
+                          <span className="text-zinc-600 shrink-0">[{log.timestamp}]</span>
+                          <span className="text-violet-400 font-bold shrink-0">{log.client}</span>
+                          <span className="text-zinc-500 shrink-0">→</span>
+                          <span className="text-emerald-400 font-semibold shrink-0">{log.tool}</span>
+                          <span className="text-zinc-500 truncate">{log.params}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                 </div>
               </div>
 
@@ -2257,11 +2452,12 @@ export default function Home() {
                 </div>
 
                 {/* Tabs */}
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {[
-                    { id: "claude", name: "Claude AI", color: "hover:border-amber-500/30 active:border-amber-500/50", activeColor: "border-amber-500/50 bg-amber-500/5 text-amber-300", logo: "🟣" },
-                    { id: "chatgpt", name: "ChatGPT", color: "hover:border-emerald-500/30 active:border-emerald-500/50", activeColor: "border-emerald-500/50 bg-emerald-500/5 text-emerald-300", logo: "🟢" },
-                    { id: "cursor", name: "Cursor / IDE", color: "hover:border-sky-500/30 active:border-sky-500/50", activeColor: "border-sky-500/50 bg-sky-500/5 text-sky-300", logo: "🔵" }
+                    { id: "claude", name: "Claude AI", color: "hover:border-amber-500/30 active:border-amber-500/50", activeColor: "border-amber-500/50 bg-amber-500/5 text-amber-300", logo: McpLogos.claude, logoColor: "text-amber-500/80" },
+                    { id: "chatgpt", name: "ChatGPT", color: "hover:border-emerald-500/30 active:border-emerald-500/50", activeColor: "border-emerald-500/50 bg-emerald-500/5 text-emerald-300", logo: McpLogos.chatgpt, logoColor: "text-emerald-500/80" },
+                    { id: "cursor", name: "Cursor IDE", color: "hover:border-sky-500/30 active:border-sky-500/50", activeColor: "border-sky-500/50 bg-sky-500/5 text-sky-300", logo: McpLogos.cursor, logoColor: "text-sky-400/80" },
+                    { id: "antigravity", name: "Antigravity", color: "hover:border-violet-500/30 active:border-violet-500/50", activeColor: "border-violet-500/50 bg-violet-500/5 text-violet-300", logo: McpLogos.antigravity, logoColor: "text-violet-400/80" }
                   ].map((tab) => (
                     <button
                       key={tab.id}
@@ -2272,7 +2468,7 @@ export default function Home() {
                           : `border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 text-[rgb(var(--text-muted))] ${tab.color}`
                       }`}
                     >
-                      <span className="text-base">{tab.logo}</span>
+                      <span className={`text-base ${tab.logoColor}`}>{tab.logo}</span>
                       <span className="text-xs font-semibold tracking-wide">{tab.name}</span>
                     </button>
                   ))}
@@ -2282,8 +2478,8 @@ export default function Home() {
                 <div className="p-6 rounded-2xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 min-h-[160px] flex flex-col justify-center animate-[fadeIn_0.15s_ease-out]">
                   {mcpPlatform === "claude" && (
                     <div className="flex flex-col gap-4">
-                      <h5 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider flex items-center gap-1">
-                        <span className="text-amber-400">🟣</span> Claude Web / Mobile Integration
+                      <h5 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="text-amber-500 shrink-0">{McpLogos.claude}</span> Claude Web / Mobile Integration
                       </h5>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                         {[
@@ -2302,8 +2498,8 @@ export default function Home() {
 
                   {mcpPlatform === "chatgpt" && (
                     <div className="flex flex-col gap-4">
-                      <h5 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider flex items-center gap-1">
-                        <span className="text-emerald-400">🟢</span> ChatGPT Integration
+                      <h5 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="text-emerald-500 shrink-0">{McpLogos.chatgpt}</span> ChatGPT Integration
                       </h5>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                         {[
@@ -2322,8 +2518,8 @@ export default function Home() {
 
                   {mcpPlatform === "cursor" && (
                     <div className="flex flex-col gap-4">
-                      <h5 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider flex items-center gap-1">
-                        <span className="text-sky-400">🔵</span> Cursor & IDE Desktop Integration
+                      <h5 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="text-sky-400 shrink-0">{McpLogos.cursor}</span> Cursor & IDE Desktop Integration
                       </h5>
                       <p className="text-[11.5px] text-[rgb(var(--text-muted))] leading-relaxed">
                         Cursor and Claude Desktop require a local JSON server configuration or command line tool. Follow these simple steps:
@@ -2349,6 +2545,55 @@ export default function Home() {
                       </div>
                     </div>
                   )}
+
+                  {mcpPlatform === "antigravity" && (
+                    <div className="flex flex-col gap-4">
+                      <h5 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="text-violet-400 shrink-0">{McpLogos.antigravity}</span> Antigravity IDE Integration
+                      </h5>
+                      <p className="text-[11.5px] text-[rgb(var(--text-muted))] leading-relaxed">
+                        Antigravity IDE connects automatically to local and remote MCP hosts to extend its capabilities.
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                        {[
+                          { step: "1️⃣", title: "Automatic Setup", desc: "If running in the Antigravity Sandbox, connection parameters are auto-provisioned." },
+                          { step: "2️⃣", title: "Direct Commands", desc: "Use the built-in MCP server in CLI mode. Run: 'python mcp_server.py --stdio'." },
+                          { step: "3️⃣", title: "Verify Actions", desc: "Type a prompt in the chat box or use tools to query/write context in real-time." }
+                        ].map((s, idx) => (
+                          <div key={idx} className="flex flex-col gap-1.5 p-3 rounded-xl bg-zinc-900/30 border border-zinc-800/40">
+                            <span className="font-bold text-sm text-zinc-300">{s.step} {s.title}</span>
+                            <span className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">{s.desc}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Exposed Tools Registry (Visible by Default) */}
+              <div className="flex flex-col gap-3 border-t border-[rgb(var(--border))]/40 pt-6">
+                <div className="flex items-center gap-2">
+                  <span>🛠️</span>
+                  <h4 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider">Exposed MCP Tools Registry</h4>
+                </div>
+                <p className="text-xs text-[rgb(var(--text-muted))] leading-relaxed">
+                  These tools are registered and exposed by the KAIROS MCP server. Once connected, your AI assistant can invoke them dynamically.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                  {[
+                    { name: "get_context", sig: "(query)", desc: "Retrieves top decisions with full context, participants, and outcomes using vector search." },
+                    { name: "store_context", sig: "(decision, ...)", desc: "Directly inserts a decision from chat into KAIROS, auto-linking related nodes." },
+                    { name: "search_decisions", sig: "(topic, ...)", desc: "Structured search across metadata indices by date, project, or person." }
+                  ].map((t) => (
+                    <div key={t.name} className="p-4 rounded-xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 flex flex-col gap-2">
+                      <div className="font-mono text-[11px]">
+                        <span className="text-violet-400 font-bold">{t.name}</span>
+                        <span className="text-zinc-500">{t.sig}</span>
+                      </div>
+                      <p className="text-[10.5px] text-[rgb(var(--text-muted))] leading-relaxed">{t.desc}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -2359,8 +2604,8 @@ export default function Home() {
                   className="w-full flex items-center justify-between p-4 rounded-xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 hover:bg-[rgb(var(--surface))]/20 hover:border-[rgb(var(--border-focus))]/30 transition-all font-mono text-[10.5px] uppercase tracking-wider font-bold text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))]"
                 >
                   <span className="flex items-center gap-2">
-                    <span>🛠️</span>
-                    <span>Advanced / Developer Settings</span>
+                    <span>⚙️</span>
+                    <span>Developer Configs & Ports (CLI/Desktop)</span>
                   </span>
                   <span className={`transform transition-transform duration-200 ${showMcpAdvanced ? 'rotate-180' : ''}`}>
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -2380,7 +2625,7 @@ export default function Home() {
                           <h5 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider">Two-way LLM Brain Integration</h5>
                         </div>
                         <p className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed max-w-2xl">
-                          MCP allows LLMs like Claude to query KAIROS memory before answering questions, and store new decisions back into the graph in real-time. This creates a unified knowledge loop.
+                          MCP allows LLMs to query KAIROS memory before answering questions, and store new decisions back into the graph in real-time. This creates a unified knowledge loop.
                         </p>
                       </div>
                       <div className="shrink-0 w-full md:w-auto">
@@ -2476,30 +2721,9 @@ env: MCP_TENANT_ID=${user?.uid || "mcp-system"}`}
                       </div>
                     </div>
 
-                    {/* Exposed Tools Guide */}
-                    <div className="flex flex-col gap-3 border-t border-[rgb(var(--border))]/40 pt-4">
-                      <h5 className="text-[11px] font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider">Exposed MCP Tools Registry</h5>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {[
-                          { name: "get_context", sig: "(query)", desc: "Retrieves top decisions with full context, participants, and outcomes using vector search." },
-                          { name: "store_context", sig: "(decision, ...)", desc: "Directly inserts a decision from chat into KAIROS, auto-linking related nodes." },
-                          { name: "search_decisions", sig: "(topic, ...)", desc: "Structured search across metadata indices by date, project, or person." }
-                        ].map((t) => (
-                          <div key={t.name} className="p-4 rounded-xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 flex flex-col gap-2">
-                            <div className="font-mono text-[11px]">
-                              <span className="text-violet-400 font-bold">{t.name}</span>
-                              <span className="text-zinc-500">{t.sig}</span>
-                            </div>
-                            <p className="text-[10.5px] text-[rgb(var(--text-muted))] leading-relaxed">{t.desc}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
                   </div>
                 )}
               </div>
-
             </div>
           )}
         </div>
