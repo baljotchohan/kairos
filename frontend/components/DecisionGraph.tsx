@@ -374,7 +374,7 @@ export default function DecisionGraph({
     const theme = themeRef.current;
     const currentSettings = settingsRef.current;
 
-    ctx.clearRect(0, 0, width, height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
     ctx.save();
