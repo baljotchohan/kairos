@@ -530,12 +530,12 @@ class KairosMemory:
 
     @staticmethod
     def make_id(title: str | None = None, source_url: str | None = None, user_id: str | None = None) -> str:
+        import uuid
         # Namespace the deterministic ID by user_id so two users who ingest the SAME
         # public doc/link (or a shared "Untitled" title) never produce the same id and
         # silently overwrite each other's decision (INSERT OR REPLACE / vector upsert).
         # Missing user_id → random uuid, so unauthenticated ingests can't collide either.
         if title and source_url and user_id:
-            import uuid
             namespace = uuid.UUID("3c8f8d22-1d57-4b77-84a1-f761d4aef822")
             unique_key = f"{user_id.strip().lower()}:{title.strip().lower()}:{source_url.strip().lower()}"
             return str(uuid.uuid5(namespace, unique_key))
