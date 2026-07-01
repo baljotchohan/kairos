@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 
 export interface GraphNode {
   id: string;
@@ -92,6 +93,7 @@ export default function DecisionGraph({
   className = "",
   onNodeClick,
 }: DecisionGraphProps) {
+  const { user } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -135,13 +137,57 @@ export default function DecisionGraph({
     settingsRef.current = settings;
   }, [settings]);
 
+  // Load settings from localStorage when client mounts or user changes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const settingsKey = user ? `kairos-graph-settings-${user.uid}` : "kairos-graph-settings-default";
+      const saved = localStorage.getItem(settingsKey);
+      
+      const defaults = {
+        showLabels: "all",
+        showIcons: false,
+        showGrid: false,
+        nodeRadius: 4.5,
+        linkOpacity: 0.22,
+        particleSpeed: 0,
+        charge: 1200,
+        linkDistance: 90,
+        linkStrength: 0.04,
+        gravity: 0.012,
+      };
+
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setSettings({
+            ...defaults,
+            ...parsed,
+          });
+        } catch (err) {
+          console.warn("Failed to parse saved graph settings:", err);
+          setSettings(defaults);
+        }
+      } else {
+        setSettings(defaults);
+      }
+      alphaRef.current = 1.0; // reheat simulation to apply new forces
+    }
+  }, [user]);
+
   const updateSetting = (key: string, value: any) => {
-    setSettings((prev) => ({ ...prev, [key]: value }));
+    setSettings((prev) => {
+      const updated = { ...prev, [key]: value };
+      if (typeof window !== "undefined") {
+        const settingsKey = user ? `kairos-graph-settings-${user.uid}` : "kairos-graph-settings-default";
+        localStorage.setItem(settingsKey, JSON.stringify(updated));
+      }
+      return updated;
+    });
     alphaRef.current = 1.0; // reheat simulation on adjustment
   };
 
   const resetSettings = () => {
-    setSettings({
+    const defaults = {
       showLabels: "all",
       showIcons: false,
       showGrid: false,
@@ -152,7 +198,12 @@ export default function DecisionGraph({
       linkDistance: 90,
       linkStrength: 0.04,
       gravity: 0.012,
-    });
+    };
+    setSettings(defaults);
+    if (typeof window !== "undefined") {
+      const settingsKey = user ? `kairos-graph-settings-${user.uid}` : "kairos-graph-settings-default";
+      localStorage.setItem(settingsKey, JSON.stringify(defaults));
+    }
     alphaRef.current = 1.0;
   };
 
