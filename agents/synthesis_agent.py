@@ -148,13 +148,21 @@ Extract all decisions from the above content."""
             if not isinstance(decisions_data, list):
                 return []
 
-        except (json.JSONDecodeError, Exception) as e:
+        except Exception as e:
             print(f"[Synthesis] extraction error: {e}")
             return []
 
         # Store each extracted decision
         stored = []
         for d in decisions_data:
+            # The LLM occasionally returns a well-formed JSON array containing a
+            # non-object element (e.g. a stray string). d.get(...) below would
+            # raise AttributeError, which propagates uncaught out of this method —
+            # the caller (orchestrator._synthesize) catches it per-batch but never
+            # marks the item processed, so it gets re-sent and re-fails on every
+            # future ingestion cycle instead of just being skipped once.
+            if not isinstance(d, dict):
+                continue
             if not d.get("title") or not d.get("summary"):
                 continue
 

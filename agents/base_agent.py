@@ -303,7 +303,16 @@ class BaseAgent(ABC):
         tone = persona_overlay.get("tone_preset", "professional")
         if not display_name:
             return system_prompt
-        overlay = f"Respond as '{display_name}', a {tone} analyst. Keep this persona in your tone and phrasing only — never change what facts you report.\n\n"
+        # Defense-in-depth: display_name is sanitized at write time (see
+        # core.personas.sanitize_display_name), but strip control/newline chars
+        # here too so this stays safe even if a caller ever bypasses that path —
+        # an embedded newline would let display_name break out of this single-line
+        # instruction and inject arbitrary text into the system prompt.
+        import re
+        safe_name = re.sub(r"[\x00-\x1f\x7f]+", " ", str(display_name)).strip()[:80]
+        if not safe_name:
+            return system_prompt
+        overlay = f"Respond as '{safe_name}', a {tone} analyst. Keep this persona in your tone and phrasing only — never change what facts you report.\n\n"
         return overlay + system_prompt
 
     # ── Info ──────────────────────────────────────────────────────────────────

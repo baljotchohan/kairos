@@ -139,13 +139,42 @@ async def oauth_register(request: Request):
 async def oauth_authorize(request: Request):
     p = dict(request.query_params)
     redirect_uri = p.get("redirect_uri", "")
+    client_id = p.get("client_id", "")
 
     if not redirect_uri:
         return JSONResponse({"error": "invalid_request", "error_description": "redirect_uri required"}, status_code=400)
+    if not client_id:
+        return JSONResponse({"error": "invalid_request", "error_description": "client_id required"}, status_code=400)
 
     req_id = uuid.uuid4().hex
     c = _conn()
     try:
+        # RFC 6749 §3.1.2.3 / §4.1.1 — redirect_uri MUST match one registered for
+        # this client_id at /oauth/register. Without this check, client_ids aren't
+        # secret, so an attacker can reuse a known/legitimate client_id with their
+        # OWN redirect_uri, phish a real user into authenticating here, and have
+        # the resulting authorization code delivered to an attacker-controlled
+        # origin instead of the real client — full read/write access to that
+        # user's KAIROS memory. Reject before ever storing the request or
+        # redirecting to the login page, so a bad redirect_uri never reaches a user.
+        client_row = c.execute(
+            "SELECT redirect_uris FROM mcp_oauth_clients WHERE client_id = ?", (client_id,)
+        ).fetchone()
+        if not client_row:
+            return JSONResponse(
+                {"error": "invalid_client", "error_description": "Unknown client_id — register via /oauth/register first"},
+                status_code=400,
+            )
+        try:
+            registered_uris = json.loads(client_row["redirect_uris"])
+        except (json.JSONDecodeError, TypeError):
+            registered_uris = []
+        if redirect_uri not in registered_uris:
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "redirect_uri does not match any URI registered for this client_id"},
+                status_code=400,
+            )
+
         # Strip base64url padding from code_challenge (RFC 7636 §4.2 requires no padding,
         # but some OAuth clients — including older Claude.ai builds — include "=" chars).
         # Storing normalised (no padding) ensures the server-side SHA256 computation
@@ -153,7 +182,7 @@ async def oauth_authorize(request: Request):
         code_challenge = p.get("code_challenge", "").rstrip("=")
         c.execute(
             "INSERT INTO mcp_oauth_requests (req_id, client_id, redirect_uri, code_challenge, state, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (req_id, p.get("client_id", ""), redirect_uri, code_challenge, p.get("state", ""), datetime.utcnow().isoformat()),
+            (req_id, client_id, redirect_uri, code_challenge, p.get("state", ""), datetime.utcnow().isoformat()),
         )
         c.commit()
     finally:

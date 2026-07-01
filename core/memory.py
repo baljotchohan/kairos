@@ -198,9 +198,12 @@ class KairosMemory:
         if date_to:
             clauses.append("date <= ?")
             params.append(date_to)
-        if user_id:
-            clauses.append("user_id = ?")
-            params.append(user_id)
+        # Unconditional (not `if user_id:`): we've already returned [] above if
+        # user_id is None, so at this point it's a real string. Filtering only on
+        # truthiness let user_id="" skip this clause entirely and query across
+        # every tenant's rows — see tests/test_memory.py::test_structured_search_scopes_to_empty_string_user_id.
+        clauses.append("user_id = ?")
+        params.append(user_id)
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with self._connect() as conn:
@@ -451,11 +454,18 @@ class KairosMemory:
                     metadata TEXT
                 )
             """)
-            # Schema Migration: Safely add user_id column if not exists
+            # Schema Migration: Safely add user_id column if not exists. The
+            # check-then-ALTER pattern isn't atomic — under concurrent first boot
+            # (multiple workers/replicas racing this on a fresh DB) two processes
+            # can both see the column missing and both attempt to add it, so the
+            # second ALTER must not crash the whole startup.
             cursor = conn.execute("PRAGMA table_info(decisions)")
             columns = [info[1] for info in cursor.fetchall()]
             if "user_id" not in columns:
-                conn.execute("ALTER TABLE decisions ADD COLUMN user_id TEXT NOT NULL DEFAULT ''")
+                try:
+                    conn.execute("ALTER TABLE decisions ADD COLUMN user_id TEXT NOT NULL DEFAULT ''")
+                except sqlite3.OperationalError:
+                    pass
 
             # Inventory: lightweight, per-user snapshot of raw items seen during
             # Ingestion.
@@ -478,7 +488,10 @@ class KairosMemory:
             cursor = conn.execute("PRAGMA table_info(inventory)")
             inv_columns = [info[1] for info in cursor.fetchall()]
             if "processed" not in inv_columns:
-                conn.execute("ALTER TABLE inventory ADD COLUMN processed INTEGER NOT NULL DEFAULT 0")
+                try:
+                    conn.execute("ALTER TABLE inventory ADD COLUMN processed INTEGER NOT NULL DEFAULT 0")
+                except sqlite3.OperationalError:
+                    pass
 
             conn.execute("CREATE INDEX IF NOT EXISTS idx_inventory_user ON inventory(user_id, source)")
             conn.commit()

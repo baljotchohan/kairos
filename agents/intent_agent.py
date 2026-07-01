@@ -162,7 +162,7 @@ class IntentAgent(BaseAgent):
 
             return intent
 
-        except (json.JSONDecodeError, Exception) as e:
+        except Exception as e:
             self.observe(f"Classification failed: {e}. Falling back to default search intent.")
             return QueryIntent(
                 intent="search",

@@ -8,12 +8,24 @@ own generated text (never its extraction/classification logic).
 
 from __future__ import annotations
 
+import re
 import time
 import sqlite3
 import contextlib
 from typing import Optional
 
 TONE_PRESETS = ("professional", "concise", "analyst", "custom")
+
+# Strips control/newline characters from user-supplied display names before they
+# ever reach a stored persona or an LLM system-prompt overlay (see apply_persona
+# in agents/base_agent.py) — a raw newline would let a display_name break out of
+# the single-line "Respond as '{name}', a {tone} analyst." instruction and inject
+# arbitrary follow-on text into the system prompt.
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]+")
+
+
+def sanitize_display_name(name: str) -> str:
+    return _CONTROL_CHARS_RE.sub(" ", name).strip()[:80]
 
 # Internal agent_key -> (display group, default display name)
 DEFAULT_PERSONAS: dict[str, dict] = {
@@ -127,7 +139,9 @@ class AgentPersonaStore:
             raise ValueError(f"tone_preset must be one of {TONE_PRESETS}")
 
         current = self.get(user_id, agent_key)
-        final_name = (display_name or current["display_name"]).strip()[:80]
+        final_name = sanitize_display_name(display_name or current["display_name"])
+        if not final_name:
+            raise ValueError("display_name cannot be empty after sanitization")
         final_tone = tone_preset or current["tone_preset"]
         now = time.time()
 

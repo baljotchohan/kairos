@@ -98,6 +98,20 @@ def test_search_fails_closed_without_user_id(memory):
     assert memory.structured_search(topic="Secret") == []
 
 
+def test_structured_search_scopes_to_empty_string_user_id(memory):
+    """Regression test: user_id="" (falsy but not None) must NOT skip the
+    user_id filter clause entirely — that would return every tenant's rows.
+    It should behave like any other real (if unusual) tenant id: scoped only
+    to rows that share that exact user_id."""
+    memory.store(make_node(id="owned-by-real-user", title="Real Tenant Decision", topics=["Widget"]), user_id="owner-a")
+    memory.store(make_node(id="owned-by-blank-user", title="Blank Tenant Decision", topics=["Widget"]), user_id="")
+
+    results = memory.structured_search(topic="Widget", user_id="")
+    ids = [n.id for n in results]
+    assert "owned-by-blank-user" in ids
+    assert "owned-by-real-user" not in ids
+
+
 def test_graph_auto_links(memory):
     memory.store(make_node(id="g1", title="First AWS Decision", topics=["Infrastructure", "AWS"]))
     memory.store(make_node(id="g2", title="Second AWS Decision", topics=["Infrastructure", "Cloud"]))

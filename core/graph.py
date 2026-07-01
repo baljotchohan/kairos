@@ -98,11 +98,17 @@ class DecisionGraph:
                     PRIMARY KEY (from_id, to_id, relation_type)
                 )
             """)
-            # Schema Migration: Safely add user_id column if not exists
+            # Schema Migration: Safely add user_id column if not exists. The
+            # check-then-ALTER pattern isn't atomic — under concurrent first boot
+            # two processes could both see it missing and both try to add it, so
+            # the loser of the race must not crash startup.
             cursor = conn.execute("PRAGMA table_info(decisions)")
             columns = [info[1] for info in cursor.fetchall()]
             if "user_id" not in columns:
-                conn.execute("ALTER TABLE decisions ADD COLUMN user_id TEXT NOT NULL DEFAULT ''")
+                try:
+                    conn.execute("ALTER TABLE decisions ADD COLUMN user_id TEXT NOT NULL DEFAULT ''")
+                except sqlite3.OperationalError:
+                    pass
 
             # Create optimization indexes on decisions table to speed up query/timeline filtering
             conn.execute("CREATE INDEX IF NOT EXISTS idx_decisions_date ON decisions(date DESC)")

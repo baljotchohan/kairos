@@ -120,6 +120,23 @@ async def search_decisions(
     }
 
 
+@router.get("/decisions/debt-score")
+async def decision_debt_score(
+    scope: str = "all",
+    memory=Depends(get_memory),
+    current_user: UserProfile = Depends(get_current_user),
+):
+    """Pure SQL/graph aggregation: how many decisions have gone 12+ months
+    without a follow_up review, weighted by cost/impact keywords. No LLM call.
+
+    Must stay registered ABOVE /decisions/{decision_id} — FastAPI/Starlette
+    matches path routes in registration order, so a static path defined after
+    a dynamic {decision_id} path would be swallowed by it (decision_id="debt-score")
+    and always 404. See tests/test_api.py::test_decisions_debt_score_route_is_reachable.
+    """
+    return compute_debt_score(memory, current_user.uid, scope=scope)
+
+
 @router.get("/decisions/{decision_id}")
 async def get_decision(decision_id: str, memory=Depends(get_memory), current_user: UserProfile = Depends(get_current_user)):
     """Get a single decision with all related decisions."""
@@ -181,17 +198,6 @@ async def graph_stats(memory=Depends(get_memory), current_user: UserProfile = De
     """Decision graph statistics."""
     stats = memory.graph.stats(user_id=current_user.uid)
     return stats
-
-
-@router.get("/decisions/debt-score")
-async def decision_debt_score(
-    scope: str = "all",
-    memory=Depends(get_memory),
-    current_user: UserProfile = Depends(get_current_user),
-):
-    """Pure SQL/graph aggregation: how many decisions have gone 12+ months
-    without a follow_up review, weighted by cost/impact keywords. No LLM call."""
-    return compute_debt_score(memory, current_user.uid, scope=scope)
 
 
 @router.post("/graph/export/obsidian")

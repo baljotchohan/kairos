@@ -85,6 +85,21 @@ def test_graph_stats(client):
     assert "total_decisions" in data
 
 
+def test_decisions_debt_score_route_is_reachable(client):
+    """Regression test: /decisions/debt-score must be registered ABOVE
+    /decisions/{decision_id} in api/routes/decisions.py, or Starlette's
+    in-order path matching swallows it (decision_id="debt-score") and this
+    always 404s instead of returning compute_debt_score()'s output."""
+    client.app.state.memory.graph.all_decisions.return_value = []
+    resp = client.get(
+        "/api/v1/decisions/debt-score",
+        headers={"Authorization": "Bearer simulated-google-token"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data == {"debt_score": 0, "high_risk_count": 0, "total_decisions": 0, "top_offenders": []}
+
+
 def test_admin_status(client):
     resp = client.get(
         "/api/v1/admin/status",
