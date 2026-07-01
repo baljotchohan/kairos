@@ -58,6 +58,7 @@ function generateId(): string {
 export function useKairosChat(token: string | null) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [isReconnectExhausted, setIsReconnectExhausted] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [stats, setStats] = useState<KairosStats | null>(null);
   const [ingestProgress, setIngestProgress] = useState<string | null>(null);
@@ -172,11 +173,14 @@ export function useKairosChat(token: string | null) {
     const unsubConnection = wsClient.on(
       "connection",
       (data: unknown) => {
-        const d = data as { connected: boolean };
+        const d = data as { connected: boolean; exhausted?: boolean };
         setIsConnected(d.connected);
         if (d.connected) {
+          setIsReconnectExhausted(false);
           // Request stats on connect
           wsClient.send({ type: "stats" });
+        } else if (d.exhausted) {
+          setIsReconnectExhausted(true);
         }
       }
     );
@@ -388,9 +392,16 @@ export function useKairosChat(token: string | null) {
     setActiveSessionId(undefined);
   }, []);
 
+  const retryConnection = useCallback(() => {
+    setIsReconnectExhausted(false);
+    wsClient.retryConnection();
+  }, []);
+
   return {
     messages,
     isConnected,
+    isReconnectExhausted,
+    retryConnection,
     isStreaming,
     stats,
     ingestProgress,

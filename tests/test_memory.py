@@ -68,6 +68,14 @@ def test_structured_search_by_topic(memory):
     assert all(n.id != "s2" for n in infra)
 
 
+def test_structured_search_respects_limit(memory):
+    for i in range(5):
+        memory.store(make_node(id=f"lim-{i}", title=f"Widget Decision {i}", topics=["Widget"]), user_id=TEST_UID)
+
+    results = memory.structured_search(topic="Widget", user_id=TEST_UID, limit=2)
+    assert len(results) == 2
+
+
 def test_structured_search_by_person(memory):
     memory.store(make_node(id="p1", title="John's Call", participants=["John Smith", "Alice"]), user_id=TEST_UID)
     memory.store(make_node(id="p2", title="Bob's Call", participants=["Bob Jones"]), user_id=TEST_UID)

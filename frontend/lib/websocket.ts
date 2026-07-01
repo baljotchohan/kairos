@@ -75,7 +75,12 @@ class KairosWebSocket {
   }
 
   private scheduleReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) return;
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      // Without this, the UI silently claims "Reconnecting…" forever after
+      // attempts are exhausted, with no way back short of a full page reload.
+      this.emit("connection", { connected: false, exhausted: true });
+      return;
+    }
     if (this.reconnectTimer) return;
 
     this.reconnectTimer = setTimeout(() => {
@@ -83,6 +88,18 @@ class KairosWebSocket {
       this.reconnectAttempts++;
       this.connect(this.token);
     }, this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts));
+  }
+
+  /** Manually retry after reconnect attempts were exhausted (e.g. a user
+   * clicking a "Retry" button) — resets the backoff counter and connects. */
+  retryConnection(): void {
+    this.reconnectAttempts = 0;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.manuallyDisconnected = false;
+    this.connect(this.token);
   }
 
   disconnect(): void {

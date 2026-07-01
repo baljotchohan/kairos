@@ -30,11 +30,32 @@ import asyncio
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
-# Registry for active MCP SSE transport sessions (mapping session_id -> asyncio.Queue)
-_active_sessions: dict[str, asyncio.Queue] = {}
+# Registry for active MCP SSE transport sessions: session_id -> (owner_user_id, queue).
+# The owner is recorded at session creation (GET, one token per session) and checked
+# on every POST before routing a response into it — without this, a POST authenticated
+# as user A but supplying user B's session_id would deliver A's tool-call response into
+# B's SSE stream (a cross-session response-injection bug, not a data-exfiltration one,
+# since tool execution itself is separately scoped to the POST's own verified user_id —
+# but injecting unrequested content into another user's trusted MCP stream is still a
+# real integrity issue worth closing).
+_active_sessions: dict[str, tuple[str, asyncio.Queue]] = {}
+
+
+def _owned_session_queue(session_id: str | None, user_id: str) -> asyncio.Queue | None:
+    """Return the SSE queue for session_id ONLY if it's owned by user_id."""
+    if not session_id:
+        return None
+    entry = _active_sessions.get(session_id)
+    if entry is None:
+        return None
+    owner_user_id, queue = entry
+    if owner_user_id != user_id:
+        log.warning("MCP SSE session %s owned by a different user — refusing to route response into it", session_id)
+        return None
+    return queue
 
 from core.graph import DecisionNode
-from core.mcp_auth import verify_mcp_token, mint_mcp_token
+from core.mcp_auth import verify_mcp_token, mint_mcp_token, revoke_mcp_tokens
 from core import decision_intelligence as di
 from config import config
 from api.auth import get_current_user, UserProfile
@@ -450,9 +471,10 @@ async def mcp_streamable_http(token: str, request: Request):
     except Exception:
         return JSONResponse(_error(None, -32700, "Parse error"), status_code=400)
 
-    # Resolve SSE session if active
+    # Resolve SSE session if active — only if THIS request's authenticated
+    # user_id matches the session's recorded owner (see _owned_session_queue).
     session_id = request.query_params.get("session_id") or request.headers.get("Mcp-Session-Id")
-    has_sse_session = session_id and session_id in _active_sessions
+    sse_queue = _owned_session_queue(session_id, user_id)
 
     # JSON-RPC supports single messages and batches (a JSON array).
     if isinstance(body, list):
@@ -460,11 +482,11 @@ async def mcp_streamable_http(token: str, request: Request):
         for m in body:
             resp = await _handle_message(m, memory, user_id, request)
             if resp is not None:
-                if has_sse_session:
-                    await _active_sessions[session_id].put(resp)
+                if sse_queue is not None:
+                    await sse_queue.put(resp)
                 else:
                     responses.append(resp)
-        if has_sse_session:
+        if sse_queue is not None:
             return Response(status_code=202)  # Response routed via SSE
         if not responses:
             return Response(status_code=202)
@@ -479,9 +501,9 @@ async def mcp_streamable_http(token: str, request: Request):
     if resp is None:
         return Response(status_code=202)  # notification — no body
 
-    if has_sse_session:
+    if sse_queue is not None:
         # Route response message back to client via the active SSE stream queue
-        await _active_sessions[session_id].put(resp)
+        await sse_queue.put(resp)
         return Response(status_code=202)
 
     # Fallback to returning direct JSON (stateless Streamable-HTTP)
@@ -511,20 +533,21 @@ async def mcp_bearer_http(request: Request):
     except Exception:
         return JSONResponse(_error(None, -32700, "Parse error"), status_code=400)
 
-    # Resolve SSE session if active
+    # Resolve SSE session if active — only if THIS request's authenticated
+    # user_id matches the session's recorded owner (see _owned_session_queue).
     session_id = request.query_params.get("session_id") or request.headers.get("Mcp-Session-Id")
-    has_sse_session = session_id and session_id in _active_sessions
+    sse_queue = _owned_session_queue(session_id, user_id)
 
     if isinstance(body, list):
         responses = []
         for m in body:
             resp = await _handle_message(m, memory, user_id, request)
             if resp is not None:
-                if has_sse_session:
-                    await _active_sessions[session_id].put(resp)
+                if sse_queue is not None:
+                    await sse_queue.put(resp)
                 else:
                     responses.append(resp)
-        if has_sse_session:
+        if sse_queue is not None:
             return Response(status_code=202)  # Response routed via SSE
         if not responses:
             return Response(status_code=202)
@@ -539,9 +562,9 @@ async def mcp_bearer_http(request: Request):
     if resp is None:
         return Response(status_code=202)
 
-    if has_sse_session:
+    if sse_queue is not None:
         # Route response message back to client via the active SSE stream queue
-        await _active_sessions[session_id].put(resp)
+        await sse_queue.put(resp)
         return Response(status_code=202)
 
     return _format_response(resp, extra_headers)
@@ -557,7 +580,7 @@ async def mcp_streamable_http_get(token: str, request: Request):
 
     session_id = uuid.uuid4().hex
     queue = asyncio.Queue()
-    _active_sessions[session_id] = queue
+    _active_sessions[session_id] = (user_id, queue)
 
     async def sse_generator():
         # Push the endpoint configuration event immediately
@@ -627,4 +650,23 @@ def mcp_connection_info(request: Request, current_user: UserProfile = Depends(ge
             "chatgpt": f"Settings → Connectors (developer mode) → Add → paste: {oauth_url}",
             "claude_desktop": "Paste claude_desktop_config into claude_desktop_config.json.",
         },
+    }
+
+
+@mcp_connect_router.post("/revoke")
+def mcp_revoke(request: Request, current_user: UserProfile = Depends(get_current_user)):
+    """Invalidate every MCP token previously issued to this user (URL tokens
+    AND OAuth access tokens — both are verified by the same epoch check) and
+    immediately mint a fresh one. Use this if a connect URL or token may have
+    leaked, or when disconnecting an MCP client you no longer trust."""
+    new_epoch = revoke_mcp_tokens(current_user.uid)
+    new_token = mint_mcp_token(current_user.uid)
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.url.netloc)
+    base_url = f"{scheme}://{host}"
+    return {
+        "revoked": True,
+        "epoch": new_epoch,
+        "token": new_token,
+        "token_url": f"{base_url}/mcp/u/{new_token}",
     }

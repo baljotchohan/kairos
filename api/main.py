@@ -223,6 +223,10 @@ from collections import defaultdict, deque
 _RL_WINDOW = 60.0   # seconds
 _RL_MAX = 120       # max requests per window per IP across /api/* and /mcp/*
 _rl_hits: dict[str, deque] = defaultdict(deque)
+# _rl_hits never evicted an IP whose deque had fully expired — under sustained
+# unique-IP traffic (scraper/bot churn, IPv6 rotation) this dict grows for the
+# entire process lifetime. Sweep it at most once per window instead.
+_rl_last_sweep = [0.0]
 
 
 @app.middleware("http")
@@ -241,6 +245,12 @@ async def rate_limit_middleware(request: Request, call_next):
                 headers={"Retry-After": "30"},
             )
         hits.append(now)
+
+        if now - _rl_last_sweep[0] > _RL_WINDOW:
+            _rl_last_sweep[0] = now
+            stale_ips = [k for k, v in _rl_hits.items() if not v or now - v[-1] > _RL_WINDOW]
+            for k in stale_ips:
+                _rl_hits.pop(k, None)
     return await call_next(request)
 
 # Mount routes

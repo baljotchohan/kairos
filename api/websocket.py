@@ -9,7 +9,10 @@ Receive: stream of tokens, then a final sources message
 from __future__ import annotations
 
 import json
+import asyncio
+import contextlib
 import logging
+from typing import Any, Awaitable
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from api.auth import verify_token
@@ -17,6 +20,47 @@ from api.auth import verify_token
 log = logging.getLogger(__name__)
 
 ws_router = APIRouter()
+
+
+async def _run_cancellably(websocket: WebSocket, work: Awaitable[Any]) -> Any:
+    """Run `work` (a query_with_memory/run_ingestion call) racing against the
+    socket's next receive event. If the client disconnects mid-stream, cancel
+    `work` immediately instead of letting an LLM call + memory writes for an
+    abandoned request run to completion — a burst of disconnects during long
+    RAG/LLM calls would otherwise keep consuming tokens/compute for nobody.
+
+    A non-disconnect message arriving while `work` is still running (our own
+    frontend never does this — it blocks input until the current query
+    completes) is logged and dropped rather than reordering the single-flight
+    request/response contract this handler otherwise guarantees.
+    """
+    work_task = asyncio.ensure_future(work)
+    recv_task = asyncio.ensure_future(websocket.receive())
+    try:
+        done, _ = await asyncio.wait({work_task, recv_task}, return_when=asyncio.FIRST_COMPLETED)
+
+        if work_task in done:
+            recv_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await recv_task
+            return work_task.result()
+
+        # recv_task finished first.
+        message = recv_task.result()
+        if message.get("type") == "websocket.disconnect":
+            work_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await work_task
+            raise WebSocketDisconnect(message.get("code", 1000))
+
+        # An unexpected message arrived mid-stream — drop it, let the
+        # in-flight work finish normally (preserves single-flight semantics).
+        log.warning("Dropped unexpected WebSocket message received while a query/ingest was already in flight")
+        return await work_task
+    finally:
+        for t in (work_task, recv_task):
+            if not t.done():
+                t.cancel()
 
 
 @ws_router.websocket("/ws")
@@ -67,13 +111,13 @@ async def websocket_endpoint(websocket: WebSocket):
                     await websocket.send_json(msg)
 
                 try:
-                    result = await orchestrator.query_with_memory(
+                    result = await _run_cancellably(websocket, orchestrator.query_with_memory(
                         question=question,
                         user_id=user_id,
                         session_id=session_id,
                         stream_callback=stream_cb
-                    )
-                    
+                    ))
+
                     await websocket.send_json({
                         "type": "done",
                         "answer": result["answer"],
@@ -109,7 +153,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     await websocket.send_json({"type": "progress", "message": msg})
 
                 try:
-                    result = await orchestrator.run_ingestion(user_id=user_id, progress_callback=progress)
+                    result = await _run_cancellably(
+                        websocket, orchestrator.run_ingestion(user_id=user_id, progress_callback=progress)
+                    )
                     await websocket.send_json({
                         "type": "ingest_done",
                         "decisions_extracted": result.get("decisions_extracted", 0),

@@ -178,6 +178,7 @@ class KairosMemory:
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
         user_id: Optional[str] = None,
+        limit: int = 200,
     ) -> list[DecisionNode]:
         """SQL-backed exact / range queries."""
         # Fail CLOSED: never return every tenant's rows when user_id is missing.
@@ -207,7 +208,9 @@ class KairosMemory:
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with self._connect() as conn:
-            rows = conn.execute(f"SELECT id FROM decisions {where}", params).fetchall()
+            rows = conn.execute(
+                f"SELECT id FROM decisions {where} ORDER BY date DESC LIMIT ?", params + [max(1, limit)]
+            ).fetchall()
         return [n for row in rows if (n := self.graph.get_decision(row[0], user_id=user_id))]
 
     def hybrid_search(self, query: str, n_results: int = 5, user_id: Optional[str] = None) -> list[DecisionNode]:

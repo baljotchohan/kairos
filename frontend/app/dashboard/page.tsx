@@ -176,6 +176,8 @@ export default function Home() {
   const {
     messages,
     isConnected,
+    isReconnectExhausted,
+    retryConnection,
     isStreaming,
     stats,
     ingestProgress,
@@ -242,6 +244,7 @@ export default function Home() {
   const [debtScore, setDebtScore] = useState<{
     debt_score: number; high_risk_count: number; total_decisions: number; top_offenders: string[];
   } | null>(null);
+  const [debtScoreLoading, setDebtScoreLoading] = useState(false);
 
   // Simulated live MCP activity logs
   const [mcpLogs, setMcpLogs] = useState<any[]>([
@@ -668,10 +671,12 @@ export default function Home() {
   // Fetch the Decision Debt Score when the Metrics tab opens
   useEffect(() => {
     if (activeTab !== "dashboard" || !token) return;
+    setDebtScoreLoading(true);
     fetch("/api/v1/decisions/debt-score", { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setDebtScore(d))
-      .catch((e) => console.error("Error fetching decision debt score", e));
+      .catch((e) => console.error("Error fetching decision debt score", e))
+      .finally(() => setDebtScoreLoading(false));
   }, [activeTab, token]);
 
   // Simulated live MCP query logs tick-tock
@@ -1442,7 +1447,7 @@ export default function Home() {
               </div>
               <div className="flex items-center justify-between text-[10px] text-[rgb(var(--text-muted))] font-mono">
                 <span>Sync Engine:</span>
-                <ConnectionStatus isConnected={isConnected} />
+                <ConnectionStatus isConnected={isConnected} exhausted={isReconnectExhausted} onRetry={retryConnection} />
               </div>
             </>
           ) : (
@@ -1936,6 +1941,16 @@ export default function Home() {
               </div>
 
               {/* Decision Debt Score — pure SQL/graph aggregation, no LLM call */}
+              {debtScoreLoading && !debtScore && (
+                <div className="p-5 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/40 backdrop-blur-sm shadow-sm flex items-center gap-6 animate-pulse">
+                  <div className="shrink-0 w-20 h-20 rounded-full bg-[rgb(var(--border))]/60" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-2.5 w-40 rounded bg-[rgb(var(--border))]/60" />
+                    <div className="h-3.5 w-64 rounded bg-[rgb(var(--border))]/50" />
+                    <div className="h-2.5 w-56 rounded bg-[rgb(var(--border))]/40" />
+                  </div>
+                </div>
+              )}
               {debtScore && debtScore.total_decisions > 0 && (
                 <div className="p-5 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/40 backdrop-blur-sm shadow-sm flex items-center gap-6">
                   <div className="relative shrink-0 w-20 h-20">
@@ -2278,6 +2293,34 @@ export default function Home() {
                       { label: "Transcribed", value: "14.5 hrs" },
                       { label: "Reliability", value: "92.5%" },
                       { label: "Execution Cache", value: "N/A" }
+                    ]
+                  },
+                  {
+                    name: "notion_agent",
+                    label: "Notion Extraction Agent",
+                    status: syncStatus.notion === "syncing" ? "processing" : "idle",
+                    description: "Walks Notion pages and databases recursively, extracting decisions logged in specs and wikis.",
+                    model: "Qwen 2.5 72B Instruct",
+                    hardware: "AMD Instinct GPU (Fireworks Cloud)",
+                    icon: "🗂️",
+                    metrics: [
+                      { label: "Decisions", value: "22" },
+                      { label: "Reliability", value: "95.6%" },
+                      { label: "Execution Cache", value: "90%" }
+                    ]
+                  },
+                  {
+                    name: "live_data_agent",
+                    label: "Live Agent",
+                    status: isChatStreaming ? "processing" : "idle",
+                    description: "Skips stored memory entirely for on-demand questions — \"how many unread emails do I have?\" — answered straight from your connected accounts.",
+                    model: "Llama 3.3 70B (Groq Cloud)",
+                    hardware: "Groq LPU Accelerator",
+                    icon: "⚡",
+                    metrics: [
+                      { label: "Live Queries", value: "36" },
+                      { label: "Avg Latency", value: "640ms" },
+                      { label: "Sources Hit", value: "4.1 avg" }
                     ]
                   }
                 ].map((agent) => (

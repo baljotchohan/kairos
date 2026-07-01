@@ -100,6 +100,26 @@ def test_decisions_debt_score_route_is_reachable(client):
     assert data == {"debt_score": 0, "high_risk_count": 0, "total_decisions": 0, "top_offenders": []}
 
 
+def test_rate_limiter_sweeps_stale_ip_entries(client, monkeypatch):
+    """Regression test: _rl_hits must not grow forever under unique-IP churn —
+    an IP whose whole window has expired should get evicted, not linger for
+    the rest of the process lifetime."""
+    import time
+    from collections import deque
+    import api.main as main
+
+    monkeypatch.setattr(main, "_RL_WINDOW", 0.05)
+    main._rl_hits.clear()
+    main._rl_last_sweep[0] = 0.0
+    main._rl_hits["1.2.3.4"] = deque([0.0])  # a long-expired entry from an IP that never returns
+
+    time.sleep(0.1)  # let both the seeded entry and the sweep interval expire
+
+    resp = client.get("/api/v1/graph/stats", headers={"Authorization": "Bearer simulated-google-token"})
+    assert resp.status_code == 200
+    assert "1.2.3.4" not in main._rl_hits
+
+
 def test_admin_status(client):
     resp = client.get(
         "/api/v1/admin/status",
