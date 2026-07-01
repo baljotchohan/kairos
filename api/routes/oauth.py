@@ -24,7 +24,6 @@ from datetime import datetime
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
 
 from api.auth import get_current_user, UserProfile
 from config import config
@@ -441,50 +440,77 @@ async def jira_callback(code: str = None, state: str = None, error: str = None):
 
 # ── ZOOM ──────────────────────────────────────────────────────────────────────
 
-class NotionConnectRequest(BaseModel):
-    api_key: str
+# ── NOTION ────────────────────────────────────────────────────────────────────
+
+@router.get("/notion/start")
+async def notion_start(current_user: UserProfile = Depends(get_current_user)):
+    state = _generate_state_token(current_user.uid)
+    url = (
+        "https://api.notion.com/v1/oauth/authorize"
+        f"?client_id={config.NOTION_CLIENT_ID}"
+        "&response_type=code"
+        "&owner=user"
+        f"&redirect_uri={quote(_callback_url('notion'), safe='')}"
+        f"&state={state}"
+    )
+    return {"service": "notion", "url": url}
 
 
-@router.post("/notion/connect")
-async def notion_connect(
-    body: NotionConnectRequest,
-    current_user: UserProfile = Depends(get_current_user),
-):
-    """Accept the user's own Notion Integration Secret, validate it, store per-user."""
-    api_key = body.api_key.strip()
-    if not api_key.startswith("ntn_") and not api_key.startswith("secret_"):
-        raise HTTPException(400, "Invalid Notion key — must start with ntn_ or secret_")
+@router.get("/notion/callback")
+async def notion_callback(code: str = None, state: str = None, error: str = None):
+    if error or not code or not state:
+        return _popup_error(error or "Missing authorization code")
 
-    # Validate the key against Notion API and get workspace info
-    workspace_name = "Notion"
+    verified_uid = _verify_state_token(state)
+    if not verified_uid:
+        return _popup_error("Security Check Failed: Invalid or expired OAuth state parameter.")
+
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(
-                "https://api.notion.com/v1/users/me",
+        import base64
+        credentials = base64.b64encode(
+            f"{config.NOTION_CLIENT_ID}:{config.NOTION_CLIENT_SECRET}".encode()
+        ).decode()
+
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                "https://api.notion.com/v1/oauth/token",
                 headers={
-                    "Authorization": f"Bearer {api_key}",
+                    "Authorization": f"Basic {credentials}",
+                    "Content-Type": "application/json",
                     "Notion-Version": "2022-06-28",
                 },
+                json={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": _callback_url("notion"),
+                },
             )
-        if resp.status_code == 401:
-            raise HTTPException(400, "Invalid Notion key — Notion rejected it. Check you copied it correctly.")
-        if resp.status_code != 200:
-            raise HTTPException(400, f"Notion API returned {resp.status_code} — check your key.")
-        user_data = resp.json()
-        workspace_name = user_data.get("name") or user_data.get("type") or "Notion"
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(400, f"Could not reach Notion API: {e}")
 
-    _store_token(current_user.uid, "notion", {
-        "api_key": api_key,
-        "service": "notion",
-        "workspace": workspace_name,
-        "connected_at": datetime.utcnow().isoformat(),
-    })
-    print(f"[OAuth] ✅ Notion connected uid={current_user.uid} workspace={workspace_name}")
-    return {"service": "notion", "connected": True, "workspace": workspace_name}
+        if resp.status_code != 200:
+            print(f"[OAuth] 🔴 Notion token exchange failed: {resp.status_code} {resp.text}")
+            return _popup_error("Notion authorization failed — please try again.")
+
+        data = resp.json()
+        access_token = data.get("access_token")
+        workspace_name = data.get("workspace_name") or "Notion Workspace"
+        workspace_id = data.get("workspace_id", "")
+
+        if not access_token:
+            return _popup_error("Notion did not return an access token.")
+
+        _store_token(verified_uid, "notion", {
+            "access_token": access_token,
+            "workspace_name": workspace_name,
+            "workspace_id": workspace_id,
+            "service": "notion",
+            "connected_at": datetime.utcnow().isoformat(),
+        })
+        print(f"[OAuth] ✅ Notion connected uid={verified_uid} workspace={workspace_name}")
+        return _popup_success("Notion", f"Connected to {workspace_name}")
+
+    except Exception as e:
+        print(f"[OAuth] 🔴 Notion callback error: {e}")
+        return _popup_error("We couldn't complete the Notion connection. Please try again.")
 
 
 @router.get("/zoom/start")

@@ -93,8 +93,9 @@ class NotionAgent(BaseAgent):
             if row:
                 from core.token_crypto import decrypt_token_data
                 data = decrypt_token_data(row["token_data"])
-                if data.get("api_key") and not data.get("disconnected"):
-                    return data["api_key"]
+                token = data.get("access_token") or data.get("api_key")
+                if token and not data.get("disconnected"):
+                    return token
         except Exception:
             pass
 

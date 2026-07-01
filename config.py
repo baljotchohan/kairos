@@ -59,7 +59,9 @@ class Config:
     ZOOM_CLIENT_SECRET: str = os.getenv("ZOOM_CLIENT_SECRET", "")
 
     # ── Notion ─────────────────────────────────────────────────────────────────
-    NOTION_API_KEY: str = os.getenv("NOTION_API_KEY", "")
+    NOTION_CLIENT_ID: str = os.getenv("NOTION_CLIENT_ID", "")
+    NOTION_CLIENT_SECRET: str = os.getenv("NOTION_CLIENT_SECRET", "")
+    NOTION_API_KEY: str = os.getenv("NOTION_API_KEY", "")  # fallback / admin key
 
     # ── Jira ───────────────────────────────────────────────────────────────────
     JIRA_URL: str = os.getenv("JIRA_URL", "")

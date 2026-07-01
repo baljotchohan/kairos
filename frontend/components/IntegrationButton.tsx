@@ -23,10 +23,6 @@ const SERVICE_CONFIG: Record<string, ServiceConfig> = {
     ),
     accentColor: "#37352f",
     description: "Read Notion pages and databases, extract decisions",
-    manualKeyConnect: true,
-    keyPlaceholder: "ntn_xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    keyHelpUrl: "https://www.notion.so/my-integrations",
-    keyHelpLabel: "notion.so/my-integrations",
   },
   slack: {
     name: "Slack",
