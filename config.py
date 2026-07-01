@@ -58,6 +58,9 @@ class Config:
     ZOOM_CLIENT_ID: str = os.getenv("ZOOM_CLIENT_ID", "")
     ZOOM_CLIENT_SECRET: str = os.getenv("ZOOM_CLIENT_SECRET", "")
 
+    # ── Notion ─────────────────────────────────────────────────────────────────
+    NOTION_API_KEY: str = os.getenv("NOTION_API_KEY", "")
+
     # ── Jira ───────────────────────────────────────────────────────────────────
     JIRA_URL: str = os.getenv("JIRA_URL", "")
     JIRA_EMAIL: str = os.getenv("JIRA_EMAIL", "")

@@ -440,6 +440,21 @@ async def jira_callback(code: str = None, state: str = None, error: str = None):
 
 # ── ZOOM ──────────────────────────────────────────────────────────────────────
 
+@router.get("/notion/start")
+async def notion_start(current_user: UserProfile = Depends(get_current_user)):
+    """Notion uses a static Internal Integration Secret — no OAuth popup needed."""
+    if config.NOTION_API_KEY:
+        _store_token(current_user.uid, "notion", {
+            "api_key": config.NOTION_API_KEY,
+            "service": "notion",
+            "connected_at": datetime.utcnow().isoformat(),
+        })
+        print(f"[OAuth] ✅ Notion (API key) connected uid={current_user.uid}")
+        return {"service": "notion", "connected": True,
+                "message": "Notion connected via Integration Secret."}
+    raise HTTPException(400, "NOTION_API_KEY not configured on server.")
+
+
 @router.get("/zoom/start")
 async def zoom_start(current_user: UserProfile = Depends(get_current_user)):
     state = _generate_state_token(current_user.uid)
@@ -541,7 +556,7 @@ async def get_status(current_user: UserProfile = Depends(get_current_user)):
     # Gmail + Drive both read the single Google grant (one consent covers both).
     frontend_to_storage = {
         "slack": "slack", "gmail": "google", "drive": "google",
-        "jira": "jira", "zoom": "zoom",
+        "jira": "jira", "zoom": "zoom", "notion": "notion",
     }
 
     result = {}
@@ -563,7 +578,7 @@ async def disconnect_service(
     service: str,
     current_user: UserProfile = Depends(get_current_user),
 ):
-    valid = {"slack", "gmail", "drive", "jira", "zoom"}
+    valid = {"slack", "gmail", "drive", "jira", "zoom", "notion"}
     if service not in valid:
         raise HTTPException(400, f"Unknown service: {service}")
     # "gmail" and "drive" both map to the single "google" grant in the token store

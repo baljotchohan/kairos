@@ -39,6 +39,7 @@ class KairosState(TypedDict):
     drive_data: list[dict]
     meeting_data: list[dict]
     jira_data: list[dict]
+    notion_data: list[dict]
     decisions_extracted: int
     errors: list[str]
     status: str
@@ -62,6 +63,7 @@ class KairosOrchestrator:
         from agents.email_agent import EmailAgent
         from agents.drive_agent import DriveAgent
         from agents.meeting_agent import MeetingAgent
+        from agents.notion_agent import NotionAgent
         from agents.synthesis_agent import SynthesisAgent
         from agents.intent_agent import IntentAgent
         from agents.context_agent import ContextAgent
@@ -74,6 +76,7 @@ class KairosOrchestrator:
         self.email_agent = EmailAgent()
         self.drive_agent = DriveAgent()
         self.meeting_agent = MeetingAgent()
+        self.notion_agent = NotionAgent()
         self.jira_connector = JiraConnector()
         self.synthesis_agent = SynthesisAgent(memory=memory)
 
@@ -102,6 +105,7 @@ class KairosOrchestrator:
         g.add_node("gather_drive", self._gather_drive)
         g.add_node("gather_meetings", self._gather_meetings)
         g.add_node("gather_jira", self._gather_jira)
+        g.add_node("gather_notion", self._gather_notion)
         g.add_node("synthesize", self._synthesize)
 
         g.set_entry_point("gather_slack")
@@ -109,7 +113,8 @@ class KairosOrchestrator:
         g.add_edge("gather_email", "gather_drive")
         g.add_edge("gather_drive", "gather_meetings")
         g.add_edge("gather_meetings", "gather_jira")
-        g.add_edge("gather_jira", "synthesize")
+        g.add_edge("gather_jira", "gather_notion")
+        g.add_edge("gather_notion", "synthesize")
         g.add_edge("synthesize", END)
 
         return g.compile()
@@ -147,6 +152,14 @@ class KairosOrchestrator:
         except Exception as e:
             errs = state.get("errors", []) + [f"Meetings: {e}"]
             return {"meeting_data": [], "errors": errs}
+
+    async def _gather_notion(self, state: KairosState) -> dict:
+        try:
+            data = await self.notion_agent.fetch(user_id=state.get("user_id"))
+            return {"notion_data": data, "status": "notion_done"}
+        except Exception as e:
+            errs = state.get("errors", []) + [f"Notion: {e}"]
+            return {"notion_data": [], "errors": errs}
 
     async def _gather_jira(self, state: KairosState) -> dict:
         # Jira creds are global env (no per-user OAuth yet) — only ingest the
@@ -196,6 +209,7 @@ class KairosOrchestrator:
         # decision-rich ones (Jira tickets, email approvals).
         sources = [
             state.get("jira_data", []),     # tickets/epics — richest in decisions
+            state.get("notion_data", []),   # pages/databases — structured decisions
             state.get("email_data", []),    # approvals/threads
             state.get("drive_data", []),    # docs/specs
             state.get("meeting_data", []),  # transcripts
