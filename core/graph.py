@@ -313,6 +313,24 @@ class DecisionGraph:
                 and any(name_lower in p.lower() for p in self.graph.nodes[n]["data"].participants)
             ]
 
+    def get_edges_by_type(self, relation_type: RelationType, user_id: Optional[str] = None) -> list[tuple[DecisionNode, DecisionNode]]:
+        """Return (from_node, to_node) pairs for every edge carrying `relation_type`,
+        scoped to user_id (both endpoints must belong to that user)."""
+        with self._lock:
+            pairs: list[tuple[DecisionNode, DecisionNode]] = []
+            for u, v, data in self.graph.edges(data=True):
+                relations = data.get("relations") or [data.get("relation")]
+                if relation_type not in relations:
+                    continue
+                nu = self.graph.nodes[u].get("data")
+                nv = self.graph.nodes[v].get("data")
+                if not nu or not nv:
+                    continue
+                if user_id is not None and (nu.user_id != user_id or nv.user_id != user_id):
+                    continue
+                pairs.append((nu, nv))
+            return pairs
+
     def all_decisions(self, user_id: Optional[str] = None) -> list[DecisionNode]:
         with self._lock:
             return [

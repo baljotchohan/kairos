@@ -438,6 +438,12 @@ const Logos = {
       <path d="M3 8.5C3 7.12 4.12 6 5.5 6h7C13.88 6 15 7.12 15 8.5v7c0 1.38-1.12 2.5-2.5 2.5h-7C4.12 18 3 16.88 3 15.5v-7zM16 9.8l3.7-2.66c.66-.48 1.3-.02 1.3.74v8.24c0 .76-.64 1.22-1.3.74L16 14.2V9.8z" />
     </svg>
   ),
+  notion: (
+    <svg viewBox="0 0 24 24" className="w-7 h-7">
+      <rect width="24" height="24" rx="5.5" fill="#000000" />
+      <path d="M7.1 6.3c0-.66.44-1.1 1.1-1.1h1.62l6.08 9.3V6.3c0-.66.44-1.1 1.1-1.1h.6c.66 0 1.1.44 1.1 1.1v11.4c0 .66-.44 1.1-1.1 1.1h-1.56l-6.14-9.4v8.4c0 .66-.44 1.1-1.1 1.1h-.6c-.66 0-1.1-.44-1.1-1.1V6.3z" fill="#fff" />
+    </svg>
+  ),
 };
 
 /* ── Static data ─────────────────────────────────────────────────────────── */
@@ -462,26 +468,69 @@ const PROBLEMS = [
   },
 ];
 
-const AGENTS = [
-  { icon: "💬", name: "Slack Agent", desc: "Reads every channel & thread, flags decision moments, captures participants and outcomes." },
-  { icon: "✉️", name: "Email Agent", desc: "Scans Gmail for approvals, sign-offs and escalations — links threads to the decisions they made." },
-  { icon: "📁", name: "Drive Agent", desc: "Parses docs, specs and proposals in Google Drive for the key choices written down inside them." },
-  { icon: "🎥", name: "Meeting Agent", desc: "Transcribes Zoom recordings with Whisper, then pinpoints decisions, timestamps and who was in the room." },
-  { icon: "🧠", name: "Synthesis Agent", desc: "The orchestrator. Fuses every source into one decision graph and answers your questions with citations." },
-];
+const AGENTS = {
+  extraction: [
+    { icon: "💬", name: "Slack Agent", desc: "Reads every channel & thread, flags decision moments, captures participants and outcomes." },
+    { icon: "✉️", name: "Email Agent", desc: "Scans Gmail for approvals, sign-offs and escalations — links threads to the decisions they made." },
+    { icon: "📁", name: "Drive Agent", desc: "Parses docs, specs and proposals in Google Drive for the key choices written down inside them." },
+    { icon: "🗂️", name: "Notion Agent", desc: "Walks pages and databases recursively, extracting decisions logged in specs and wikis." },
+    { icon: "🎥", name: "Meeting Agent", desc: "Transcribes Zoom recordings with Whisper, then pinpoints decisions, timestamps and who was in the room." },
+  ],
+  reasoning: [
+    { icon: "🧠", name: "Synthesis Engine", desc: "Fuses every source into one decision graph and answers your questions with citations." },
+    { icon: "🔀", name: "Router", desc: "Classifies every query — search, live data, general chat, or ingest — before anything else runs." },
+    { icon: "🔎", name: "Retrieval Engine", desc: "Hybrid semantic + keyword + graph-neighbor search, personalized to your profile and history." },
+    { icon: "⚡", name: "Live Agent", desc: "Skips memory entirely for on-demand questions — \"how many unread emails do I have?\" — answered live." },
+  ],
+};
 
 const CONNECTORS = [
   { key: "slack", name: "Slack", sub: "Channels & DMs" },
   { key: "gmail", name: "Gmail", sub: "Emails & approvals" },
   { key: "drive", name: "Google Drive", sub: "Docs & specs" },
-  { key: "jira", name: "Jira", sub: "Tickets & epics" },
+  { key: "notion", name: "Notion", sub: "Pages & databases" },
   { key: "zoom", name: "Zoom", sub: "Meeting recordings" },
+  { key: "jira", name: "Jira", sub: "Tickets & epics" },
 ] as const;
 
 const MCP_TOOLS = [
   { name: "get_context", sig: "(query)", desc: "Claude pulls relevant company memory before it answers anything." },
   { name: "store_context", sig: "(decision, …)", desc: "Claude writes new decisions back into KAIROS the moment it learns them." },
   { name: "search_decisions", sig: "(topic, person, date)", desc: "Structured search across the decision graph with full source citations." },
+  { name: "find_similar_decisions", sig: "(query)", desc: "Checks whether a new plan has real precedent — or if you're about to repeat a mistake." },
+  { name: "detect_decision_patterns", sig: "(scope)", desc: "Proactively scans the whole graph for contradictions, stale spend, and bus-factor risk." },
+  { name: "predict_decision_risk", sig: "(scope)", desc: "Scores every decision 0–100 for staleness, ownership gaps, and unreviewed impact." },
+];
+
+const INTELLIGENCE = [
+  {
+    icon: "🎯",
+    tool: "find_similar_decisions",
+    title: "Precedent Check",
+    body: "Before your team repeats a mobile-app attempt or re-signs a vendor, KAIROS checks memory first — and gives a punchy verdict, not a hedge.",
+    verdict: "“Yes — tried in 2021, failed from no mobile expertise. Don't repeat without closing that gap first.”",
+  },
+  {
+    icon: "🕸️",
+    tool: "detect_decision_patterns",
+    title: "Pattern Detection",
+    body: "A structural scan of the entire decision graph — contradictory outcomes on the same topic, unreviewed vendor spend, one person signing off on everything.",
+    verdict: "“3 infra decisions since 2022 contradict each other — and the same person signed all of them.”",
+  },
+  {
+    icon: "⚠️",
+    tool: "predict_decision_risk",
+    title: "Risk Prediction",
+    body: "Every decision gets a live 0–100 risk score — stale, unowned, or high-impact — ranked so nothing important slips through again.",
+    verdict: "“Risk 82/100 — vendor contract, no review in 3 years, no owner on record.”",
+  },
+];
+
+const STEPS = [
+  { n: "01", title: "Connect", body: "One-click OAuth into Slack, Gmail, Drive, Notion, Zoom and Jira. No admin install, no IT ticket." },
+  { n: "02", title: "Extract", body: "Nine agents read continuously, catching every decision-shaped moment with sources, people, and outcomes." },
+  { n: "03", title: "Graph", body: "Every decision auto-links to related ones by topic, person, and timeframe — a living, physics-simulated web." },
+  { n: "04", title: "Ask", body: "Query in plain English over chat or any MCP client — cited answers in seconds, or a warning before you repeat a mistake." },
 ];
 
 /* ── Page ────────────────────────────────────────────────────────────────── */
@@ -516,6 +565,14 @@ export default function Landing() {
 
   return (
     <main className="relative min-h-screen w-full bg-[#080808] text-[#ededed] overflow-x-hidden font-serif">
+      {/* Subtle film-grain texture for a premium, non-flat finish */}
+      <div
+        className="fixed inset-0 z-[1] pointer-events-none opacity-[0.035] mix-blend-overlay"
+        style={{
+          backgroundImage:
+            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+        }}
+      />
       <SiteBackground />
       <CursorGlow />
       {/* ── Nav ── */}
@@ -532,9 +589,10 @@ export default function Landing() {
             <KairosLogo size={30} />
             <span className="text-lg font-bold tracking-[0.2em]">KAIROS</span>
           </div>
-          <div className="hidden md:flex items-center gap-8 text-xs font-mono tracking-wide text-zinc-400">
+          <div className="hidden md:flex items-center gap-7 text-xs font-mono tracking-wide text-zinc-400">
             <a href="#problem" className="hover:text-white transition-colors">The Problem</a>
             <a href="#agents" className="hover:text-white transition-colors">Agents</a>
+            <a href="#intelligence" className="hover:text-white transition-colors">Intelligence</a>
             <a href="#connectors" className="hover:text-white transition-colors">Connectors</a>
             <a href="#mcp" className="hover:text-white transition-colors">MCP</a>
           </div>
@@ -581,9 +639,9 @@ export default function Landing() {
           </h1>
 
           <p className="mt-7 text-base md:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed font-sans">
-            Five AI agents read your Slack, email, Drive, Jira and Zoom — extracting
-            every decision and its full context into a living decision graph. Ask in
-            plain English, get the answer with sources in seconds.
+            Nine AI agents read your Slack, email, Drive, Notion, Jira and Zoom —
+            extracting every decision into a living decision graph that proactively
+            flags risk. Ask in plain English, get the answer with sources in seconds.
           </p>
 
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -607,11 +665,11 @@ export default function Landing() {
           </div>
 
           <div className="mt-14 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-[11px] font-mono tracking-wide text-zinc-500">
-            <span><span className="text-violet-300 font-semibold">5</span> parallel agents</span>
+            <span><span className="text-violet-300 font-semibold">9</span> parallel agents</span>
             <span className="text-zinc-700">·</span>
-            <span><span className="text-violet-300 font-semibold">5</span> connectors</span>
+            <span><span className="text-violet-300 font-semibold">6</span> connectors</span>
             <span className="text-zinc-700">·</span>
-            <span><span className="text-violet-300 font-semibold">3</span> MCP tools</span>
+            <span><span className="text-violet-300 font-semibold">6</span> MCP tools</span>
             <span className="text-zinc-700">·</span>
             <span><span className="text-violet-300 font-semibold">~4s</span> recall</span>
           </div>
@@ -655,21 +713,47 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── How it works ── */}
+      <section id="how" className="relative py-28 px-6">
+        <div className="max-w-6xl mx-auto">
+          <Reveal className="text-center mb-16">
+            <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">How It Works</p>
+            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">From raw chatter to cited answers</h2>
+          </Reveal>
+
+          <div className="grid md:grid-cols-4 gap-5 relative">
+            <div className="hidden md:block absolute top-8 left-[12%] right-[12%] h-px bg-gradient-to-r from-violet-500/0 via-violet-500/30 to-violet-500/0" />
+            {STEPS.map((s, i) => (
+              <Reveal key={s.n} delay={i * 100}>
+                <div className="relative flex flex-col items-center text-center gap-3">
+                  <div className="relative z-10 w-16 h-16 rounded-2xl border border-violet-500/25 bg-[#0b0b0d] flex items-center justify-center text-lg font-mono font-bold text-violet-300 shadow-[0_0_24px_rgba(139,92,246,0.15)]">
+                    {s.n}
+                  </div>
+                  <h3 className="text-base font-semibold">{s.title}</h3>
+                  <p className="text-sm text-zinc-400 leading-relaxed font-sans max-w-[15rem]">{s.body}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Agents ── */}
       <section id="agents" className="relative py-28 px-6 bg-gradient-to-b from-transparent via-violet-950/10 to-transparent">
         <div className="max-w-6xl mx-auto">
           <Reveal className="text-center mb-16">
             <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">The Engine</p>
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">Five agents, running in parallel</h2>
+            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">Nine agents, running in parallel</h2>
             <p className="mt-4 text-zinc-400 max-w-2xl mx-auto font-sans">
-              Orchestrated with LangGraph, each agent owns a source. Together they turn raw
-              communication into a structured, queryable memory.
+              Orchestrated with LangGraph — five own a source and extract decisions, four reason
+              over the graph to route, retrieve, synthesize and answer live queries.
             </p>
           </Reveal>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {AGENTS.map((a, i) => (
-              <Reveal key={a.name} delay={i * 90}>
+          <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-5">Extraction Agents</p>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5 mb-14">
+            {AGENTS.extraction.map((a, i) => (
+              <Reveal key={a.name} delay={i * 80}>
                 <div className="group h-full p-6 rounded-2xl border border-violet-500/15 bg-white/[0.02] hover:bg-white/[0.04] hover:border-violet-500/40 transition-all">
                   <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform">
                     {a.icon}
@@ -679,16 +763,101 @@ export default function Landing() {
                 </div>
               </Reveal>
             ))}
-            <Reveal delay={AGENTS.length * 90}>
-              <div className="h-full p-6 rounded-2xl border border-violet-500/25 bg-violet-600/10 flex flex-col justify-center">
-                <p className="text-sm text-zinc-300 leading-relaxed font-sans">
-                  Powered by <span className="text-violet-300 font-semibold">Fireworks AI</span> on
-                  AMD hardware — Qwen-2.5 72B for answers, Llama-3.1 8B for high-volume ingestion,
-                  with automatic provider fallback so it never stalls.
+          </div>
+
+          <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-5">Reasoning Layer</p>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+            {AGENTS.reasoning.map((a, i) => (
+              <Reveal key={a.name} delay={i * 80}>
+                <div className="group h-full p-6 rounded-2xl border border-violet-500/15 bg-white/[0.02] hover:bg-white/[0.04] hover:border-violet-500/40 transition-all">
+                  <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform">
+                    {a.icon}
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">{a.name}</h3>
+                  <p className="text-sm text-zinc-400 leading-relaxed font-sans">{a.desc}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          <Reveal delay={200}>
+            <div className="mt-8 p-6 rounded-2xl border border-violet-500/25 bg-violet-600/10">
+              <p className="text-sm text-zinc-300 leading-relaxed font-sans">
+                Powered by <span className="text-violet-300 font-semibold">Fireworks AI</span> on
+                AMD hardware — Qwen-3 for answers, Llama-3.3 for high-volume ingestion, with
+                automatic Groq + Gemini fallback so it never stalls.
+              </p>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── Decision Intelligence ── */}
+      <section id="intelligence" className="relative py-28 px-6 overflow-hidden">
+        <div
+          className="absolute top-0 right-0 w-[40rem] h-[40rem] rounded-full bg-fuchsia-700/10 blur-[150px] pointer-events-none"
+        />
+        <div className="max-w-6xl mx-auto relative">
+          <Reveal className="text-center mb-16">
+            <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">New — Proactive, Not Just Reactive</p>
+            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">
+              KAIROS doesn&apos;t wait to be asked.
+            </h2>
+            <p className="mt-4 text-zinc-400 max-w-2xl mx-auto font-sans">
+              A structural scan of the entire decision graph, plus one focused model call per
+              finding — never invented, always grounded in what&apos;s actually in memory.
+            </p>
+          </Reveal>
+
+          <div className="grid md:grid-cols-3 gap-5 mb-10">
+            {INTELLIGENCE.map((f, i) => (
+              <Reveal key={f.tool} delay={i * 110}>
+                <TiltCard className="h-full p-6 rounded-2xl border border-violet-500/15 bg-gradient-to-b from-violet-500/[0.03] to-transparent hover:border-violet-500/40 transition-colors flex flex-col">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-11 h-11 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-xl">
+                      {f.icon}
+                    </div>
+                    <span className="font-mono text-[10.5px] text-violet-400">{f.tool}()</span>
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2.5">{f.title}</h3>
+                  <p className="text-sm text-zinc-400 leading-relaxed font-sans mb-4">{f.body}</p>
+                  <div className="mt-auto pt-4 border-t border-violet-500/10">
+                    <p className="text-[12.5px] text-violet-200/90 italic leading-relaxed font-sans">{f.verdict}</p>
+                  </div>
+                </TiltCard>
+              </Reveal>
+            ))}
+          </div>
+
+          <Reveal delay={340}>
+            <div className="p-6 md:p-8 rounded-2xl border border-violet-500/20 bg-[#0b0b0d] flex flex-col md:flex-row items-center gap-8">
+              <div className="relative shrink-0 w-32 h-32">
+                <svg viewBox="0 0 36 36" className="w-32 h-32 -rotate-90">
+                  <path d="M18 2.5 a15.5 15.5 0 0 1 0 31 a15.5 15.5 0 0 1 0 -31" fill="none" stroke="rgba(139,92,246,0.15)" strokeWidth="3" />
+                  <path
+                    d="M18 2.5 a15.5 15.5 0 0 1 0 31 a15.5 15.5 0 0 1 0 -31"
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeWidth="3"
+                    strokeDasharray="34, 100"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center flex-col">
+                  <span className="text-2xl font-black text-white">34</span>
+                  <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">/ 100</span>
+                </div>
+              </div>
+              <div className="flex-1 text-center md:text-left">
+                <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-amber-400 mb-2">Decision Debt Score</p>
+                <p className="text-lg text-white font-semibold mb-1.5">14 decisions with no review in 2+ years</p>
+                <p className="text-sm text-zinc-400 leading-relaxed font-sans">
+                  Pure SQL and graph aggregation — no model call, always live. One glance tells
+                  a story your CFO will actually read.
                 </p>
               </div>
-            </Reveal>
-          </div>
+            </div>
+          </Reveal>
         </div>
       </section>
 
@@ -704,7 +873,7 @@ export default function Landing() {
             </p>
           </Reveal>
 
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {CONNECTORS.map((c, i) => (
               <Reveal key={c.key} delay={i * 80}>
                 <TiltCard className="h-full p-6 rounded-2xl border border-violet-500/15 bg-white/[0.02] hover:border-violet-500/35 transition-colors flex flex-col items-center text-center gap-3">

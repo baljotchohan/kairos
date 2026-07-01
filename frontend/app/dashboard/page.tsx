@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useKairosChat, Source, KairosStats } from "@/hooks/useKairosChat";
 import { useAuth } from "@/hooks/useAuth";
 import ConnectionStatus from "@/components/ConnectionStatus";
@@ -119,6 +120,8 @@ export default function Home() {
     isSimulation,
   } = useAuth();
 
+  const router = useRouter();
+
   const [activeTab, setActiveTab] = useState<Tab>("chat");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -231,6 +234,14 @@ export default function Home() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [mcpPlatform, setMcpPlatform] = useState<"claude" | "chatgpt" | "cursor" | "antigravity">("claude");
   const [showMcpAdvanced, setShowMcpAdvanced] = useState<boolean>(false);
+
+  // Per-user agent persona overrides (display name shown instead of the raw agent_key)
+  const [agentPersonas, setAgentPersonas] = useState<Record<string, string>>({});
+
+  // Decision Debt Score — pure SQL/graph aggregation, no LLM (core/decision_intelligence.py)
+  const [debtScore, setDebtScore] = useState<{
+    debt_score: number; high_risk_count: number; total_decisions: number; top_offenders: string[];
+  } | null>(null);
 
   // Simulated live MCP activity logs
   const [mcpLogs, setMcpLogs] = useState<any[]>([
@@ -638,6 +649,29 @@ export default function Home() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setMcpConnection(d))
       .catch((e) => console.error("Error fetching MCP connection", e));
+  }, [activeTab, token]);
+
+  // Fetch this user's agent persona overrides when the Agents tab opens
+  useEffect(() => {
+    if (activeTab !== "agents" || !token) return;
+    fetch("/api/v1/agents", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d?.agents) return;
+        const labels: Record<string, string> = {};
+        for (const p of d.agents) labels[p.agent_key] = p.display_name;
+        setAgentPersonas(labels);
+      })
+      .catch((e) => console.error("Error fetching agent personas", e));
+  }, [activeTab, token]);
+
+  // Fetch the Decision Debt Score when the Metrics tab opens
+  useEffect(() => {
+    if (activeTab !== "dashboard" || !token) return;
+    fetch("/api/v1/decisions/debt-score", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setDebtScore(d))
+      .catch((e) => console.error("Error fetching decision debt score", e));
   }, [activeTab, token]);
 
   // Simulated live MCP query logs tick-tock
@@ -1901,6 +1935,45 @@ export default function Home() {
                 ))}
               </div>
 
+              {/* Decision Debt Score — pure SQL/graph aggregation, no LLM call */}
+              {debtScore && debtScore.total_decisions > 0 && (
+                <div className="p-5 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/40 backdrop-blur-sm shadow-sm flex items-center gap-6">
+                  <div className="relative shrink-0 w-20 h-20">
+                    <svg viewBox="0 0 36 36" className="w-20 h-20 -rotate-90">
+                      <path
+                        d="M18 2.5 a15.5 15.5 0 0 1 0 31 a15.5 15.5 0 0 1 0 -31"
+                        fill="none"
+                        stroke="rgb(var(--border))"
+                        strokeWidth="3"
+                      />
+                      <path
+                        d="M18 2.5 a15.5 15.5 0 0 1 0 31 a15.5 15.5 0 0 1 0 -31"
+                        fill="none"
+                        stroke={debtScore.debt_score >= 60 ? "#f43f5e" : debtScore.debt_score >= 30 ? "#f59e0b" : "#10b981"}
+                        strokeWidth="3"
+                        strokeDasharray={`${debtScore.debt_score}, 100`}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-lg font-black text-[rgb(var(--text-primary))]">{debtScore.debt_score}</span>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-[9px] font-mono text-[rgb(var(--text-muted))] uppercase block tracking-wider font-bold mb-1">
+                      Decision Debt Score
+                    </span>
+                    <p className="text-xs text-[rgb(var(--text-primary))] leading-relaxed">
+                      <strong>{debtScore.high_risk_count}</strong> high-impact decision{debtScore.high_risk_count === 1 ? "" : "s"} out of{" "}
+                      <strong>{debtScore.total_decisions}</strong> total have gone 12+ months without review.
+                    </p>
+                    <p className="text-[10.5px] text-[rgb(var(--text-muted))] mt-1">
+                      Lower is better — this is a pure count/weight of unreviewed decisions, not model-generated.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Connected APIs */}
               <div className="space-y-4">
                 <h4 className="text-sm font-bold text-[rgb(var(--text-primary))] tracking-tight">Ingestion Connectors</h4>
@@ -2094,9 +2167,17 @@ export default function Home() {
           {/* AI AGENTS REGISTRY */}
           {activeTab === "agents" && (
             <div className="p-8 max-w-4xl mx-auto flex flex-col gap-6 animate-[fadeIn_0.2s_ease-out]">
-              <div className="border-b border-[rgb(var(--border))]/40 pb-4">
-                <h3 className="text-lg font-bold tracking-tight text-[rgb(var(--text-primary))] mb-0.5">Agent Registry</h3>
-                <p className="text-xs text-[rgb(var(--text-muted))]">Monitor parallel models execution, processing metrics, and active states.</p>
+              <div className="border-b border-[rgb(var(--border))]/40 pb-4 flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold tracking-tight text-[rgb(var(--text-primary))] mb-0.5">Agent Registry</h3>
+                  <p className="text-xs text-[rgb(var(--text-muted))]">Monitor parallel models execution, processing metrics, and active states.</p>
+                </div>
+                <button
+                  onClick={() => router.push("/settings/agents")}
+                  className="shrink-0 text-[10px] font-mono px-3 py-1.5 rounded-lg border border-[rgb(var(--border))] text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] hover:border-[rgb(var(--border-focus))] transition-colors"
+                >
+                  Customize names & tone →
+                </button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2205,7 +2286,7 @@ export default function Home() {
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <span className="text-sm">{agent.icon}</span>
-                          <span className="text-xs font-bold text-[rgb(var(--text-primary))]">{agent.label}</span>
+                          <span className="text-xs font-bold text-[rgb(var(--text-primary))]">{agentPersonas[agent.name] || agent.label}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <span className={`w-1.5 h-1.5 rounded-full ${agent.status === "processing" ? "bg-amber-500 animate-ping" : "bg-emerald-500"}`} />
@@ -2245,7 +2326,7 @@ export default function Home() {
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <span className="text-sm">🧠</span>
-                        <span className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase">Decision Synthesis Hub (Orchestrator)</span>
+                        <span className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase">{agentPersonas["synthesis_agent"] || "Decision Synthesis Hub (Orchestrator)"}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className={`w-1.5 h-1.5 rounded-full ${isChatStreaming ? "bg-indigo-500 animate-ping" : "bg-emerald-500"}`} />

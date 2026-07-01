@@ -30,6 +30,7 @@ from mcp.server.fastmcp import FastMCP
 
 from core.memory import KairosMemory
 from core.graph import DecisionNode
+from core import decision_intelligence as di
 
 # ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -281,6 +282,97 @@ def search_decisions(
             f"   Outcome:      {n.outcome[:200]}{'...' if len(n.outcome) > 200 else ''}\n"
         )
 
+    return "\n".join(lines)
+
+
+# ── Tool 4: find_similar_decisions ────────────────────────────────────────────
+
+@mcp.tool()
+async def find_similar_decisions(query: str, limit: int = 5) -> str:
+    """Check whether a new situation has genuine precedent in past decisions.
+
+    Runs semantic search, then has the model separate real precedent from
+    topically-similar noise. Use this before repeating a project/approach to
+    find out if the company already tried something like it.
+
+    Args:
+        query: Describe the new situation, e.g. "building a mobile app" or
+               "switching to a new payroll vendor".
+        limit: Max genuine precedents to return (default 5).
+
+    Returns:
+        A punchy verdict plus the matching past decisions with sources.
+    """
+    result = await di.find_similar_decisions(memory, MCP_TENANT_ID, query, limit=limit)
+    if not result["matches"]:
+        return f"KAIROS: {result['verdict']}"
+    lines = [f"KAIROS VERDICT: {result['verdict']}\n", "=" * 60]
+    for i, m in enumerate(result["matches"], 1):
+        lines.append(
+            f"\n{i}. [{m['date']}] {m['title']} (similarity {m['similarity_score']:.0%})\n"
+            f"   Summary: {m['summary']}\n   Outcome: {m['outcome']}\n"
+            f"   Source:  {m['source_url'] or 'n/a'}"
+        )
+    return "\n".join(lines)
+
+
+# ── Tool 5: detect_decision_patterns ──────────────────────────────────────────
+
+@mcp.tool()
+async def detect_decision_patterns(scope: str = "all", lookback_days: int = 365) -> str:
+    """Proactively scan organizational memory for risky decision patterns.
+
+    Flags: the same topic decided twice with contradictory outcomes, vendor
+    or contract decisions with no review in 12+ months, and decisions where
+    one person is the sole decision-maker across many high-impact calls
+    (bus-factor risk). Not a query — a proactive audit of the whole org memory.
+
+    Args:
+        scope: "all" or a specific topic/project name to restrict the scan.
+        lookback_days: Only consider decisions within this many days (default 365).
+
+    Returns:
+        Ranked list of patterns with severity, affected decisions, and a recommendation.
+    """
+    result = await di.detect_decision_patterns(memory, MCP_TENANT_ID, scope=scope, lookback_days=lookback_days)
+    if not result["patterns"]:
+        return "KAIROS: No risky decision patterns detected in the current scope."
+    lines = [f"KAIROS: {len(result['patterns'])} pattern(s) detected\n", "=" * 60]
+    for i, p in enumerate(result["patterns"], 1):
+        lines.append(
+            f"\n{i}. [{p['severity'].upper()}] {p['pattern_type'].replace('_', ' ')}\n"
+            f"   {p['description']}\n"
+            f"   Affected: {len(p['affected_decisions'])} decision(s)\n"
+            f"   Recommendation: {p['recommendation']}"
+        )
+    return "\n".join(lines)
+
+
+# ── Tool 6: predict_decision_risk ─────────────────────────────────────────────
+
+@mcp.tool()
+async def predict_decision_risk(decision_id: str = "", scope: str = "all") -> str:
+    """Score decisions by risk of being stale, unowned, or overdue for review.
+
+    Args:
+        decision_id: If given, score only this one decision.
+        scope: "all" or a specific topic/project name (ignored if decision_id is set).
+
+    Returns:
+        Ranked list of at-risk decisions with a 0-100 risk score, reasons, and a recommendation.
+    """
+    result = await di.predict_decision_risk(
+        memory, MCP_TENANT_ID, decision_id=decision_id or None, scope=scope
+    )
+    if not result["at_risk"]:
+        return "KAIROS: No at-risk decisions found in the current scope."
+    lines = [f"KAIROS: {len(result['at_risk'])} at-risk decision(s)\n", "=" * 60]
+    for i, r in enumerate(result["at_risk"], 1):
+        lines.append(
+            f"\n{i}. [{r['risk_score']}/100] {r['title']}\n"
+            f"   Reasons: {'; '.join(r['reasons'])}\n"
+            f"   Recommendation: {r['recommendation']}"
+        )
     return "\n".join(lines)
 
 

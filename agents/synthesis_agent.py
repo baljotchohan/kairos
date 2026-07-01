@@ -184,6 +184,17 @@ Extract all decisions from the above content."""
 
         return stored
 
+    def _persona_for(self, user_id: str | None) -> dict | None:
+        """Fetch this user's persona override for the synthesis agent, if any."""
+        if not user_id:
+            return None
+        try:
+            from core.personas import AgentPersonaStore
+            return AgentPersonaStore(db_path=self.memory.db_path).get(user_id, "synthesis_agent")
+        except Exception as e:
+            print(f"[Synthesis] persona lookup failed: {e}")
+            return None
+
     # ── Query answering / ReAct execution ──────────────────────────────────────
 
     async def execute(self, input_data: Any, **kwargs) -> dict:
@@ -240,6 +251,8 @@ Provide your synthesis answer:"""
 
         self.think("Synthesizing final response based on retrieved decisions and user profile context")
 
+        system_prompt = self.apply_persona(SYNTHESIS_SYSTEM, self._persona_for(user_id))
+
         stream_callback = kwargs.get("stream_callback")
         if stream_callback:
             # Run in streaming mode
@@ -247,7 +260,7 @@ Provide your synthesis answer:"""
                 client=self._async_client,
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": SYNTHESIS_SYSTEM},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,
@@ -269,7 +282,7 @@ Provide your synthesis answer:"""
                 client=self._async_client,
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": SYNTHESIS_SYSTEM},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,
@@ -347,11 +360,13 @@ KAIROS Memory Context:
 
 Answer the question clearly and specifically:"""
 
+        system_prompt = self.apply_persona(SYNTHESIS_SYSTEM, self._persona_for(user_id))
+
         stream = await self._chat_completion_with_fallback(
             client=self._async_client,
             model=self.model,
             messages=[
-                {"role": "system", "content": SYNTHESIS_SYSTEM},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.3,

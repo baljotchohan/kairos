@@ -288,6 +288,24 @@ class BaseAgent(ABC):
 
         return last_result
 
+    # ── Persona overlay ───────────────────────────────────────────────────────
+
+    @staticmethod
+    def apply_persona(system_prompt: str, persona_overlay: dict | None) -> str:
+        """Prepend a short tone/voice instruction to a system prompt. Additive
+        only — never touches the extraction/classification instructions below it,
+        only the framing of the agent's user-facing output text. `persona_overlay`
+        is a dict shaped like core.personas.AgentPersonaStore.get()'s return value;
+        pass None (or a default persona) to leave the prompt unchanged."""
+        if not persona_overlay or persona_overlay.get("is_default"):
+            return system_prompt
+        display_name = persona_overlay.get("display_name")
+        tone = persona_overlay.get("tone_preset", "professional")
+        if not display_name:
+            return system_prompt
+        overlay = f"Respond as '{display_name}', a {tone} analyst. Keep this persona in your tone and phrasing only — never change what facts you report.\n\n"
+        return overlay + system_prompt
+
     # ── Info ──────────────────────────────────────────────────────────────────
 
     def info(self) -> dict:

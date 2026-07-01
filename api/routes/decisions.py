@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from api.auth import get_current_user, UserProfile
 from core.graph import DecisionNode
+from core.decision_intelligence import compute_debt_score
 
 router = APIRouter()
 
@@ -180,6 +181,17 @@ async def graph_stats(memory=Depends(get_memory), current_user: UserProfile = De
     """Decision graph statistics."""
     stats = memory.graph.stats(user_id=current_user.uid)
     return stats
+
+
+@router.get("/decisions/debt-score")
+async def decision_debt_score(
+    scope: str = "all",
+    memory=Depends(get_memory),
+    current_user: UserProfile = Depends(get_current_user),
+):
+    """Pure SQL/graph aggregation: how many decisions have gone 12+ months
+    without a follow_up review, weighted by cost/impact keywords. No LLM call."""
+    return compute_debt_score(memory, current_user.uid, scope=scope)
 
 
 @router.post("/graph/export/obsidian")

@@ -35,6 +35,7 @@ _active_sessions: dict[str, asyncio.Queue] = {}
 
 from core.graph import DecisionNode
 from core.mcp_auth import verify_mcp_token, mint_mcp_token
+from core import decision_intelligence as di
 from config import config
 from api.auth import get_current_user, UserProfile
 
@@ -140,6 +141,51 @@ TOOLS = [
             },
         },
     },
+    {
+        "name": "find_similar_decisions",
+        "description": (
+            "Check whether a new situation has genuine precedent in past decisions. Runs semantic "
+            "search then has the model separate real precedent from topically-similar noise. Use "
+            "before repeating a project/approach to find out if the company already tried something like it."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Describe the new situation, e.g. 'building a mobile app'."},
+                "limit": {"type": "integer", "description": "Max genuine precedents to return.", "default": 5},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "detect_decision_patterns",
+        "description": (
+            "Proactively scan organizational memory for risky decision patterns: contradictory "
+            "outcomes on the same topic, unreviewed vendor/contract spend, and bus-factor risk "
+            "(one person as sole decision-maker across many high-impact calls)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "scope": {"type": "string", "description": "\"all\" or a specific topic/project name.", "default": "all"},
+                "lookback_days": {"type": "integer", "description": "Only consider decisions within this many days.", "default": 365},
+            },
+        },
+    },
+    {
+        "name": "predict_decision_risk",
+        "description": (
+            "Score decisions by risk of being stale, unowned, or overdue for review. Returns a "
+            "0-100 risk score, reasons, and a recommendation per decision."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "decision_id": {"type": "string", "description": "If given, score only this one decision."},
+                "scope": {"type": "string", "description": "\"all\" or a specific topic/project name.", "default": "all"},
+            },
+        },
+    },
 ]
 
 
@@ -225,7 +271,45 @@ def _tool_search_decisions(memory, user_id: str, topic: str = None, date_from: s
     return "\n".join(lines)
 
 
-def _call_tool(memory, user_id: str, name: str, args: dict) -> str:
+def _format_similar_decisions(result: dict) -> str:
+    if not result["matches"]:
+        return f"KAIROS: {result['verdict']}"
+    lines = [f"KAIROS VERDICT: {result['verdict']}", "=" * 60]
+    for i, m in enumerate(result["matches"], 1):
+        lines.append(
+            f"\n{i}. [{m['date']}] {m['title']} (similarity {m['similarity_score']:.0%})\n"
+            f"   Summary: {m['summary']}\n   Outcome: {m['outcome']}\n"
+            f"   Source:  {m['source_url'] or 'n/a'}"
+        )
+    return "\n".join(lines)
+
+
+def _format_decision_patterns(result: dict) -> str:
+    if not result["patterns"]:
+        return "KAIROS: No risky decision patterns detected in the current scope."
+    lines = [f"KAIROS: {len(result['patterns'])} pattern(s) detected", "=" * 60]
+    for i, p in enumerate(result["patterns"], 1):
+        lines.append(
+            f"\n{i}. [{p['severity'].upper()}] {p['pattern_type'].replace('_', ' ')}\n"
+            f"   {p['description']}\n   Affected: {len(p['affected_decisions'])} decision(s)\n"
+            f"   Recommendation: {p['recommendation']}"
+        )
+    return "\n".join(lines)
+
+
+def _format_decision_risk(result: dict) -> str:
+    if not result["at_risk"]:
+        return "KAIROS: No at-risk decisions found in the current scope."
+    lines = [f"KAIROS: {len(result['at_risk'])} at-risk decision(s)", "=" * 60]
+    for i, r in enumerate(result["at_risk"], 1):
+        lines.append(
+            f"\n{i}. [{r['risk_score']}/100] {r['title']}\n"
+            f"   Reasons: {'; '.join(r['reasons'])}\n   Recommendation: {r['recommendation']}"
+        )
+    return "\n".join(lines)
+
+
+async def _call_tool(memory, user_id: str, name: str, args: dict) -> str:
     if name == "get_context":
         return _tool_get_context(memory, user_id, args.get("query"), int(args.get("limit") or 5))
     if name == "store_context":
@@ -247,6 +331,19 @@ def _call_tool(memory, user_id: str, name: str, args: dict) -> str:
             args.get("person"),
             args.get("project")
         )
+    if name == "find_similar_decisions":
+        result = await di.find_similar_decisions(memory, user_id, args.get("query"), limit=int(args.get("limit") or 5))
+        return _format_similar_decisions(result)
+    if name == "detect_decision_patterns":
+        result = await di.detect_decision_patterns(
+            memory, user_id, scope=args.get("scope") or "all", lookback_days=int(args.get("lookback_days") or 365)
+        )
+        return _format_decision_patterns(result)
+    if name == "predict_decision_risk":
+        result = await di.predict_decision_risk(
+            memory, user_id, decision_id=args.get("decision_id") or None, scope=args.get("scope") or "all"
+        )
+        return _format_decision_risk(result)
     raise ValueError(f"Unknown tool name: {name}")
 
 
@@ -260,7 +357,7 @@ def _error(req_id, code, message):
     return {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
 
 
-def _handle_message(msg: dict, memory, user_id: str, request: Request = None) -> dict | None:
+async def _handle_message(msg: dict, memory, user_id: str, request: Request = None) -> dict | None:
     """Process one JSON-RPC message. Returns a response dict, or None for notifications."""
     method = msg.get("method")
     req_id = msg.get("id")
@@ -299,7 +396,7 @@ def _handle_message(msg: dict, memory, user_id: str, request: Request = None) ->
         name = params.get("name")
         args = params.get("arguments") or {}
         try:
-            text = _call_tool(memory, user_id, name, args)
+            text = await _call_tool(memory, user_id, name, args)
             return _result(req_id, {"content": [{"type": "text", "text": text}], "isError": False})
         except Exception as e:
             log.warning("MCP tool '%s' failed for %s", name, user_id, exc_info=True)
@@ -361,7 +458,7 @@ async def mcp_streamable_http(token: str, request: Request):
     if isinstance(body, list):
         responses = []
         for m in body:
-            resp = _handle_message(m, memory, user_id, request)
+            resp = await _handle_message(m, memory, user_id, request)
             if resp is not None:
                 if has_sse_session:
                     await _active_sessions[session_id].put(resp)
@@ -378,7 +475,7 @@ async def mcp_streamable_http(token: str, request: Request):
         # Keep incoming or issue new session id
         extra_headers["Mcp-Session-Id"] = session_id or uuid.uuid4().hex
 
-    resp = _handle_message(body, memory, user_id, request)
+    resp = await _handle_message(body, memory, user_id, request)
     if resp is None:
         return Response(status_code=202)  # notification — no body
 
@@ -421,7 +518,7 @@ async def mcp_bearer_http(request: Request):
     if isinstance(body, list):
         responses = []
         for m in body:
-            resp = _handle_message(m, memory, user_id, request)
+            resp = await _handle_message(m, memory, user_id, request)
             if resp is not None:
                 if has_sse_session:
                     await _active_sessions[session_id].put(resp)
@@ -438,7 +535,7 @@ async def mcp_bearer_http(request: Request):
         # Keep incoming or issue new session id
         extra_headers["Mcp-Session-Id"] = session_id or uuid.uuid4().hex
 
-    resp = _handle_message(body, memory, user_id, request)
+    resp = await _handle_message(body, memory, user_id, request)
     if resp is None:
         return Response(status_code=202)
 

@@ -112,6 +112,36 @@ def test_remote_mcp_sse_handshake(client):
     assert "session_id=" in resp.text
 
 
+def test_remote_mcp_tools_list_includes_intelligence_tools(client):
+    """tools/list should advertise the new decision-intelligence tools alongside the original 3."""
+    from core.mcp_auth import mint_mcp_token
+    token = mint_mcp_token("test-user-uid")
+
+    resp = client.post(f"/mcp/u/{token}", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+    assert resp.status_code == 200
+    names = {t["name"] for t in resp.json()["result"]["tools"]}
+    assert {"get_context", "store_context", "search_decisions",
+            "find_similar_decisions", "detect_decision_patterns", "predict_decision_risk"} <= names
+
+
+def test_remote_mcp_find_similar_decisions_call(client):
+    """tools/call for the new async find_similar_decisions tool round-trips through the
+    async JSON-RPC dispatch path added for the intelligence tools."""
+    from core.mcp_auth import mint_mcp_token
+    token = mint_mcp_token("test-user-uid")
+
+    client.app.state.memory.semantic_search.return_value = []
+
+    resp = client.post(f"/mcp/u/{token}", json={
+        "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+        "params": {"name": "find_similar_decisions", "arguments": {"query": "building a mobile app"}},
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["result"]["isError"] is False
+    assert "No precedent found" in body["result"]["content"][0]["text"]
+
+
 # Note: test_oauth_metadata_discovery has been removed as it is obsolete.
 # OAuth discovery metadata is now served by Next.js API routes on the frontend,
 # and /.well-known/oauth-authorization-server is served at 200 OK by the backend.
