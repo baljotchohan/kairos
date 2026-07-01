@@ -1639,12 +1639,21 @@ export default function Home() {
                               : "flex-1 space-y-4 text-[14.5px] leading-relaxed text-[rgb(var(--text-primary))]"
                           }`}
                         >
-                          <StreamingText
-                            text={msg.content}
-                            isStreaming={msg.isStreaming ?? false}
-                            hasWarning={msg.hasWarning}
-                            className="kairos-prose"
-                          />
+                          {msg.thinkingStep && !msg.content ? (
+                            <div className="flex flex-col gap-1.5">
+                              <ThinkingIndicator />
+                              <p className="text-[11.5px] text-zinc-500 pl-7 truncate">
+                                {msg.thinkingStep.agent} · {msg.thinkingStep.content}
+                              </p>
+                            </div>
+                          ) : (
+                            <StreamingText
+                              text={msg.content}
+                              isStreaming={msg.isStreaming ?? false}
+                              hasWarning={msg.hasWarning}
+                              className="kairos-prose"
+                            />
+                          )}
 
                           {/* Assistant Metadata Context */}
                           {msg.role === "assistant" && (
@@ -1680,16 +1689,6 @@ export default function Home() {
                                   <span className="text-[10px] font-mono text-zinc-400 font-bold">{(msg.confidence * 100).toFixed(0)}%</span>
                                 </div>
                               )}
-                            </div>
-                          )}
-
-                          {/* Live Thinking Status Indicator */}
-                          {msg.thinkingStep && (
-                            <div className="flex flex-col gap-1.5 mt-3 max-w-lg">
-                              <ThinkingIndicator />
-                              <p className="text-[11.5px] text-zinc-500 pl-7 truncate">
-                                {msg.thinkingStep.agent} · {msg.thinkingStep.content}
-                              </p>
                             </div>
                           )}
 
