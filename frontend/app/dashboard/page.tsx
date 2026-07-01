@@ -576,7 +576,7 @@ export default function Home() {
             label: data.source.toUpperCase(),
             type: "source",
             info: data.source_url || "Ingested Source",
-            icon: getSourceIcon(data.source) === "?" ? "📁" : "🔌"
+            icon: getSourceIcon(data.source) === "◆" ? "📁" : "🔌"
           });
           addEdge(data.id, sId);
         }
@@ -772,7 +772,7 @@ export default function Home() {
                 label: data.source.toUpperCase(),
                 type: "source",
                 info: data.source_url || "Ingested Source",
-                icon: getSourceIcon(data.source) === "?" ? "📁" : "🔌"
+                icon: getSourceIcon(data.source) === "◆" ? "📁" : "🔌"
               });
             }
             addEdge(data.id, sid);
@@ -982,11 +982,19 @@ export default function Home() {
   const getSourceIcon = (source: string) => {
     switch (source.toLowerCase()) {
       case "slack": return "#";
-      case "email": return "@";
-      case "drive": return "D";
+      case "email":
+      case "gmail": return "@";
+      case "drive":
+      case "google drive": return "D";
       case "jira": return "J";
-      case "meeting": return "M";
-      default: return "?";
+      case "meeting":
+      case "zoom": return "M";
+      case "notion":
+      case "notion page":
+      case "notion database":
+      case "notion_page":
+      case "notion_db": return "N";
+      default: return "◆";
     }
   };
 
