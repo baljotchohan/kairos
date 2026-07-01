@@ -19,7 +19,9 @@ import hashlib
 import html
 import time
 import os
+import base64
 from datetime import datetime
+from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -269,7 +271,6 @@ async def gmail_start(current_user: UserProfile = Depends(get_current_user)):
         "https://www.googleapis.com/auth/documents.readonly",
         "https://www.googleapis.com/auth/userinfo.email",
     ])
-    from urllib.parse import quote
     url = (
         "https://accounts.google.com/o/oauth2/v2/auth"
         f"?client_id={config.GOOGLE_CLIENT_ID}"
@@ -445,12 +446,18 @@ async def jira_callback(code: str = None, state: str = None, error: str = None):
 @router.get("/notion/start")
 async def notion_start(current_user: UserProfile = Depends(get_current_user)):
     state = _generate_state_token(current_user.uid)
+    # Use explicit NOTION_REDIRECT_URI if set, else derive from BACKEND_URL.
+    # Fallback ensures we never send localhost to Notion in production.
+    backend = config.BACKEND_URL
+    if not backend or "localhost" in backend or "127.0.0.1" in backend:
+        backend = "https://baljot07-kairos-backend.hf.space"
+    redirect_uri = f"{backend}/api/oauth/notion/callback"
     url = (
         "https://api.notion.com/v1/oauth/authorize"
         f"?client_id={config.NOTION_CLIENT_ID}"
         "&response_type=code"
         "&owner=user"
-        f"&redirect_uri={quote(_callback_url('notion'), safe='')}"
+        f"&redirect_uri={quote(redirect_uri, safe='')}"
         f"&state={state}"
     )
     return {"service": "notion", "url": url}
@@ -466,7 +473,6 @@ async def notion_callback(code: str = None, state: str = None, error: str = None
         return _popup_error("Security Check Failed: Invalid or expired OAuth state parameter.")
 
     try:
-        import base64
         credentials = base64.b64encode(
             f"{config.NOTION_CLIENT_ID}:{config.NOTION_CLIENT_SECRET}".encode()
         ).decode()
@@ -482,7 +488,11 @@ async def notion_callback(code: str = None, state: str = None, error: str = None
                 json={
                     "grant_type": "authorization_code",
                     "code": code,
-                    "redirect_uri": _callback_url("notion"),
+                    "redirect_uri": (
+                        f"https://baljot07-kairos-backend.hf.space/api/oauth/notion/callback"
+                        if ("localhost" in config.BACKEND_URL or "127.0.0.1" in config.BACKEND_URL or not config.BACKEND_URL)
+                        else _callback_url("notion")
+                    ),
                 },
             )
 
@@ -539,7 +549,6 @@ async def zoom_start(current_user: UserProfile = Depends(get_current_user)):
         return {"service": "zoom", "url": sim_url}
 
     # User-managed OAuth app → real Zoom consent popup (redirect_uri URL-encoded).
-    from urllib.parse import quote
     url = (
         "https://zoom.us/oauth/authorize"
         "?response_type=code"
