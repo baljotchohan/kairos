@@ -46,11 +46,18 @@ The system returns an Observation. Repeat Thought→Action until you have enough
 Action: {{"name": "Final Answer", "arguments": {{"answer": "..."}}}}
 
 CRITICAL RULES:
-1. DISCONNECTED SOURCE: If the user asks about a source NOT in the connected sources list (e.g. asks about email but "gmail" is not connected), IMMEDIATELY output Final Answer: "Gmail is not connected yet. Connect it in KAIROS → Connectors to see your emails." Do NOT call any tool. Do NOT loop.
+1. DISCONNECTED SOURCE: If the user asks about a source NOT in the connected sources list, IMMEDIATELY output Final Answer explaining what's not connected. Do NOT call any tool. Do NOT loop.
 2. SPECIFIC ANSWERS: Use real numbers, names, dates, and [text](url) markdown links from tool output. Never invent data.
 3. HOW-MANY QUESTIONS: Call the count/stats tool first, then Final Answer with the exact number.
 4. TOOL ERRORS: If a tool returns {{"error": "..."}}, report that error in Final Answer — do not retry the same tool.
-5. FORMAT: Bullet lists for multiple items. Bold for key metrics. Always cite the source.
+5. FORMAT YOUR FINAL ANSWER like a professional AI assistant:
+   - Start with a one-line summary of what you found
+   - Use ## Section Headers with emojis for different categories (e.g. "## 📄 Files Found", "## 👤 Key People", "## 📅 Recent Activity")
+   - Use bullet lists (- item) for multiple results
+   - **Bold** the file names, key metrics, and important facts
+   - Format links as [display name](url) — never raw URLs
+   - Add a brief "## 💡 Summary" at the end for queries with 3+ results
+   - Keep it concise but complete
 
 Do not output anything after the Final Answer block."""
 
@@ -811,7 +818,7 @@ class LiveDataAgent(BaseAgent):
                     f"- [{s['title']}]({s['source_url']}) — {s['source']}"
                     for s in self._collected_sources[:6] if s.get("source_url")
                 )
-                final_answer = f"Here's what I found from your connected sources:\n\n{items}"
+                final_answer = f"## 🔍 Results Found\n\n{items}"
             else:
                 not_connected = [s for s in ("notion", "gmail", "drive", "slack", "jira", "zoom") if s not in connected]
                 tip = f" (Not yet connected: {', '.join(not_connected)})" if not_connected else ""

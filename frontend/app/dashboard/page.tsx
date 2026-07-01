@@ -1685,9 +1685,11 @@ export default function Home() {
 
                           {/* Live Thinking Status Indicator */}
                           {msg.thinkingStep && (
-                            <div className="p-3 bg-[rgb(var(--surface))]/40 border border-[rgb(var(--border))]/80 rounded-xl flex items-center gap-3 animate-pulse text-[11.5px] text-indigo-400 max-w-lg mt-3">
-                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping shrink-0" />
-                              <span className="truncate"><strong>[{msg.thinkingStep.agent} thinking]:</strong> {msg.thinkingStep.content}</span>
+                            <div className="flex flex-col gap-1.5 mt-3 max-w-lg">
+                              <ThinkingIndicator />
+                              <p className="text-[11.5px] text-zinc-500 pl-7 truncate">
+                                {msg.thinkingStep.agent} · {msg.thinkingStep.content}
+                              </p>
                             </div>
                           )}
 
