@@ -2,7 +2,18 @@
 
 import React, { useState } from "react";
 
-const SERVICE_CONFIG: Record<string, { name: string; icon: React.ReactNode; accentColor: string; description: string }> = {
+interface ServiceConfig {
+  name: string;
+  icon: React.ReactNode;
+  accentColor: string;
+  description: string;
+  manualKeyConnect?: boolean;
+  keyPlaceholder?: string;
+  keyHelpUrl?: string;
+  keyHelpLabel?: string;
+}
+
+const SERVICE_CONFIG: Record<string, ServiceConfig> = {
   notion: {
     name: "Notion",
     icon: (
@@ -12,6 +23,10 @@ const SERVICE_CONFIG: Record<string, { name: string; icon: React.ReactNode; acce
     ),
     accentColor: "#37352f",
     description: "Read Notion pages and databases, extract decisions",
+    manualKeyConnect: true,
+    keyPlaceholder: "ntn_xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    keyHelpUrl: "https://www.notion.so/my-integrations",
+    keyHelpLabel: "notion.so/my-integrations",
   },
   slack: {
     name: "Slack",
@@ -93,10 +108,48 @@ export default function IntegrationButton({
 }: IntegrationButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showKeyInput, setShowKeyInput] = useState(false);
+  const [apiKey, setApiKey] = useState("");
 
   const cfg = SERVICE_CONFIG[service];
 
+  // ── Notion: manual key submit ──────────────────────────────────────────────
+  const handleNotionSubmit = async () => {
+    if (!apiKey.trim()) return;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/oauth/notion/connect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ api_key: apiKey.trim() }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Connection failed");
+
+      setShowKeyInput(false);
+      setApiKey("");
+      onRefresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Connection failed");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ── Standard OAuth connect ─────────────────────────────────────────────────
   const handleConnect = async () => {
+    if (cfg.manualKeyConnect) {
+      setShowKeyInput(true);
+      setError(null);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -118,7 +171,6 @@ export default function IntegrationButton({
 
       const data = await res.json();
 
-      // S2S or server-side connect (e.g. Zoom with server credentials) — no popup needed
       if (data.connected === true) {
         onRefresh();
         setIsLoading(false);
@@ -126,7 +178,6 @@ export default function IntegrationButton({
       }
 
       const { url } = data;
-
       const popup = window.open(url, "kairos_oauth", "width=600,height=700,left=200,top=100");
       if (!popup) {
         setError("Popup blocked — please allow popups for this site and try again.");
@@ -134,19 +185,13 @@ export default function IntegrationButton({
         return;
       }
 
-      // Poll until popup closes, then refresh status
       const timer = setInterval(() => {
         if (popup.closed) {
           clearInterval(timer);
-          // Small delay to ensure backend has stored the token
-          setTimeout(() => {
-            onRefresh();
-            setIsLoading(false);
-          }, 800);
+          setTimeout(() => { onRefresh(); setIsLoading(false); }, 800);
         }
       }, 500);
 
-      // Safety timeout: 10 minutes
       setTimeout(() => {
         clearInterval(timer);
         if (!popup.closed) popup.close();
@@ -188,67 +233,119 @@ export default function IntegrationButton({
 
   return (
     <div
-      className="flex items-center justify-between p-5 rounded-xl border transition-all theme-transition"
+      className="rounded-xl border transition-all theme-transition"
       style={{
-        borderColor: isConnected ? "rgba(34,197,94,0.4)" : "rgb(var(--border))",
+        borderColor: isConnected ? "rgba(34,197,94,0.4)" : showKeyInput ? `${cfg.accentColor}50` : "rgb(var(--border))",
         background: isConnected ? "rgba(34,197,94,0.04)" : "rgb(var(--surface))",
       }}
     >
-      {/* Left: icon + info */}
-      <div className="flex items-start gap-4 flex-1 min-w-0">
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: `${cfg.accentColor}18` }}
-        >
-          {cfg.icon}
-        </div>
+      {/* Main row */}
+      <div className="flex items-center justify-between p-5">
+        {/* Left: icon + info */}
+        <div className="flex items-start gap-4 flex-1 min-w-0">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: `${cfg.accentColor}18` }}
+          >
+            {cfg.icon}
+          </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-[rgb(var(--text-primary))]">{cfg.name}</span>
-            {isConnected && (
-              <span className="text-[9px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                CONNECTED
-              </span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-[rgb(var(--text-primary))]">{cfg.name}</span>
+              {isConnected && (
+                <span className="text-[9px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                  CONNECTED
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-[rgb(var(--text-muted))] mt-0.5">{cfg.description}</p>
+            {isConnected && serviceName && (
+              <p className="text-[10px] text-[rgb(var(--text-muted))] mt-0.5">
+                <span className="text-zinc-500">as</span>{" "}
+                <span className="font-semibold text-[rgb(var(--text-primary))]">{serviceName}</span>
+                {formattedDate && (
+                  <span className="text-zinc-600 ml-2">· {formattedDate}</span>
+                )}
+              </p>
+            )}
+            {error && (
+              <p className="text-[10px] text-rose-400 mt-1">⚠ {error}</p>
             )}
           </div>
-          <p className="text-[11px] text-[rgb(var(--text-muted))] mt-0.5">{cfg.description}</p>
-          {isConnected && serviceName && (
-            <p className="text-[10px] text-[rgb(var(--text-muted))] mt-0.5">
-              <span className="text-zinc-500">as</span>{" "}
-              <span className="font-semibold text-[rgb(var(--text-primary))]">{serviceName}</span>
-              {formattedDate && (
-                <span className="text-zinc-600 ml-2">· {formattedDate}</span>
-              )}
-            </p>
-          )}
-          {error && (
-            <p className="text-[10px] text-rose-400 mt-1">⚠ {error}</p>
+        </div>
+
+        {/* Right: action button */}
+        <div className="shrink-0 ml-4">
+          {isConnected ? (
+            <button
+              onClick={handleDisconnect}
+              disabled={isLoading}
+              className="px-3 py-1.5 rounded-lg border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 text-[11px] font-semibold disabled:opacity-40 transition-all"
+            >
+              {isLoading ? "…" : "Disconnect"}
+            </button>
+          ) : showKeyInput ? (
+            <button
+              onClick={() => { setShowKeyInput(false); setApiKey(""); setError(null); }}
+              className="text-zinc-500 hover:text-zinc-300 text-[11px] transition-colors"
+            >
+              Cancel
+            </button>
+          ) : (
+            <button
+              onClick={handleConnect}
+              disabled={isLoading}
+              className="px-4 py-1.5 rounded-lg text-white text-[11px] font-semibold disabled:opacity-40 transition-all hover:opacity-90"
+              style={{ background: isLoading ? "#3f3f46" : cfg.accentColor }}
+            >
+              {isLoading ? "Connecting…" : "Connect"}
+            </button>
           )}
         </div>
       </div>
 
-      {/* Right: action button */}
-      <div className="shrink-0 ml-4">
-        {isConnected ? (
-          <button
-            onClick={handleDisconnect}
-            disabled={isLoading}
-            className="px-3 py-1.5 rounded-lg border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 text-[11px] font-semibold disabled:opacity-40 transition-all"
-          >
-            {isLoading ? "…" : "Disconnect"}
-          </button>
-        ) : (
-          <button
-            onClick={handleConnect}
-            disabled={isLoading}
-            className="px-4 py-1.5 rounded-lg text-white text-[11px] font-semibold disabled:opacity-40 transition-all hover:opacity-90"
-            style={{ background: isLoading ? "#3f3f46" : cfg.accentColor }}
-          >
-            {isLoading ? "Connecting…" : "Connect"}
-          </button>
-        )}
-      </div>
+      {/* Notion inline key input — shown when user clicks Connect */}
+      {showKeyInput && cfg.manualKeyConnect && (
+        <div className="px-5 pb-5 pt-0">
+          <div className="border-t border-zinc-800 pt-4 space-y-3">
+            <p className="text-[11px] text-zinc-400 leading-relaxed">
+              Create an integration at{" "}
+              <a
+                href={cfg.keyHelpUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2"
+              >
+                {cfg.keyHelpLabel}
+              </a>
+              , copy the <span className="text-zinc-200 font-mono">Internal Integration Secret</span>, then paste it below.
+              Share your Notion pages with the integration via the page&apos;s{" "}
+              <span className="text-zinc-200">… → Connections</span> menu.
+            </p>
+
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleNotionSubmit()}
+                placeholder={cfg.keyPlaceholder}
+                autoFocus
+                className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-[11px] font-mono text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
+              />
+              <button
+                onClick={handleNotionSubmit}
+                disabled={isLoading || !apiKey.trim()}
+                className="px-4 py-2 rounded-lg text-white text-[11px] font-semibold disabled:opacity-40 transition-all hover:opacity-90"
+                style={{ background: cfg.accentColor }}
+              >
+                {isLoading ? "…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

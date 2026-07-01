@@ -24,6 +24,7 @@ from datetime import datetime
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 
 from api.auth import get_current_user, UserProfile
 from config import config
@@ -440,19 +441,50 @@ async def jira_callback(code: str = None, state: str = None, error: str = None):
 
 # ── ZOOM ──────────────────────────────────────────────────────────────────────
 
-@router.get("/notion/start")
-async def notion_start(current_user: UserProfile = Depends(get_current_user)):
-    """Notion uses a static Internal Integration Secret — no OAuth popup needed."""
-    if config.NOTION_API_KEY:
-        _store_token(current_user.uid, "notion", {
-            "api_key": config.NOTION_API_KEY,
-            "service": "notion",
-            "connected_at": datetime.utcnow().isoformat(),
-        })
-        print(f"[OAuth] ✅ Notion (API key) connected uid={current_user.uid}")
-        return {"service": "notion", "connected": True,
-                "message": "Notion connected via Integration Secret."}
-    raise HTTPException(400, "NOTION_API_KEY not configured on server.")
+class NotionConnectRequest(BaseModel):
+    api_key: str
+
+
+@router.post("/notion/connect")
+async def notion_connect(
+    body: NotionConnectRequest,
+    current_user: UserProfile = Depends(get_current_user),
+):
+    """Accept the user's own Notion Integration Secret, validate it, store per-user."""
+    api_key = body.api_key.strip()
+    if not api_key.startswith("ntn_") and not api_key.startswith("secret_"):
+        raise HTTPException(400, "Invalid Notion key — must start with ntn_ or secret_")
+
+    # Validate the key against Notion API and get workspace info
+    workspace_name = "Notion"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                "https://api.notion.com/v1/users/me",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Notion-Version": "2022-06-28",
+                },
+            )
+        if resp.status_code == 401:
+            raise HTTPException(400, "Invalid Notion key — Notion rejected it. Check you copied it correctly.")
+        if resp.status_code != 200:
+            raise HTTPException(400, f"Notion API returned {resp.status_code} — check your key.")
+        user_data = resp.json()
+        workspace_name = user_data.get("name") or user_data.get("type") or "Notion"
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Could not reach Notion API: {e}")
+
+    _store_token(current_user.uid, "notion", {
+        "api_key": api_key,
+        "service": "notion",
+        "workspace": workspace_name,
+        "connected_at": datetime.utcnow().isoformat(),
+    })
+    print(f"[OAuth] ✅ Notion connected uid={current_user.uid} workspace={workspace_name}")
+    return {"service": "notion", "connected": True, "workspace": workspace_name}
 
 
 @router.get("/zoom/start")
