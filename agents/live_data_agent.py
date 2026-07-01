@@ -62,6 +62,7 @@ _SOURCE_KEYWORDS: dict[str, list[str]] = {
     "slack": ["slack", "channel", "message", "workspace", "dm", "post"],
     "jira": ["jira", "ticket", "issue", "sprint", "backlog", "epic", "bug", "task", "story"],
     "zoom": ["zoom", "recording", "meeting", "call", "video"],
+    "notion": ["notion", "page", "database", "wiki", "notes", "notion page", "notion db"],
 }
 
 
@@ -260,10 +261,27 @@ class LiveDataAgent(BaseAgent):
             parameters={"type": "object", "properties": {"limit": {"type": "integer"}}},
         ))
 
+        # ── Notion ───────────────────────────────────────────────────────────
+        self.register_tool(AgentTool(
+            name="notion_list_pages",
+            description="List recent Notion pages and database entries shared with KAIROS. Optional 'limit' (default 20) and 'days_back' (default 30). Use for 'what's in Notion', 'show my Notion pages'.",
+            handler=self._tool_notion_list,
+            parameters={"type": "object", "properties": {
+                "limit": {"type": "integer"}, "days_back": {"type": "integer"}}},
+        ))
+        self.register_tool(AgentTool(
+            name="notion_search",
+            description="Search Notion pages and databases by keyword. Args: 'query' (required), 'limit' (default 10). Use for 'find Notion pages about X', 'search Notion for Y'.",
+            handler=self._tool_notion_search,
+            parameters={"type": "object", "properties": {
+                "query": {"type": "string"}, "limit": {"type": "integer"}},
+                "required": ["query"]},
+        ))
+
         # ── Memory cache fallback ─────────────────────────────────────────────
         self.register_tool(AgentTool(
             name="search_cached_items",
-            description="Search KAIROS's previously-ingested decision cache when a live source is unavailable. Args: 'query' (str), 'source' (optional: drive|email|slack|jira|zoom).",
+            description="Search KAIROS's previously-ingested decision cache when a live source is unavailable. Args: 'query' (str), 'source' (optional: drive|email|slack|jira|zoom|notion).",
             handler=self._tool_search_inventory,
             parameters={"type": "object", "properties": {
                 "query": {"type": "string"}, "source": {"type": "string"}},
@@ -312,7 +330,7 @@ class LiveDataAgent(BaseAgent):
         connected = self._connectors.get("connected", [])
         return {
             "connected": connected,
-            "not_connected": [s for s in ("drive", "gmail", "slack", "jira", "zoom") if s not in connected],
+            "not_connected": [s for s in ("notion", "drive", "gmail", "slack", "jira", "zoom") if s not in connected],
         }
 
     async def _tool_dashboard(self) -> dict:
@@ -655,6 +673,45 @@ class LiveDataAgent(BaseAgent):
             })
         return {"count": len(out), "recordings": out}
 
+    # Notion
+    async def _tool_notion_list(self, limit: int = 20, days_back: int = 30) -> Any:
+        c = self._connectors.get("notion")
+        if not c:
+            return {"error": "Notion is not connected."}
+        items = await c.fetch_all(days_back=days_back)
+        out = []
+        for item in items[:limit]:
+            self._add_source(item.get("title", "Notion page"), item.get("date", ""), "Notion", item.get("url", ""))
+            out.append({
+                "title": item.get("title", "Untitled"),
+                "type": item.get("source_type", "notion_page"),
+                "date": item.get("date", ""),
+                "url": item.get("url", ""),
+                "preview": (item.get("text", "") or "")[:200],
+            })
+        return {"count": len(out), "pages": out}
+
+    async def _tool_notion_search(self, query: str, limit: int = 10) -> Any:
+        c = self._connectors.get("notion")
+        if not c:
+            return {"error": "Notion is not connected."}
+        items = await c.fetch_all(days_back=90)
+        q = query.lower()
+        matched = [
+            item for item in items
+            if q in (item.get("title", "") or "").lower() or q in (item.get("text", "") or "").lower()
+        ]
+        out = []
+        for item in matched[:limit]:
+            self._add_source(item.get("title", "Notion page"), item.get("date", ""), "Notion", item.get("url", ""))
+            out.append({
+                "title": item.get("title", "Untitled"),
+                "date": item.get("date", ""),
+                "url": item.get("url", ""),
+                "preview": (item.get("text", "") or "")[:300],
+            })
+        return {"count": len(out), "results": out}
+
     # Cache fallback
     async def _tool_search_inventory(self, query: str = None, source: str = None) -> Any:
         if not self.memory:
@@ -678,7 +735,7 @@ class LiveDataAgent(BaseAgent):
         if not connected:
             answer = (
                 "No data sources are connected yet. Go to **KAIROS → Connectors** and connect "
-                "Google Drive, Gmail, Slack, Jira, or Zoom to start querying your live data."
+                "Notion, Google Drive, Gmail, Slack, Jira, or Zoom to start querying your live data."
             )
             await self._maybe_stream(answer, kwargs.get("stream_callback"))
             return {"answer": answer, "sources": [], "query": question}
@@ -688,7 +745,7 @@ class LiveDataAgent(BaseAgent):
         for source_name, keywords in _SOURCE_KEYWORDS.items():
             if source_name not in connected and any(kw in q_lower for kw in keywords):
                 source_display = {"gmail": "Gmail", "drive": "Google Drive", "slack": "Slack",
-                                  "jira": "Jira", "zoom": "Zoom"}.get(source_name, source_name.title())
+                                  "jira": "Jira", "zoom": "Zoom", "notion": "Notion"}.get(source_name, source_name.title())
                 answer = (
                     f"**{source_display} is not connected.** Go to **KAIROS → Connectors** and "
                     f"click Connect on {source_display} to enable this. Once connected, ask me again."
@@ -756,7 +813,7 @@ class LiveDataAgent(BaseAgent):
                 )
                 final_answer = f"Here's what I found from your connected sources:\n\n{items}"
             else:
-                not_connected = [s for s in ("gmail", "drive", "slack", "jira", "zoom") if s not in connected]
+                not_connected = [s for s in ("notion", "gmail", "drive", "slack", "jira", "zoom") if s not in connected]
                 tip = f" (Not yet connected: {', '.join(not_connected)})" if not_connected else ""
                 final_answer = (
                     f"I couldn't fetch data for this query from your connected sources "

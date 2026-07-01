@@ -68,22 +68,32 @@ def save_refreshed_token(user_id: str, service: str, token_data: dict):
     _store_token(user_id, service, token_data)
 
 
+def get_notion_token(user_id: str) -> Optional[str]:
+    """Return the Notion access_token (OAuth) or api_key (legacy) for this user."""
+    for data in _read_token_rows(user_id, "notion"):
+        token = data.get("access_token") or data.get("api_key")
+        if token:
+            return token
+    return None
+
+
 def build_connectors_for_user(user_id: str) -> dict:
     """
     Build connector instances for every source the user has connected.
 
-    Returns a dict with keys drive/gmail/slack/jira/zoom (each a connector
-    instance or None) plus "connected": the list of available source names.
+    Returns a dict with keys drive/gmail/slack/jira/zoom/notion (each a
+    connector instance or None) plus "connected": the list of source names.
     """
     from connectors.drive_connector import DriveConnector
     from connectors.gmail_connector import GmailConnector
     from connectors.slack_connector import SlackConnector
     from connectors.jira_connector import JiraConnector
     from connectors.zoom_connector import ZoomConnector
+    from connectors.notion_connector import NotionConnector
 
     out: dict = {
         "drive": None, "gmail": None, "slack": None,
-        "jira": None, "zoom": None, "connected": [],
+        "jira": None, "zoom": None, "notion": None, "connected": [],
     }
 
     google = get_google_token(user_id)
@@ -133,5 +143,10 @@ def build_connectors_for_user(user_id: str) -> dict:
     ):
         out["jira"] = JiraConnector()
         out["connected"].append("jira")
+
+    notion_token = get_notion_token(user_id)
+    if notion_token:
+        out["notion"] = NotionConnector(api_key=notion_token)
+        out["connected"].append("notion")
 
     return out
