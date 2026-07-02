@@ -66,24 +66,40 @@ class FireworksEmbeddingFunction(EmbeddingFunction):
     def __call__(self, input: Documents) -> Embeddings:
         if self._local_fallback:
             return self._local_ef(input)
-        try:
-            response = self._client.embeddings.create(
-                model=self.model,
-                input=[text[:8000] for text in input],  # safe truncation
-            )
-            return [item.embedding for item in response.data]
-        except Exception as e:
-            # Never let an embedding API failure crash a live query or store.
-            # Permanently switch this instance to local embeddings so every
-            # subsequent call uses the same vector space (avoids dimension
-            # mismatch between remote and local vectors mid-session).
-            import sys
-            print(f"[Memory] Embedding API failed ({e}); switching to local embeddings.", file=sys.stderr)
-            from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
-            if not getattr(self, "_local_ef", None):
-                self._local_ef = DefaultEmbeddingFunction()
-            self._local_fallback = True
-            return self._local_ef(input)
+
+        import sys
+        import time
+
+        # Retry transient failures (rate limits, momentary network blips)
+        # before giving up on this call — a single retry catches most of
+        # what would otherwise be an unnecessary degradation.
+        last_exc: Exception | None = None
+        for attempt in range(3):
+            try:
+                response = self._client.embeddings.create(
+                    model=self.model,
+                    input=[text[:8000] for text in input],  # safe truncation
+                )
+                return [item.embedding for item in response.data]
+            except Exception as e:
+                last_exc = e
+                if attempt < 2:
+                    time.sleep(0.5 * (2 ** attempt))
+
+        # All retries exhausted. Do NOT permanently switch this instance to
+        # local embeddings — the local model's vector dimensionality can
+        # differ from whatever's already stored in this Chroma collection
+        # under the remote model, so silently mixing them risks a hard
+        # dimension-mismatch error on every future query, or (worse) vectors
+        # that happen to share a dimension but are otherwise meaningless
+        # cosine-similarity garbage. Instead, raise so the caller's own
+        # fallback (semantic_search() degrades to structured_search() on any
+        # exception) handles it per-call, and the next call gets a fresh
+        # chance at the real embedding model instead of being stuck on the
+        # degraded path for the rest of the process lifetime.
+        print(f"[Memory] Embedding API failed after retries ({last_exc}); this call is failing rather than silently degrading.", file=sys.stderr)
+        assert last_exc is not None
+        raise last_exc
 
 
 class KairosMemory:
@@ -319,10 +335,23 @@ class KairosMemory:
         now = datetime.utcnow().isoformat()
         try:
             with self._connect() as conn:
+                # Upsert instead of INSERT OR REPLACE: a REPLACE deletes and
+                # re-inserts the row on a (user_id, item_id) PK conflict,
+                # which silently resets `processed` back to its schema
+                # default (0) every time an already-processed item is seen
+                # again in a later ingestion cycle — breaking the inventory
+                # idempotency guarantee and re-sending processed items
+                # through the LLM extractor forever. ON CONFLICT DO UPDATE
+                # only touches the metadata columns, leaving `processed`
+                # (and any other future column) untouched.
                 conn.executemany("""
-                    INSERT OR REPLACE INTO inventory
+                    INSERT INTO inventory
                     (user_id, source, item_id, title, url, item_date, kind, snippet, fetched_at)
                     VALUES (?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT(user_id, item_id) DO UPDATE SET
+                        source=excluded.source, title=excluded.title, url=excluded.url,
+                        item_date=excluded.item_date, kind=excluded.kind,
+                        snippet=excluded.snippet, fetched_at=excluded.fetched_at
                 """, [
                     (
                         user_id, it.get("source", ""), str(it.get("item_id", "")),
