@@ -747,18 +747,26 @@ class LiveDataAgent(BaseAgent):
             await self._maybe_stream(answer, kwargs.get("stream_callback"))
             return {"answer": answer, "sources": [], "query": question}
 
-        # Early-exit: detect if the user needs a source that isn't connected
+        # Early-exit: detect if the user needs a source that isn't connected.
+        # Some keywords (e.g. "message") appear in more than one source's
+        # list, so a query like "get my Slack messages" can match Gmail's
+        # list too. If the question literally names a source the user HAS
+        # connected, trust that over any incidental keyword overlap with a
+        # different, disconnected source — otherwise a Slack request could
+        # incorrectly be rejected as "Gmail is not connected".
         q_lower = question.lower()
-        for source_name, keywords in _SOURCE_KEYWORDS.items():
-            if source_name not in connected and any(kw in q_lower for kw in keywords):
-                source_display = {"gmail": "Gmail", "drive": "Google Drive", "slack": "Slack",
-                                  "jira": "Jira", "zoom": "Zoom", "notion": "Notion"}.get(source_name, source_name.title())
-                answer = (
-                    f"**{source_display} is not connected.** Go to **KAIROS → Connectors** and "
-                    f"click Connect on {source_display} to enable this. Once connected, ask me again."
-                )
-                await self._maybe_stream(answer, kwargs.get("stream_callback"))
-                return {"answer": answer, "sources": [], "query": question}
+        mentioned_sources = {s for s in _SOURCE_KEYWORDS if s in q_lower}
+        if not (mentioned_sources & set(connected)):
+            for source_name, keywords in _SOURCE_KEYWORDS.items():
+                if source_name not in connected and any(kw in q_lower for kw in keywords):
+                    source_display = {"gmail": "Gmail", "drive": "Google Drive", "slack": "Slack",
+                                      "jira": "Jira", "zoom": "Zoom", "notion": "Notion"}.get(source_name, source_name.title())
+                    answer = (
+                        f"**{source_display} is not connected.** Go to **KAIROS → Connectors** and "
+                        f"click Connect on {source_display} to enable this. Once connected, ask me again."
+                    )
+                    await self._maybe_stream(answer, kwargs.get("stream_callback"))
+                    return {"answer": answer, "sources": [], "query": question}
 
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
             connected=", ".join(connected) or "none",
