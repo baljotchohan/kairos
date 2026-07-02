@@ -145,6 +145,8 @@ async def oauth_authorize(request: Request):
         return JSONResponse({"error": "invalid_request", "error_description": "redirect_uri required"}, status_code=400)
     if not client_id:
         return JSONResponse({"error": "invalid_request", "error_description": "client_id required"}, status_code=400)
+    if not p.get("code_challenge"):
+        return JSONResponse({"error": "invalid_request", "error_description": "code_challenge (PKCE) required"}, status_code=400)
 
     req_id = uuid.uuid4().hex
     c = _conn()
@@ -268,6 +270,8 @@ async def oauth_token(request: Request):
         return JSONResponse({"error": "unsupported_grant_type"}, status_code=400)
     if not code:
         return JSONResponse({"error": "invalid_request", "error_description": "code required"}, status_code=400)
+    if not code_verifier:
+        return JSONResponse({"error": "invalid_request", "error_description": "code_verifier (PKCE) required"}, status_code=400)
 
     c = _conn()
     try:
@@ -281,14 +285,17 @@ async def oauth_token(request: Request):
 
         # Verify PKCE — normalise both sides to no-padding base64url so that
         # clients that sent code_challenge WITH "=" padding (stored normalised above)
-        # and clients that sent it WITHOUT padding all verify correctly.
+        # and clients that sent it WITHOUT padding all verify correctly. Since
+        # /oauth/authorize now requires code_challenge, always enforce here too
+        # rather than skipping the check when either side happens to be absent.
         stored_challenge = (row["code_challenge"] or "").rstrip("=")
-        if stored_challenge and code_verifier:
-            challenge = base64.urlsafe_b64encode(
-                hashlib.sha256(code_verifier.encode()).digest()
-            ).decode().rstrip("=")
-            if not hmac.compare_digest(challenge, stored_challenge):
-                return JSONResponse({"error": "invalid_grant", "error_description": "PKCE verification failed"}, status_code=400)
+        if not stored_challenge:
+            return JSONResponse({"error": "invalid_grant", "error_description": "Authorization code has no associated PKCE challenge"}, status_code=400)
+        challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(code_verifier.encode()).digest()
+        ).decode().rstrip("=")
+        if not hmac.compare_digest(challenge, stored_challenge):
+            return JSONResponse({"error": "invalid_grant", "error_description": "PKCE verification failed"}, status_code=400)
 
         c.execute("UPDATE mcp_oauth_codes SET used = 1 WHERE code = ?", (code,))
         c.commit()
