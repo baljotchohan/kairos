@@ -115,12 +115,18 @@ class KairosWebSocket {
     }
   }
 
-  send(message: object): void {
+  /** Returns true if the message was actually sent, false if the socket
+   * wasn't open — callers should surface the false case to the user instead
+   * of assuming it went through (a dropped `query` message otherwise looks
+   * like the chat silently hanging, with the user's message shown but no
+   * reply ever coming). */
+  send(message: object): boolean {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
-    } else {
-      console.warn("[KAIROS WS] Cannot send — not connected");
+      return true;
     }
+    console.warn("[KAIROS WS] Cannot send — not connected");
+    return false;
   }
 
   on(type: string, callback: Listener): () => void {
