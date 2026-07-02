@@ -26,7 +26,9 @@ def _read_token_rows(user_id: str, service: str) -> list[dict]:
     if not user_id:
         return out
     try:
-        conn = sqlite3.connect(config.SQLITE_PATH)
+        conn = sqlite3.connect(config.SQLITE_PATH, timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA busy_timeout=30000;")
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             "SELECT token_data FROM oauth_tokens WHERE service = ? AND user_uid = ?",
@@ -63,9 +65,20 @@ def get_zoom_token(user_id: str) -> Optional[dict]:
 
 
 def save_refreshed_token(user_id: str, service: str, token_data: dict):
-    """Save rotated OAuth token_data back to SQLite (encrypting it)."""
+    """Save rotated OAuth token_data back to SQLite (encrypting it).
+
+    Connectors call this with only the fields that actually changed on
+    refresh (access_token, refresh_token, client_id/secret — see
+    gmail_connector.py / drive_connector.py / zoom_connector.py). token_data
+    is stored as a single encrypted JSON blob per (user_id, service), so a
+    naive overwrite here would drop every OTHER field in that blob (e.g.
+    `email`, set once at the original OAuth callback) the first time a token
+    refreshes — merge onto the existing stored row instead.
+    """
     from api.routes.oauth import _store_token
-    _store_token(user_id, service, token_data)
+    existing = _read_token_rows(user_id, service)
+    merged = {**existing[0], **token_data} if existing else token_data
+    _store_token(user_id, service, merged)
 
 
 def get_notion_token(user_id: str) -> Optional[str]:
