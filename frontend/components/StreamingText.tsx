@@ -24,13 +24,13 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode {
     }
     if (match[1] !== undefined) {
       parts.push(
-        <strong key={`${keyPrefix}-b${k++}`} className="font-semibold text-white">
+        <strong key={`${keyPrefix}-b${k++}`} className="font-semibold text-[rgb(var(--text-primary))]">
           {match[1]}
         </strong>
       );
     } else if (match[2] !== undefined) {
       parts.push(
-        <em key={`${keyPrefix}-i${k++}`} className="italic text-zinc-300">
+        <em key={`${keyPrefix}-i${k++}`} className="italic text-[rgb(var(--text-primary))]/85">
           {match[2]}
         </em>
       );
@@ -38,7 +38,7 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode {
       parts.push(
         <code
           key={`${keyPrefix}-c${k++}`}
-          className="font-mono text-[0.82em] bg-zinc-800/80 text-indigo-300 border border-zinc-700/60 px-1.5 py-0.5 rounded-md"
+          className="font-mono text-[0.82em] bg-[rgb(var(--surface-hover))]/80 text-indigo-400 border border-[rgb(var(--border))]/60 px-1.5 py-0.5 rounded-md"
         >
           {match[3]}
         </code>
@@ -81,10 +81,10 @@ function parseBlocks(text: string): React.ReactNode[] {
     if (trimmed.startsWith("## ")) {
       elements.push(
         <div key={key++} className="flex items-center gap-3 mt-6 mb-2 first:mt-1">
-          <h2 className="text-[14.5px] font-bold text-white tracking-tight shrink-0">
+          <h2 className="text-[14.5px] font-bold text-[rgb(var(--text-primary))] tracking-tight shrink-0">
             {renderInline(trimmed.slice(3), `h2-${key}`)}
           </h2>
-          <div className="flex-1 h-px bg-zinc-700/50" />
+          <div className="flex-1 h-px bg-[rgb(var(--border))]/70" />
         </div>
       );
       i++;
@@ -94,7 +94,7 @@ function parseBlocks(text: string): React.ReactNode[] {
     // ── H3: ### heading ─────────────────────────────────────────────────────
     if (trimmed.startsWith("### ")) {
       elements.push(
-        <h3 key={key++} className="text-[13px] font-semibold text-zinc-200 mt-4 mb-1.5 tracking-tight">
+        <h3 key={key++} className="text-[13px] font-semibold text-[rgb(var(--text-primary))]/90 mt-4 mb-1.5 tracking-tight">
           {renderInline(trimmed.slice(4), `h3-${key}`)}
         </h3>
       );
@@ -110,7 +110,7 @@ function parseBlocks(text: string): React.ReactNode[] {
         listItems.push(
           <li key={i} className="flex items-start gap-2.5">
             <span className="mt-[6px] w-1.5 h-1.5 rounded-full bg-indigo-500/80 shrink-0" />
-            <span className="text-zinc-200 leading-[1.7]">
+            <span className="text-[rgb(var(--text-primary))]/90 leading-[1.7]">
               {renderInline(content, `li-${key}-${i}`)}
             </span>
           </li>
@@ -136,7 +136,7 @@ function parseBlocks(text: string): React.ReactNode[] {
             <span className="text-[11px] font-bold text-indigo-400 mt-[5px] w-4 shrink-0 text-right">
               {num++}.
             </span>
-            <span className="text-zinc-200 leading-[1.7]">
+            <span className="text-[rgb(var(--text-primary))]/90 leading-[1.7]">
               {renderInline(content, `ol-${key}-${i}`)}
             </span>
           </li>
@@ -157,7 +157,7 @@ function parseBlocks(text: string): React.ReactNode[] {
       elements.push(
         <blockquote
           key={key++}
-          className="border-l-2 border-indigo-500/60 pl-3.5 py-0.5 my-2 text-zinc-400 italic text-[13.5px]"
+          className="border-l-2 border-indigo-500/60 pl-3.5 py-0.5 my-2 text-[rgb(var(--text-muted))] italic text-[13.5px]"
         >
           {renderInline(content, `bq-${key}`)}
         </blockquote>
@@ -169,7 +169,7 @@ function parseBlocks(text: string): React.ReactNode[] {
     // ── Horizontal rule ──────────────────────────────────────────────────────
     if (trimmed === "---" || trimmed === "___" || trimmed === "***") {
       elements.push(
-        <hr key={key++} className="border-zinc-700/50 my-4" />
+        <hr key={key++} className="border-[rgb(var(--border))]/70 my-4" />
       );
       i++;
       continue;
@@ -184,7 +184,7 @@ function parseBlocks(text: string): React.ReactNode[] {
 
     // ── Regular paragraph ────────────────────────────────────────────────────
     elements.push(
-      <p key={key++} className="text-[14px] text-zinc-200 leading-[1.75]">
+      <p key={key++} className="text-[14px] text-[rgb(var(--text-primary))]/90 leading-[1.75]">
         {renderInline(trimmed, `p-${key}`)}
       </p>
     );
