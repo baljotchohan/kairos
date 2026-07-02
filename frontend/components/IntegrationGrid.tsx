@@ -70,11 +70,11 @@ export default function IntegrationGrid({ token }: IntegrationGridProps) {
           {connectedCount}/{SERVICES.length} connectors active
         </span>
         {isFetching && (
-          <span className="text-[9px] font-mono text-zinc-600 animate-pulse">Checking status…</span>
+          <span className="text-[9px] font-mono text-[rgb(var(--text-muted))]/70 animate-pulse">Checking status…</span>
         )}
       </div>
 
-      <div className="w-full h-0.5 bg-zinc-800 rounded-full overflow-hidden">
+      <div className="w-full h-0.5 bg-[rgb(var(--border))] rounded-full overflow-hidden">
         <div
           className="h-full bg-emerald-500 rounded-full transition-all duration-700"
           style={{ width: `${(connectedCount / SERVICES.length) * 100}%` }}
