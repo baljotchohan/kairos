@@ -380,7 +380,20 @@ export function useKairosChat(token: string | null) {
       },
     ]);
 
-    wsClient.send({ type: "query", question: question.trim(), session_id: activeSessionId });
+    const sent = wsClient.send({ type: "query", question: question.trim(), session_id: activeSessionId });
+    if (!sent) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: generateId(),
+          role: "assistant",
+          content: "Message not sent — you're disconnected. Reconnecting automatically; please try again in a moment.",
+          isStreaming: false,
+          sources: [],
+          hasWarning: true,
+        },
+      ]);
+    }
   }, [isStreaming, activeSessionId]);
 
   const startIngest = useCallback((sources: string[]) => {
