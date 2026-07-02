@@ -114,7 +114,7 @@ export default function AgentPersonasPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-full bg-[#0b0b0c] items-center justify-center font-mono text-xs text-zinc-500">
+      <div className="flex h-screen w-full bg-[rgb(var(--bg))] items-center justify-center font-mono text-xs text-[rgb(var(--text-muted))] theme-transition">
         <span className="animate-pulse">Loading…</span>
       </div>
     );
@@ -129,13 +129,13 @@ export default function AgentPersonasPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0b0b0c] text-[#e4e4e7] p-8">
+    <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text-primary))] p-8 theme-transition">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <button
             onClick={() => router.push("/dashboard")}
-            className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-500 hover:text-zinc-300 mb-6 transition-colors"
+            className="flex items-center gap-1.5 text-[10px] font-mono text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] mb-6 transition-colors"
           >
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -149,10 +149,10 @@ export default function AgentPersonasPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight">Agent Personas</h1>
-              <p className="text-[11px] text-zinc-500 font-mono">KAIROS · Settings</p>
+              <p className="text-[11px] text-[rgb(var(--text-muted))] font-mono">KAIROS · Settings</p>
             </div>
           </div>
-          <p className="text-xs text-zinc-400 mt-3 leading-relaxed">
+          <p className="text-xs text-[rgb(var(--text-muted))] mt-3 leading-relaxed">
             Rename any KAIROS agent and adjust its tone. This only changes how it presents
             answers to you — extraction and classification logic never changes.
           </p>
@@ -165,23 +165,23 @@ export default function AgentPersonasPage() {
         )}
 
         {isFetching ? (
-          <p className="text-xs text-zinc-500 font-mono animate-pulse">Loading agents…</p>
+          <p className="text-xs text-[rgb(var(--text-muted))] font-mono animate-pulse">Loading agents…</p>
         ) : (
           <div className="space-y-8">
             {GROUP_ORDER.filter((g) => grouped[g]?.length).map((group) => (
               <div key={group} className="space-y-3">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-500">{group}</h2>
+                <h2 className="text-xs font-bold uppercase tracking-wider text-[rgb(var(--text-muted))]">{group}</h2>
                 {grouped[group].map((p) => {
                   const draft = drafts[p.agent_key] || { display_name: p.display_name, tone_preset: p.tone_preset };
                   const dirty = draft.display_name !== p.display_name || draft.tone_preset !== p.tone_preset;
                   return (
                     <div
                       key={p.agent_key}
-                      className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 flex flex-col gap-3"
+                      className="p-4 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-hover))]/40 flex flex-col gap-3"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex-1">
-                          <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider block mb-1">
+                          <label className="text-[9px] font-mono text-[rgb(var(--text-muted))] uppercase tracking-wider block mb-1">
                             Display name · {p.agent_key}
                           </label>
                           <input
@@ -194,11 +194,11 @@ export default function AgentPersonasPage() {
                                 [p.agent_key]: { ...draft, display_name: e.target.value },
                               }))
                             }
-                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition-colors"
+                            className="w-full bg-[rgb(var(--bg))] border border-[rgb(var(--border))] rounded-lg px-3 py-1.5 text-sm text-[rgb(var(--text-primary))]/90 focus:outline-none focus:border-indigo-500 transition-colors"
                           />
                         </div>
                         <div className="w-36">
-                          <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider block mb-1">
+                          <label className="text-[9px] font-mono text-[rgb(var(--text-muted))] uppercase tracking-wider block mb-1">
                             Tone
                           </label>
                           <select
@@ -209,7 +209,7 @@ export default function AgentPersonasPage() {
                                 [p.agent_key]: { ...draft, tone_preset: e.target.value },
                               }))
                             }
-                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-indigo-500 transition-colors"
+                            className="w-full bg-[rgb(var(--bg))] border border-[rgb(var(--border))] rounded-lg px-2 py-1.5 text-sm text-[rgb(var(--text-primary))]/90 focus:outline-none focus:border-indigo-500 transition-colors"
                           >
                             {tonePresets.map((t) => (
                               <option key={t} value={t}>
@@ -221,11 +221,11 @@ export default function AgentPersonasPage() {
                       </div>
 
                       {/* Live preview */}
-                      <div className="px-3 py-2 rounded-lg bg-black/40 border border-zinc-800/60">
-                        <span className="text-[9px] font-mono text-zinc-600 uppercase tracking-wider block mb-1">
+                      <div className="px-3 py-2 rounded-lg bg-[rgb(var(--bg))]/60 border border-[rgb(var(--border))]/70">
+                        <span className="text-[9px] font-mono text-[rgb(var(--text-muted))]/80 uppercase tracking-wider block mb-1">
                           Preview — as &ldquo;{draft.display_name}&rdquo;
                         </span>
-                        <p className="text-[11px] text-zinc-400 leading-relaxed italic">
+                        <p className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed italic">
                           &ldquo;{TONE_PREVIEWS[draft.tone_preset] || TONE_PREVIEWS.professional}&rdquo;
                         </p>
                       </div>
@@ -235,7 +235,7 @@ export default function AgentPersonasPage() {
                           <button
                             onClick={() => reset(p.agent_key)}
                             disabled={savingKey === p.agent_key}
-                            className="text-[10px] font-mono text-zinc-500 hover:text-zinc-300 px-2 py-1 transition-colors disabled:opacity-40"
+                            className="text-[10px] font-mono text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] px-2 py-1 transition-colors disabled:opacity-40"
                           >
                             Reset to default
                           </button>
@@ -243,7 +243,7 @@ export default function AgentPersonasPage() {
                         <button
                           onClick={() => save(p.agent_key)}
                           disabled={!dirty || savingKey === p.agent_key}
-                          className="text-[10px] font-mono px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white transition-colors"
+                          className="text-[10px] font-mono px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-[rgb(var(--surface-hover))] disabled:text-[rgb(var(--text-muted))] text-white transition-colors"
                         >
                           {savingKey === p.agent_key ? "Saving…" : "Save"}
                         </button>
@@ -256,9 +256,9 @@ export default function AgentPersonasPage() {
           </div>
         )}
 
-        <div className="mt-8 pt-4 border-t border-zinc-800 text-[10px] font-mono text-zinc-600 text-center">
+        <div className="mt-8 pt-4 border-t border-[rgb(var(--border))] text-[10px] font-mono text-[rgb(var(--text-muted))]/80 text-center">
           Signed in as {user.email || user.displayName || "Guest"} ·{" "}
-          <button onClick={() => router.push("/dashboard")} className="hover:text-zinc-400 transition-colors">
+          <button onClick={() => router.push("/dashboard")} className="hover:text-[rgb(var(--text-primary))] transition-colors">
             Return to dashboard
           </button>
         </div>
