@@ -258,10 +258,10 @@ export default function IntegrationButton({
             <p className="text-[11px] text-[rgb(var(--text-muted))] mt-0.5">{cfg.description}</p>
             {isConnected && serviceName && (
               <p className="text-[10px] text-[rgb(var(--text-muted))] mt-0.5">
-                <span className="text-zinc-500">as</span>{" "}
+                <span className="text-[rgb(var(--text-muted))]">as</span>{" "}
                 <span className="font-semibold text-[rgb(var(--text-primary))]">{serviceName}</span>
                 {formattedDate && (
-                  <span className="text-zinc-600 ml-2">· {formattedDate}</span>
+                  <span className="text-[rgb(var(--text-muted))]/80 ml-2">· {formattedDate}</span>
                 )}
               </p>
             )}
@@ -284,7 +284,7 @@ export default function IntegrationButton({
           ) : showKeyInput ? (
             <button
               onClick={() => { setShowKeyInput(false); setApiKey(""); setError(null); }}
-              className="text-zinc-500 hover:text-zinc-300 text-[11px] transition-colors"
+              className="text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] text-[11px] transition-colors"
             >
               Cancel
             </button>
@@ -304,8 +304,8 @@ export default function IntegrationButton({
       {/* Notion inline key input — shown when user clicks Connect */}
       {showKeyInput && cfg.manualKeyConnect && (
         <div className="px-5 pb-5 pt-0">
-          <div className="border-t border-zinc-800 pt-4 space-y-3">
-            <p className="text-[11px] text-zinc-400 leading-relaxed">
+          <div className="border-t border-[rgb(var(--border))] pt-4 space-y-3">
+            <p className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">
               Create an integration at{" "}
               <a
                 href={cfg.keyHelpUrl}
@@ -315,9 +315,9 @@ export default function IntegrationButton({
               >
                 {cfg.keyHelpLabel}
               </a>
-              , copy the <span className="text-zinc-200 font-mono">Internal Integration Secret</span>, then paste it below.
+              , copy the <span className="text-[rgb(var(--text-primary))]/90 font-mono">Internal Integration Secret</span>, then paste it below.
               Share your Notion pages with the integration via the page&apos;s{" "}
-              <span className="text-zinc-200">… → Connections</span> menu.
+              <span className="text-[rgb(var(--text-primary))]/90">… → Connections</span> menu.
             </p>
 
             <div className="flex gap-2">
@@ -328,7 +328,7 @@ export default function IntegrationButton({
                 onKeyDown={(e) => e.key === "Enter" && handleNotionSubmit()}
                 placeholder={cfg.keyPlaceholder}
                 autoFocus
-                className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-[11px] font-mono text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
+                className="flex-1 bg-[rgb(var(--surface-hover))] border border-[rgb(var(--border))] rounded-lg px-3 py-2 text-[11px] font-mono text-[rgb(var(--text-primary))]/90 placeholder-zinc-500 focus:outline-none focus:border-[rgb(var(--border-focus))] transition-colors"
               />
               <button
                 onClick={handleNotionSubmit}
