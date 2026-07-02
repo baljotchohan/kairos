@@ -79,7 +79,7 @@ export default function KairosLogo({ className = "", size = "100%", showText = f
       </defs>
 
       {/* Connecting edges — drawn first so nodes sit on top */}
-      <g stroke={`url(#${uid}-edge)`} strokeWidth="3.5" strokeLinecap="round" opacity="0.85">
+      <g stroke={`url(#${uid}-edge)`} strokeWidth="2.5" strokeLinecap="round" opacity="0.85">
         {edges.map(([a, b], i) => (
           <line
             key={i}
@@ -96,9 +96,9 @@ export default function KairosLogo({ className = "", size = "100%", showText = f
         {nodes.map((n, i) => (
           <g key={i}>
             {/* Base sphere */}
-            <circle cx={n.cx} cy={n.cy} r="6.5" fill={`url(#${uid}-node)`} />
+            <circle cx={n.cx} cy={n.cy} r="5" fill={`url(#${uid}-node)`} />
             {/* Specular highlight overlay */}
-            <circle cx={n.cx} cy={n.cy} r="6.5" fill={`url(#${uid}-shine)`} />
+            <circle cx={n.cx} cy={n.cy} r="5" fill={`url(#${uid}-shine)`} />
           </g>
         ))}
       </g>
@@ -107,12 +107,12 @@ export default function KairosLogo({ className = "", size = "100%", showText = f
       {showText && (
         <text
           x="94"
-          y="54"
+          y="52"
           fill="currentColor"
           fontFamily="'Alice', serif"
-          fontSize="46"
+          fontSize="38"
           fontWeight="bold"
-          letterSpacing="0.18em"
+          letterSpacing="0.2em"
           dominantBaseline="middle"
         >
           AIROS
