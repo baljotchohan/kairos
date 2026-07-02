@@ -21,6 +21,8 @@ interface PhysicsNode extends GraphNode {
   y: number;
   vx: number;
   vy: number;
+  mass: number;   // inertia — scales with connectivity (degree)
+  radius: number; // physical radius used for collision + hit-testing
 }
 
 interface DecisionGraphProps {
@@ -86,6 +88,21 @@ function getNodeIconEmoji(node: GraphNode) {
   return node.icon || node.label.charAt(0).toUpperCase();
 }
 
+const DEFAULT_SETTINGS = {
+  showLabels: "all",
+  showIcons: false,
+  showGrid: false,
+  nodeRadius: 4.5,
+  linkOpacity: 0.22,
+  particleSpeed: 0,
+  charge: 1200,
+  linkDistance: 90,
+  linkStrength: 0.04,
+  gravity: 0.012,
+  collision: 1.0,
+  friction: 0.85,
+};
+
 export default function DecisionGraph({
   nodes,
   edges: edgesProp,
@@ -106,18 +123,7 @@ export default function DecisionGraph({
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   // Custom Settings
-  const [settings, setSettings] = useState({
-    showLabels: "all",
-    showIcons: false,
-    showGrid: false,
-    nodeRadius: 4.5,
-    linkOpacity: 0.22,
-    particleSpeed: 0,
-    charge: 1200,
-    linkDistance: 90,
-    linkStrength: 0.04,
-    gravity: 0.012,
-  });
+  const [settings, setSettings] = useState({ ...DEFAULT_SETTINGS });
 
   // State update helpers (updating both ref and state to avoid frame lag)
   const zoomRef = useRef(zoom);
@@ -142,33 +148,20 @@ export default function DecisionGraph({
     if (typeof window !== "undefined") {
       const settingsKey = user ? `kairos-graph-settings-${user.uid}` : "kairos-graph-settings-default";
       const saved = localStorage.getItem(settingsKey);
-      
-      const defaults = {
-        showLabels: "all",
-        showIcons: false,
-        showGrid: false,
-        nodeRadius: 4.5,
-        linkOpacity: 0.22,
-        particleSpeed: 0,
-        charge: 1200,
-        linkDistance: 90,
-        linkStrength: 0.04,
-        gravity: 0.012,
-      };
 
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
           setSettings({
-            ...defaults,
+            ...DEFAULT_SETTINGS,
             ...parsed,
           });
         } catch (err) {
           console.warn("Failed to parse saved graph settings:", err);
-          setSettings(defaults);
+          setSettings({ ...DEFAULT_SETTINGS });
         }
       } else {
-        setSettings(defaults);
+        setSettings({ ...DEFAULT_SETTINGS });
       }
       alphaRef.current = 1.0; // reheat simulation to apply new forces
     }
@@ -187,22 +180,10 @@ export default function DecisionGraph({
   };
 
   const resetSettings = () => {
-    const defaults = {
-      showLabels: "all",
-      showIcons: false,
-      showGrid: false,
-      nodeRadius: 4.5,
-      linkOpacity: 0.22,
-      particleSpeed: 0,
-      charge: 1200,
-      linkDistance: 90,
-      linkStrength: 0.04,
-      gravity: 0.012,
-    };
-    setSettings(defaults);
+    setSettings({ ...DEFAULT_SETTINGS });
     if (typeof window !== "undefined") {
       const settingsKey = user ? `kairos-graph-settings-${user.uid}` : "kairos-graph-settings-default";
-      localStorage.setItem(settingsKey, JSON.stringify(defaults));
+      localStorage.setItem(settingsKey, JSON.stringify(DEFAULT_SETTINGS));
     }
     alphaRef.current = 1.0;
   };
@@ -268,25 +249,35 @@ export default function DecisionGraph({
     const cx = width / 2;
     const cy = height / 2;
 
+    const baseRadius = settingsRef.current.nodeRadius;
+
     physicsNodesRef.current = nodes.map((node, idx) => {
+      const degree = nodeDegrees.get(node.id) || 0;
+      // Heavier, larger nodes for well-connected hubs (Obsidian-style)
+      const radius = baseRadius + Math.sqrt(degree) * 1.5;
+      const mass = 1 + degree * 0.6;
+
       const existing = physicsNodesRef.current.find((n) => n.id === node.id);
       if (existing) {
-        return { ...node, x: existing.x, y: existing.y, vx: existing.vx, vy: existing.vy };
+        return { ...node, x: existing.x, y: existing.y, vx: existing.vx, vy: existing.vy, mass, radius };
       }
 
-      const angle = (idx / nodes.length) * 2 * Math.PI + Math.random() * 0.5;
-      const dist = 50 + Math.random() * 70;
+      // Seed new nodes on a golden-angle spiral so they don't stack on one axis
+      const angle = idx * 2.399963229728653 + Math.random() * 0.4;
+      const dist = 40 + Math.sqrt(idx) * 22 + Math.random() * 30;
       return {
         ...node,
         x: cx + Math.cos(angle) * dist,
         y: cy + Math.sin(angle) * dist,
         vx: 0,
         vy: 0,
+        mass,
+        radius,
       };
     });
 
     alphaRef.current = 1.0; // reheat
-  }, [nodes]);
+  }, [nodes, nodeDegrees]);
 
   // Resize observer
   useEffect(() => {
@@ -318,51 +309,107 @@ export default function DecisionGraph({
     const strength = settingsRef.current.linkStrength;
     const distance = settingsRef.current.linkDistance;
     const gravity = settingsRef.current.gravity;
-    const damping = 0.85;
+    const collision = settingsRef.current.collision ?? 1.0;
+    const damping = settingsRef.current.friction ?? 0.85;
+    const alpha = alphaRef.current;
 
-    // 1. Repulsion force between all nodes (Coulomb)
+    // Fast id → node lookup (avoids O(E·N) find() over the edge list) and
+    // refresh each node's collision radius from the live size slider.
+    const baseRadius = settingsRef.current.nodeRadius;
+    const byId = new Map<string, PhysicsNode>();
+    for (const n of pNodes) {
+      const degree = nodeDegrees.get(n.id) || 0;
+      n.radius = baseRadius + Math.sqrt(degree) * 1.5;
+      byId.set(n.id, n);
+    }
+
+    // 1. Mass-weighted Coulomb repulsion between every pair of nodes.
+    //    Heavier (better-connected) nodes are shoved around less, so hubs
+    //    stay put while leaf nodes fan out around them.
     for (let i = 0; i < pNodes.length; i++) {
       const n1 = pNodes[i];
       for (let j = i + 1; j < pNodes.length; j++) {
         const n2 = pNodes[j];
-        const dx = n2.x - n1.x;
-        const dy = n2.y - n1.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
+        let dx = n2.x - n1.x;
+        let dy = n2.y - n1.y;
+        let distSq = dx * dx + dy * dy;
+        // Jitter apart coincident nodes so the direction is well-defined
+        if (distSq < 0.01) {
+          dx = (Math.random() - 0.5) * 0.5;
+          dy = (Math.random() - 0.5) * 0.5;
+          distSq = dx * dx + dy * dy;
+        }
+        const dist = Math.sqrt(distSq);
 
-        if (dist < 400) {
-          const force = charge / (dist * dist + 150);
+        if (dist < 480) {
+          const force = charge / (distSq + 150);
           const fx = (dx / dist) * force;
           const fy = (dy / dist) * force;
 
-          n1.vx -= fx;
-          n1.vy -= fy;
-          n2.vx += fx;
-          n2.vy += fy;
+          n1.vx -= fx / n1.mass;
+          n1.vy -= fy / n1.mass;
+          n2.vx += fx / n2.mass;
+          n2.vy += fy / n2.mass;
+        }
+
+        // 2. Hard collision resolution — nodes are solid bodies and never
+        //    overlap. Overlap is split by inverse mass (Obsidian-like). A
+        //    node being dragged is treated as immovable so it tracks the
+        //    cursor exactly and just shoves its neighbours aside.
+        if (collision > 0) {
+          const minDist = (n1.radius + n2.radius) * 1.6 + 4;
+          if (dist < minDist) {
+            const overlap = (minDist - dist) * collision;
+            const ux = dx / dist;
+            const uy = dy / dist;
+            const draggedId = draggedNodeRef.current?.id;
+            const n1Fixed = n1.id === draggedId;
+            const n2Fixed = n2.id === draggedId;
+            if (n1Fixed && n2Fixed) {
+              // both pinned — nothing to do
+            } else if (n1Fixed) {
+              n2.x += ux * overlap;
+              n2.y += uy * overlap;
+            } else if (n2Fixed) {
+              n1.x -= ux * overlap;
+              n1.y -= uy * overlap;
+            } else {
+              const invSum = 1 / (n1.mass + n2.mass);
+              const push1 = overlap * 0.5 * (n2.mass * invSum);
+              const push2 = overlap * 0.5 * (n1.mass * invSum);
+              n1.x -= ux * push1;
+              n1.y -= uy * push1;
+              n2.x += ux * push2;
+              n2.y += uy * push2;
+            }
+          }
         }
       }
     }
 
-    // 2. Link force along connected edges (Spring)
+    // 3. Link force along connected edges (Spring). Rest length grows with
+    //    the two node radii so big hubs don't swallow their neighbours.
     computedEdges.forEach((edge) => {
-      const src = pNodes.find((n) => n.id === edge.source);
-      const tgt = pNodes.find((n) => n.id === edge.target);
+      const src = byId.get(edge.source);
+      const tgt = byId.get(edge.target);
       if (!src || !tgt) return;
 
       const dx = tgt.x - src.x;
       const dy = tgt.y - src.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
 
-      const force = (dist - distance) * strength;
+      const restLength = distance + src.radius + tgt.radius;
+      const force = (dist - restLength) * strength;
       const fx = (dx / dist) * force;
       const fy = (dy / dist) * force;
 
-      src.vx += fx;
-      src.vy += fy;
-      tgt.vx -= fx;
-      tgt.vy -= fy;
+      src.vx += fx / src.mass;
+      src.vy += fy / src.mass;
+      tgt.vx -= fx / tgt.mass;
+      tgt.vy -= fy / tgt.mass;
     });
 
-    // 3. Gravity force (pull to center)
+    // 4. Gravity force (pull to center)
     pNodes.forEach((node) => {
       const dx = cx - node.x;
       const dy = cy - node.y;
@@ -370,7 +417,7 @@ export default function DecisionGraph({
       node.vy += dy * gravity;
     });
 
-    // 4. Update coordinates & apply damping
+    // 5. Update coordinates & apply damping
     pNodes.forEach((node) => {
       if (node.id === draggedNodeRef.current?.id) {
         node.vx = 0;
@@ -382,14 +429,14 @@ export default function DecisionGraph({
       node.vy *= damping;
 
       const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
-      const maxSpeed = 10;
+      const maxSpeed = 12;
       if (speed > maxSpeed) {
         node.vx = (node.vx / speed) * maxSpeed;
         node.vy = (node.vy / speed) * maxSpeed;
       }
 
-      node.x += node.vx * alphaRef.current;
-      node.y += node.vy * alphaRef.current;
+      node.x += node.vx * alpha;
+      node.y += node.vy * alpha;
     });
   };
 
@@ -435,6 +482,10 @@ export default function DecisionGraph({
     const pan = panRef.current;
     const pNodes = physicsNodesRef.current;
 
+    // Fast id → node lookup shared by the link + node passes
+    const byId = new Map<string, PhysicsNode>();
+    for (const n of pNodes) byId.set(n.id, n);
+
     // 1. Draw Grid Background (if enabled)
     if (currentSettings.showGrid) {
       const spacing = 28 * zoom;
@@ -455,21 +506,26 @@ export default function DecisionGraph({
     const activeFocusId = selectedNodeId || hoveredNodeId;
     const isFocusActive = activeFocusId !== null;
 
+    // Precompute the direct neighbours of the focused node once per frame
+    const focusNeighbors = new Set<string>();
+    if (isFocusActive) {
+      for (const e of computedEdges) {
+        if (e.source === activeFocusId) focusNeighbors.add(e.target);
+        else if (e.target === activeFocusId) focusNeighbors.add(e.source);
+      }
+    }
+
     // Connectivity masking helper
     const isNodeConnected = (nodeId: string) => {
       if (!isFocusActive) return true;
       if (nodeId === activeFocusId) return true;
-      return computedEdges.some(
-        (e) =>
-          (e.source === activeFocusId && e.target === nodeId) ||
-          (e.target === activeFocusId && e.source === nodeId)
-      );
+      return focusNeighbors.has(nodeId);
     };
 
     // 2. Draw Connections (Links)
     computedEdges.forEach((edge, edgeIdx) => {
-      const src = pNodes.find((n) => n.id === edge.source);
-      const tgt = pNodes.find((n) => n.id === edge.target);
+      const src = byId.get(edge.source);
+      const tgt = byId.get(edge.target);
       if (!src || !tgt) return;
 
       const sx = src.x * zoom + pan.x;
@@ -520,9 +576,7 @@ export default function DecisionGraph({
       const nx = node.x * zoom + pan.x;
       const ny = node.y * zoom + pan.y;
 
-      const degree = nodeDegrees.get(node.id) || 0;
-      const baseRadius = currentSettings.nodeRadius;
-      const radius = baseRadius + Math.sqrt(degree) * 1.5;
+      const radius = node.radius;
 
       const isHovered = hoveredNodeId === node.id;
       const isSelected = selectedNodeId === node.id;
@@ -670,6 +724,148 @@ export default function DecisionGraph({
     };
   }, []);
 
+  // Touch handlers (mobile) — single-finger drag/pan + tap-select, two-finger
+  // pinch-zoom. Attached natively so we can preventDefault the page scroll.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    let pinchStartDist = 0;
+    let pinchStartZoom = 1;
+    let touchMoved = false;
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let lastTouchCount = 0;
+
+    const localPoint = (t: Touch) => {
+      const rect = canvas.getBoundingClientRect();
+      return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        e.preventDefault();
+        touchMoved = false;
+        lastTouchCount = 1;
+        const { x: screenX, y: screenY } = localPoint(e.touches[0]);
+        touchStartX = screenX;
+        touchStartY = screenY;
+        const worldX = (screenX - panRef.current.x) / zoomRef.current;
+        const worldY = (screenY - panRef.current.y) / zoomRef.current;
+
+        const node = physicsNodesRef.current.find((n) => {
+          const d = Math.sqrt((n.x - worldX) ** 2 + (n.y - worldY) ** 2);
+          return d <= n.radius + 14;
+        });
+
+        if (node) {
+          draggedNodeRef.current = node;
+          node.vx = 0;
+          node.vy = 0;
+          alphaRef.current = 1.0;
+        } else {
+          isPanningRef.current = true;
+          panStartRef.current = {
+            x: e.touches[0].clientX - panRef.current.x,
+            y: e.touches[0].clientY - panRef.current.y,
+          };
+        }
+      } else if (e.touches.length === 2) {
+        e.preventDefault();
+        draggedNodeRef.current = null;
+        isPanningRef.current = false;
+        lastTouchCount = 2;
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        pinchStartDist = Math.sqrt(dx * dx + dy * dy) || 1;
+        pinchStartZoom = zoomRef.current;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && pinchStartDist > 0) {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+        const prevZoom = zoomRef.current;
+        const newZoom = Math.max(0.08, Math.min(10.0, pinchStartZoom * (dist / pinchStartDist)));
+        const worldX = (midX - panRef.current.x) / prevZoom;
+        const worldY = (midY - panRef.current.y) / prevZoom;
+        setPan({ x: midX - worldX * newZoom, y: midY - worldY * newZoom });
+        setZoom(newZoom);
+        alphaRef.current = 1.0;
+        return;
+      }
+
+      if (e.touches.length !== 1) return;
+      e.preventDefault();
+      const { x: screenX, y: screenY } = localPoint(e.touches[0]);
+      // A gesture that started as a 2-finger pinch and dropped to 1 finger
+      // has a stale/zero touchStartX/Y (only ever set in onTouchStart's
+      // single-touch branch) — reset it here so the very next move doesn't
+      // spuriously read as a large jump and swallow a tap-to-select.
+      if (lastTouchCount !== 1) {
+        touchStartX = screenX;
+        touchStartY = screenY;
+      }
+      lastTouchCount = 1;
+      if (Math.abs(screenX - touchStartX) > 4 || Math.abs(screenY - touchStartY) > 4) {
+        touchMoved = true;
+      }
+
+      if (draggedNodeRef.current) {
+        draggedNodeRef.current.x = (screenX - panRef.current.x) / zoomRef.current;
+        draggedNodeRef.current.y = (screenY - panRef.current.y) / zoomRef.current;
+        draggedNodeRef.current.vx = 0;
+        draggedNodeRef.current.vy = 0;
+        alphaRef.current = 1.0;
+      } else if (isPanningRef.current) {
+        setPan({
+          x: e.touches[0].clientX - panStartRef.current.x,
+          y: e.touches[0].clientY - panStartRef.current.y,
+        });
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      // A tap (no drag) on a node selects it; on empty space clears selection.
+      if (!touchMoved && e.touches.length === 0) {
+        const dragged = draggedNodeRef.current;
+        if (dragged) {
+          setSelectedNodeId((prev) => (prev === dragged.id ? null : dragged.id));
+          setHoveredNodeId(dragged.id);
+          if (onNodeClick) onNodeClick(dragged.id);
+        } else if (isPanningRef.current) {
+          setSelectedNodeId(null);
+          setHoveredNodeId(null);
+        }
+      }
+      if (e.touches.length === 0) {
+        draggedNodeRef.current = null;
+        isPanningRef.current = false;
+        lastTouchCount = 0;
+        pinchStartDist = 0;
+      }
+    };
+
+    canvas.addEventListener("touchstart", onTouchStart, { passive: false });
+    canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+    canvas.addEventListener("touchend", onTouchEnd);
+    canvas.addEventListener("touchcancel", onTouchEnd);
+    return () => {
+      canvas.removeEventListener("touchstart", onTouchStart);
+      canvas.removeEventListener("touchmove", onTouchMove);
+      canvas.removeEventListener("touchend", onTouchEnd);
+      canvas.removeEventListener("touchcancel", onTouchEnd);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onNodeClick]);
+
   // Mouse handlers
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -683,10 +879,8 @@ export default function DecisionGraph({
 
     // Check if clicked a node
     const clickedNode = physicsNodesRef.current.find((node) => {
-      const degree = nodeDegrees.get(node.id) || 0;
-      const radius = settings.nodeRadius + Math.sqrt(degree) * 1.5;
       const dist = Math.sqrt((node.x - worldX) ** 2 + (node.y - worldY) ** 2);
-      return dist <= radius + 8;
+      return dist <= node.radius + 10;
     });
 
     if (clickedNode) {
@@ -735,10 +929,8 @@ export default function DecisionGraph({
 
     // Hover detection
     const hovered = physicsNodesRef.current.find((node) => {
-      const degree = nodeDegrees.get(node.id) || 0;
-      const radius = settings.nodeRadius + Math.sqrt(degree) * 1.5;
       const dist = Math.sqrt((node.x - worldX) ** 2 + (node.y - worldY) ** 2);
-      return dist <= radius + 8;
+      return dist <= node.radius + 10;
     });
 
     if (hovered?.id !== hoveredNodeId) {
@@ -812,7 +1004,7 @@ export default function DecisionGraph({
         ref={canvasRef}
         width={canvasWidth}
         height={canvasHeight}
-        style={{ width: "100%", height: "100%", display: "block" }}
+        style={{ width: "100%", height: "100%", display: "block", touchAction: "none" }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -849,7 +1041,7 @@ export default function DecisionGraph({
 
       {/* 2. FLOATING SETTINGS MENU (Top Right, under Pill) */}
       {showSettings && (
-        <div className="absolute top-14 right-3 w-72 max-h-[calc(100%-70px)] overflow-y-auto z-20 bg-[rgb(var(--surface))]/85 backdrop-blur-lg border border-[rgb(var(--border))]/55 p-4 rounded-2xl shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-top-4 font-sans">
+        <div className="absolute top-14 right-3 w-[min(18rem,calc(100%-24px))] max-h-[calc(100%-70px)] overflow-y-auto z-20 bg-[rgb(var(--surface))]/85 backdrop-blur-lg border border-[rgb(var(--border))]/55 p-4 rounded-2xl shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-top-4 font-sans">
           <div className="flex items-center justify-between mb-3 border-b border-[rgb(var(--border))]/40 pb-2">
             <span className="text-xs font-bold tracking-wider uppercase text-[rgb(var(--text-primary))]">
               Graph Settings
@@ -1018,6 +1210,38 @@ export default function DecisionGraph({
                     step="0.002"
                     value={settings.gravity}
                     onChange={(e) => updateSetting("gravity", parseFloat(e.target.value))}
+                    className="w-full h-1 bg-[rgb(var(--bg))] rounded-lg appearance-none cursor-pointer accent-[rgb(var(--accent))]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] text-[rgb(var(--text-muted))]">
+                    <span>Collision</span>
+                    <span className="font-mono">{settings.collision === 0 ? "Off" : `${Math.round(settings.collision * 100)}%`}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={settings.collision}
+                    onChange={(e) => updateSetting("collision", parseFloat(e.target.value))}
+                    className="w-full h-1 bg-[rgb(var(--bg))] rounded-lg appearance-none cursor-pointer accent-[rgb(var(--accent))]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] text-[rgb(var(--text-muted))]">
+                    <span>Friction</span>
+                    <span className="font-mono">{Math.round((1 - settings.friction) * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.6"
+                    max="0.97"
+                    step="0.01"
+                    value={settings.friction}
+                    onChange={(e) => updateSetting("friction", parseFloat(e.target.value))}
                     className="w-full h-1 bg-[rgb(var(--bg))] rounded-lg appearance-none cursor-pointer accent-[rgb(var(--accent))]"
                   />
                 </div>
