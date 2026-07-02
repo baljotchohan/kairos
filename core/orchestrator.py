@@ -306,6 +306,7 @@ class KairosOrchestrator:
                 "drive_data": [],
                 "meeting_data": [],
                 "jira_data": [],
+                "notion_data": [],
                 "decisions_extracted": 0,
                 "errors": [],
                 "status": "starting",
