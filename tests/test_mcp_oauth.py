@@ -39,7 +39,12 @@ def test_authorize_accepts_registered_redirect_uri(oauth_client):
     client_id = _register(oauth_client, ["https://real-client.example/callback"])
     resp = oauth_client.get(
         "/oauth/authorize",
-        params={"client_id": client_id, "redirect_uri": "https://real-client.example/callback", "state": "xyz"},
+        params={
+            "client_id": client_id,
+            "redirect_uri": "https://real-client.example/callback",
+            "state": "xyz",
+            "code_challenge": "abc123",
+        },
         follow_redirects=False,
     )
     assert resp.status_code == 302
@@ -49,7 +54,7 @@ def test_authorize_accepts_registered_redirect_uri(oauth_client):
 def test_authorize_rejects_unregistered_client_id(oauth_client):
     resp = oauth_client.get(
         "/oauth/authorize",
-        params={"client_id": "never-registered", "redirect_uri": "https://evil.example/steal"},
+        params={"client_id": "never-registered", "redirect_uri": "https://evil.example/steal", "code_challenge": "abc123"},
         follow_redirects=False,
     )
     assert resp.status_code == 400
@@ -62,7 +67,7 @@ def test_authorize_rejects_redirect_uri_not_registered_for_that_client(oauth_cli
     client_id = _register(oauth_client, ["https://real-client.example/callback"])
     resp = oauth_client.get(
         "/oauth/authorize",
-        params={"client_id": client_id, "redirect_uri": "https://evil.example/steal"},
+        params={"client_id": client_id, "redirect_uri": "https://evil.example/steal", "code_challenge": "abc123"},
         follow_redirects=False,
     )
     assert resp.status_code == 400
@@ -72,7 +77,7 @@ def test_authorize_rejects_redirect_uri_not_registered_for_that_client(oauth_cli
 def test_authorize_requires_client_id(oauth_client):
     resp = oauth_client.get(
         "/oauth/authorize",
-        params={"redirect_uri": "https://real-client.example/callback"},
+        params={"redirect_uri": "https://real-client.example/callback", "code_challenge": "abc123"},
         follow_redirects=False,
     )
     assert resp.status_code == 400
@@ -82,7 +87,20 @@ def test_authorize_requires_redirect_uri(oauth_client):
     client_id = _register(oauth_client, ["https://real-client.example/callback"])
     resp = oauth_client.get(
         "/oauth/authorize",
-        params={"client_id": client_id},
+        params={"client_id": client_id, "code_challenge": "abc123"},
         follow_redirects=False,
     )
     assert resp.status_code == 400
+
+
+def test_authorize_requires_code_challenge(oauth_client):
+    """PKCE is mandatory — an authorize request with no code_challenge must
+    be rejected rather than silently proceeding without PKCE protection."""
+    client_id = _register(oauth_client, ["https://real-client.example/callback"])
+    resp = oauth_client.get(
+        "/oauth/authorize",
+        params={"client_id": client_id, "redirect_uri": "https://real-client.example/callback"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "invalid_request"
