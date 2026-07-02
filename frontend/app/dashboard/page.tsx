@@ -133,6 +133,29 @@ export default function Home() {
   const [sourcesHeight, setSourcesHeight] = useState(200);
   const [isResizing, setIsResizing] = useState(false);
 
+  // The sidebar/chat/graph three-pane layout uses fixed pixel widths that
+  // simply can't coexist below ~700px — on a phone viewport they'd overlap
+  // or force horizontal scroll. Below the md breakpoint the sidebar becomes
+  // a slide-in overlay drawer (closed by default) and the graph panel
+  // becomes a full-screen overlay instead of a fixed-width flex sibling.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+  useEffect(() => {
+    if (isMobile) {
+      setIsSidebarOpen(false);
+      setIsGraphOpen(false);
+    }
+    // Intentionally only reacts to the mobile/desktop transition, not to
+    // isMobile being read elsewhere — this just sets sane defaults once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile]);
+
   const handleResize = (
     direction: "horizontal" | "vertical",
     setter: React.Dispatch<React.SetStateAction<number>>,
@@ -1131,13 +1154,26 @@ export default function Home() {
   }
 
   return (
-    <div className="flex h-full w-full bg-[rgb(var(--bg))] text-[rgb(var(--text-primary))] overflow-hidden theme-transition animate-[fadeIn_0.2s_ease-out]">
-      
-      {/* 1. LEFT SIDEBAR */}
+    <div className="flex h-full w-full bg-[rgb(var(--bg))] text-[rgb(var(--text-primary))] overflow-hidden theme-transition animate-[fadeIn_0.2s_ease-out] relative">
+
+      {/* Mobile sidebar backdrop — tap to close the drawer */}
+      {isMobile && isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* 1. LEFT SIDEBAR — a slide-in overlay drawer on mobile (closed by
+          default, opened via the hamburger button), a normal flex sibling
+          with a resizable width on desktop */}
+      {(!isMobile || isSidebarOpen) && (
       <div
-        className="bg-[rgb(var(--surface))] border-r border-[rgb(var(--border))]/60 flex flex-col justify-between shrink-0 theme-transition relative"
+        className={`bg-[rgb(var(--surface))] border-r border-[rgb(var(--border))]/60 flex flex-col justify-between shrink-0 theme-transition ${
+          isMobile ? "fixed inset-y-0 left-0 z-50" : "relative"
+        }`}
         style={{
-          width: isSidebarOpen ? `${sidebarWidth}px` : "64px",
+          width: isMobile ? "min(85vw, 300px)" : (isSidebarOpen ? `${sidebarWidth}px` : "64px"),
           transition: isResizing ? "none" : "width 0.3s ease, background-color 0.2s ease, border-color 0.2s ease",
         }}
       >
@@ -1332,19 +1368,19 @@ export default function Home() {
                   </button>
                 </div>
                 {userProfile.department && (
-                  <div className="flex justify-between py-1 border-b border-[rgb(var(--accent))]/5 text-zinc-400">
+                  <div className="flex justify-between py-1 border-b border-[rgb(var(--accent))]/5 text-[rgb(var(--text-muted))]">
                     <span>Department:</span>
                     <span className="text-[rgb(var(--text-primary))] font-semibold">{userProfile.department}</span>
                   </div>
                 )}
                 {userProfile.role_context && (
-                  <p className="text-zinc-400 mt-1.5 italic leading-normal">
+                  <p className="text-[rgb(var(--text-muted))] mt-1.5 italic leading-normal">
                     "{userProfile.role_context}"
                   </p>
                 )}
                 {userProfile.frequent_topics && userProfile.frequent_topics.length > 0 && (
                   <div className="mt-2.5">
-                    <span className="text-[9.5px] text-zinc-500 block mb-1">Top Topics:</span>
+                    <span className="text-[9.5px] text-[rgb(var(--text-muted))] block mb-1">Top Topics:</span>
                     <div className="flex flex-wrap gap-1">
                       {userProfile.frequent_topics.map((t: string, idx: number) => (
                         <span key={idx} className="bg-[rgb(var(--accent))]/15 text-[rgb(var(--accent))] px-1.5 py-0.5 rounded-[4px] text-[9px] font-semibold">
@@ -1505,27 +1541,39 @@ export default function Home() {
           )}
         </div>
       </div>
+      )}
 
       {/* 2. MAIN CONTAINER */}
       <main className="flex-1 flex flex-col min-w-0 bg-[rgb(var(--bg))] relative transition-colors duration-300">
         
         {/* Header */}
-        <header className="h-14 border-b border-[rgb(var(--border))]/30 flex items-center justify-between px-6 shrink-0 bg-[rgb(var(--surface))]/70 backdrop-blur-xl z-20">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 select-none">
-              <span className="text-[10px] font-bold text-[rgb(var(--text-muted))] tracking-wider uppercase font-mono">KAIROS</span>
-              <span className="text-[10px] text-[rgb(var(--text-muted))]/40 font-mono">/</span>
-              <span className="text-[11px] font-bold text-[rgb(var(--text-primary))] bg-[rgb(var(--surface-hover))]/80 border border-[rgb(var(--border))]/50 px-2.5 py-1 rounded-lg uppercase tracking-wider font-mono shadow-sm">
+        <header className="h-14 border-b border-[rgb(var(--border))]/30 flex items-center justify-between px-3 md:px-6 shrink-0 bg-[rgb(var(--surface))]/70 backdrop-blur-xl z-20 gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            {isMobile && (
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-1.5 -ml-1 shrink-0 hover:bg-[rgb(var(--surface-hover))]/80 border border-[rgb(var(--border))]/60 rounded-lg text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] transition-all"
+                title="Open Menu"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            )}
+            <div className="flex items-center gap-2 select-none min-w-0">
+              <span className="hidden sm:inline text-[10px] font-bold text-[rgb(var(--text-muted))] tracking-wider uppercase font-mono">KAIROS</span>
+              <span className="hidden sm:inline text-[10px] text-[rgb(var(--text-muted))]/40 font-mono">/</span>
+              <span className="text-[11px] font-bold text-[rgb(var(--text-primary))] bg-[rgb(var(--surface-hover))]/80 border border-[rgb(var(--border))]/50 px-2.5 py-1 rounded-lg uppercase tracking-wider font-mono shadow-sm truncate">
                 {activeTab === "chat" ? "Chat Console" : activeTab === "dashboard" ? "Metrics Overview" : activeTab === "decisions" ? "Decision Index" : activeTab === "integrations" ? "Connectors" : activeTab === "agents" ? "AI Agents" : "MCP Server"}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3 shrink-0">
             {activeTab === "chat" && (
               <button
                 onClick={() => setIsGraphOpen(!isGraphOpen)}
-                className={`px-3 py-1.5 rounded-xl border text-[9.5px] font-bold tracking-wider font-mono transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-sm ${
+                className={`px-2.5 md:px-3 py-1.5 rounded-xl border text-[9.5px] font-bold tracking-wider font-mono transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-sm whitespace-nowrap ${
                   isGraphOpen
                     ? "bg-[rgb(var(--surface-hover))] border-[rgb(var(--border-focus))] text-[rgb(var(--text-primary))]"
                     : "bg-transparent border-[rgb(var(--border))] text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))]"
@@ -1534,7 +1582,7 @@ export default function Home() {
                 {isGraphOpen ? "HIDE GRAPH" : "SHOW GRAPH"}
               </button>
             )}
-            <span className="flex items-center gap-1.5 text-[9.5px] font-mono px-2.5 py-1 rounded-lg bg-[rgb(var(--surface))]/80 border border-[rgb(var(--border))]/55 text-[rgb(var(--text-muted))] font-bold shadow-sm select-none">
+            <span className="hidden sm:flex items-center gap-1.5 text-[9.5px] font-mono px-2.5 py-1 rounded-lg bg-[rgb(var(--surface))]/80 border border-[rgb(var(--border))]/55 text-[rgb(var(--text-muted))] font-bold shadow-sm select-none">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
@@ -1681,7 +1729,7 @@ export default function Home() {
                           {msg.thinkingStep && !msg.content ? (
                             <div className="flex flex-col gap-1.5">
                               <ThinkingIndicator />
-                              <p className="text-[11.5px] text-zinc-500 pl-7 truncate">
+                              <p className="text-[11.5px] text-[rgb(var(--text-muted))] pl-7 truncate">
                                 {msg.thinkingStep.agent} · {msg.thinkingStep.content}
                               </p>
                             </div>
@@ -1712,8 +1760,8 @@ export default function Home() {
 
                               {msg.confidence !== undefined && (
                                 <div className="flex items-center gap-2">
-                                  <span className="text-[10px] text-zinc-500 font-mono uppercase">Confidence:</span>
-                                  <div className="w-16 h-1.5 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700/50">
+                                  <span className="text-[10px] text-[rgb(var(--text-muted))] font-mono uppercase">Confidence:</span>
+                                  <div className="w-16 h-1.5 bg-[rgb(var(--surface-hover))] rounded-full overflow-hidden border border-[rgb(var(--border))]/50">
                                     <div
                                       className={`h-full rounded-full transition-all duration-300 ${
                                         msg.confidence > 0.8
@@ -1725,7 +1773,7 @@ export default function Home() {
                                       style={{ width: `${msg.confidence * 100}%` }}
                                     />
                                   </div>
-                                  <span className="text-[10px] font-mono text-zinc-400 font-bold">{(msg.confidence * 100).toFixed(0)}%</span>
+                                  <span className="text-[10px] font-mono text-[rgb(var(--text-muted))] font-bold">{(msg.confidence * 100).toFixed(0)}%</span>
                                 </div>
                               )}
                             </div>
@@ -1733,8 +1781,8 @@ export default function Home() {
 
                           {/* Trace block */}
                           {msg.traces && msg.traces.length > 0 && (
-                            <details className="text-[10.5px] text-zinc-400 bg-[rgb(var(--surface))]/30 border border-[rgb(var(--border))]/60 rounded-xl p-3.5 mt-3 transition-all duration-200">
-                              <summary className="cursor-pointer font-bold text-zinc-300 select-none hover:text-zinc-100 transition-colors flex items-center gap-1.5">
+                            <details className="text-[10.5px] text-[rgb(var(--text-muted))] bg-[rgb(var(--surface))]/30 border border-[rgb(var(--border))]/60 rounded-xl p-3.5 mt-3 transition-all duration-200">
+                              <summary className="cursor-pointer font-bold text-[rgb(var(--text-primary))]/80 select-none hover:text-[rgb(var(--text-primary))] transition-colors flex items-center gap-1.5">
                                 <span>👀</span> View Multi-Agent Traces ({msg.traces.length} steps)
                               </summary>
                               <div className="mt-3.5 space-y-3 font-mono border-l border-[rgb(var(--border))] pl-3 max-h-48 overflow-y-auto text-[10px] leading-relaxed">
@@ -1751,14 +1799,14 @@ export default function Home() {
                                         [{trace.type}]
                                       </span>
                                       {trace.tool_name && (
-                                        <span className="text-[9px] text-zinc-500">
+                                        <span className="text-[9px] text-[rgb(var(--text-muted))]">
                                           ({trace.tool_name})
                                         </span>
                                       )}
                                     </div>
-                                    <p className="text-[10.5px] text-zinc-300 mt-1 whitespace-pre-wrap leading-normal">{trace.content}</p>
+                                    <p className="text-[10.5px] text-[rgb(var(--text-primary))]/80 mt-1 whitespace-pre-wrap leading-normal">{trace.content}</p>
                                     {trace.duration_ms > 0 && (
-                                      <span className="text-[8.5px] text-zinc-500 mt-0.5">Duration: {trace.duration_ms.toFixed(0)}ms</span>
+                                      <span className="text-[8.5px] text-[rgb(var(--text-muted))] mt-0.5">Duration: {trace.duration_ms.toFixed(0)}ms</span>
                                     )}
                                   </div>
                                 ))}
@@ -1849,26 +1897,43 @@ export default function Home() {
                       </svg>
                     </button>
                   </div>
-                  <p className="text-[10px] text-zinc-500 text-center mt-2.5 font-sans">
+                  <p className="text-[10px] text-[rgb(var(--text-muted))] text-center mt-2.5 font-sans">
                     KAIROS memory indices can make mistakes. Verify critical facts and historical timestamps.
                   </p>
                 </form>
               </div>
  
-              {/* Right Column: Obsidian Graph Panel */}
+              {/* Right Column: Obsidian Graph Panel — a full-screen overlay
+                  on mobile (a fixed-pixel side column can't coexist with the
+                  chat column below ~700px), a resizable flex sibling on desktop */}
               {isGraphOpen && (
                 <div
-                  className="border-l border-[rgb(var(--border))]/55 flex flex-col h-full bg-[rgb(var(--bg))]/40 shrink-0 relative"
-                  style={{
+                  className={`border-l border-[rgb(var(--border))]/55 flex flex-col bg-[rgb(var(--bg))] md:bg-[rgb(var(--bg))]/40 shrink-0 relative ${
+                    isMobile ? "fixed inset-0 z-40 h-full" : "h-full"
+                  }`}
+                  style={isMobile ? undefined : {
                     width: `${graphWidth}px`,
                     transition: isResizing ? "none" : "width 0.3s ease",
                   }}
                 >
-                  {/* Left Resize Handle */}
+                  {isMobile && (
+                    <button
+                      onClick={() => setIsGraphOpen(false)}
+                      className="absolute top-3 left-3 z-50 p-2 bg-[rgb(var(--surface))]/90 backdrop-blur-md border border-[rgb(var(--border))]/60 rounded-xl text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] shadow-lg"
+                      title="Close Graph"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                  {/* Left Resize Handle (desktop only — dragging a 1px hairline is impractical with touch) */}
+                  {!isMobile && (
                   <div
                     className="w-1 cursor-col-resize hover:bg-[rgb(var(--accent))]/45 active:bg-[rgb(var(--accent))] transition-colors absolute left-0 top-0 bottom-0 z-50"
                     onMouseDown={handleResize("horizontal", setGraphWidth, 300, 800, true)}
                   />
+                  )}
                   <div className="flex-1 relative overflow-hidden">
                     <DecisionGraph
                       nodes={currentGraphNodes}
@@ -1897,14 +1962,16 @@ export default function Home() {
                   <div
                     className="relative shrink-0"
                     style={{
-                      height: `${sourcesHeight}px`,
+                      height: isMobile ? "35vh" : `${sourcesHeight}px`,
                     }}
                   >
-                    {/* Top Height Resize Handle */}
+                    {/* Top Height Resize Handle (desktop only) */}
+                    {!isMobile && (
                     <div
                       className="h-1 cursor-row-resize hover:bg-[rgb(var(--accent))]/45 active:bg-[rgb(var(--accent))] transition-colors absolute left-0 right-0 top-0 z-50"
                       onMouseDown={handleResize("vertical", setSourcesHeight, 140, 500, true)}
                     />
+                    )}
                     <div className="h-full overflow-hidden">
                       <SourcePanel sources={activeSources} />
                     </div>
@@ -2018,11 +2085,11 @@ export default function Home() {
               <div className="space-y-3.5">
                 <div className="flex justify-between items-center">
                   <h4 className="text-sm font-bold text-[rgb(var(--text-primary))] tracking-tight">Ingestion Container Logs</h4>
-                  <span className="text-[9px] font-mono bg-zinc-950 text-emerald-400 px-2 py-0.5 rounded-lg border border-zinc-800 font-bold">
+                  <span className="text-[9px] font-mono bg-[rgb(var(--bg))] text-emerald-400 px-2 py-0.5 rounded-lg border border-[rgb(var(--border))] font-bold">
                     SYSTEM: OK
                   </span>
                 </div>
-                <div className="bg-black rounded-2xl border border-zinc-800/80 p-5 h-44 font-mono text-[10px] text-emerald-500 overflow-y-auto shadow-inner flex flex-col gap-1.5">
+                <div className="bg-[rgb(var(--bg))] rounded-2xl border border-[rgb(var(--border))]/80 p-5 h-44 font-mono text-[10px] text-emerald-500 overflow-y-auto shadow-inner flex flex-col gap-1.5">
                   {logs.map((log, index) => (
                     <div key={index} className="whitespace-pre-wrap leading-relaxed">
                       {log}
@@ -2079,7 +2146,7 @@ export default function Home() {
                   placeholder="Search index database..."
                   className="w-full bg-[rgb(var(--surface))] border border-[rgb(var(--border))]/85 rounded-xl pl-9 pr-4 py-2.5 text-xs text-[rgb(var(--text-primary))] focus:outline-none focus:border-[rgb(var(--border-focus))] placeholder-zinc-500 transition-colors"
                 />
-                <svg className="w-4 h-4 text-zinc-500 absolute left-3 top-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-4 h-4 text-[rgb(var(--text-muted))] absolute left-3 top-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
@@ -2450,8 +2517,8 @@ export default function Home() {
                     </p>
 
                     {/* Personal MCP URL + copy */}
-                    <div className="flex items-stretch gap-2 bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-1 mt-1">
-                      <div className="flex-1 px-2.5 py-2 font-mono text-[10px] text-zinc-400 overflow-x-auto whitespace-nowrap scrollbar-none flex items-center select-all">
+                    <div className="flex items-stretch gap-2 bg-[rgb(var(--bg))]/80 border border-[rgb(var(--border))]/80 rounded-xl p-1 mt-1">
+                      <div className="flex-1 px-2.5 py-2 font-mono text-[10px] text-[rgb(var(--text-muted))] overflow-x-auto whitespace-nowrap scrollbar-none flex items-center select-all">
                         {mcpConnection?.url || "Generating connection URL…"}
                       </div>
                       <button
@@ -2480,7 +2547,7 @@ export default function Home() {
                 </div>
 
                 {/* Right Card: Activity Monitor & Usage Graph */}
-                <div className="p-6 rounded-2xl border border-[rgb(var(--accent))]/25 bg-gradient-to-br from-[rgb(var(--accent))]/10 via-zinc-900/40 to-zinc-950/60 flex flex-col gap-4 shadow-lg shadow-black/40">
+                <div className="p-6 rounded-2xl border border-[rgb(var(--accent))]/25 bg-gradient-to-br from-[rgb(var(--accent))]/10 via-[rgb(var(--surface))]/40 to-[rgb(var(--bg))]/60 flex flex-col gap-4 shadow-lg shadow-black/10">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="text-lg">📊</span>
@@ -2494,15 +2561,15 @@ export default function Home() {
 
                   {/* Live Stats */}
                   <div className="grid grid-cols-3 gap-2 border-b border-[rgb(var(--border))]/40 pb-3">
-                    <div className="text-center bg-zinc-950/40 border border-zinc-900 rounded-xl p-2">
+                    <div className="text-center bg-[rgb(var(--bg))]/40 border border-[rgb(var(--border))]/70 rounded-xl p-2">
                       <div className="text-[14px] font-bold text-[rgb(var(--text-primary))] font-mono">{mcpStats.totalRequests}</div>
                       <div className="text-[8px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Total Hits</div>
                     </div>
-                    <div className="text-center bg-zinc-950/40 border border-zinc-900 rounded-xl p-2">
+                    <div className="text-center bg-[rgb(var(--bg))]/40 border border-[rgb(var(--border))]/70 rounded-xl p-2">
                       <div className="text-[14px] font-bold text-violet-400 font-mono">{mcpStats.readOps}</div>
                       <div className="text-[8px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Reads</div>
                     </div>
-                    <div className="text-center bg-zinc-950/40 border border-zinc-900 rounded-xl p-2">
+                    <div className="text-center bg-[rgb(var(--bg))]/40 border border-[rgb(var(--border))]/70 rounded-xl p-2">
                       <div className="text-[14px] font-bold text-emerald-400 font-mono">{mcpStats.writeOps}</div>
                       <div className="text-[8px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Writes</div>
                     </div>
@@ -2511,7 +2578,7 @@ export default function Home() {
                   {/* Simulated 7-day Usage Graph */}
                   <div className="flex flex-col gap-1.5">
                     <span className="text-[9px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Weekly Request Load</span>
-                    <div className="h-16 flex items-end justify-between gap-1 px-2 pt-2 border-b border-zinc-800">
+                    <div className="h-16 flex items-end justify-between gap-1 px-2 pt-2 border-b border-[rgb(var(--border))]">
                       {[
                         { day: "M", val: 120, height: "h-[35%]", color: "from-indigo-600 to-indigo-500" },
                         { day: "T", val: 85, height: "h-[25%]", color: "from-indigo-600 to-indigo-500" },
@@ -2523,12 +2590,12 @@ export default function Home() {
                       ].map((item, idx) => (
                         <div key={idx} className="flex-1 flex flex-col items-center group relative cursor-pointer">
                           {/* Tooltip */}
-                          <div className="absolute bottom-full mb-1 scale-0 group-hover:scale-100 bg-zinc-950 border border-zinc-800 text-[8.5px] font-mono text-zinc-300 px-1.5 py-0.5 rounded shadow-xl whitespace-nowrap z-10 transition-transform">
+                          <div className="absolute bottom-full mb-1 scale-0 group-hover:scale-100 bg-[rgb(var(--surface))] border border-[rgb(var(--border))] text-[8.5px] font-mono text-[rgb(var(--text-primary))]/85 px-1.5 py-0.5 rounded shadow-xl whitespace-nowrap z-10 transition-transform">
                             {item.val} calls
                           </div>
                           {/* Bar */}
                           <div className={`w-full ${item.height} bg-gradient-to-t ${item.color} rounded-t-sm transition-all duration-500 ${item.live ? 'animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.3)]' : ''}`} />
-                          <span className="text-[8px] font-mono text-zinc-500 mt-1">{item.day}</span>
+                          <span className="text-[8px] font-mono text-[rgb(var(--text-muted))] mt-1">{item.day}</span>
                         </div>
                       ))}
                     </div>
@@ -2545,12 +2612,12 @@ export default function Home() {
                         { name: "Antigravity", active: true, color: "text-violet-400/80", bg: "bg-violet-500/5", border: "border-violet-500/10", icon: "antigravity" }
                       ].map((c) => (
                         <div key={c.name} className={`flex items-center gap-2 p-1.5 rounded-xl border ${c.bg} ${c.border}`}>
-                          <div className={`w-6 h-6 rounded-lg bg-zinc-950 flex items-center justify-center ${c.color} shrink-0`}>
+                          <div className={`w-6 h-6 rounded-lg bg-[rgb(var(--bg))] flex items-center justify-center ${c.color} shrink-0`}>
                             {McpLogos[c.icon as keyof typeof McpLogos]}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="text-[10px] font-semibold text-zinc-300 truncate">{c.name}</div>
-                            <div className="text-[7.5px] font-mono text-zinc-500 uppercase tracking-wider">Connected</div>
+                            <div className="text-[10px] font-semibold text-[rgb(var(--text-primary))]/85 truncate">{c.name}</div>
+                            <div className="text-[7.5px] font-mono text-[rgb(var(--text-muted))] uppercase tracking-wider">Connected</div>
                           </div>
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                         </div>
@@ -2561,14 +2628,14 @@ export default function Home() {
                   {/* Live Request Stream */}
                   <div className="flex flex-col gap-2 mt-1">
                     <span className="text-[9px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Live API Request Stream</span>
-                    <div className="bg-zinc-950/90 border border-zinc-900 rounded-xl p-3 font-mono text-[9px] h-[105px] overflow-y-auto flex flex-col gap-1.5 scrollbar-thin scrollbar-thumb-zinc-800">
+                    <div className="bg-[rgb(var(--bg))]/90 border border-[rgb(var(--border))]/70 rounded-xl p-3 font-mono text-[9px] h-[105px] overflow-y-auto flex flex-col gap-1.5 scrollbar-thin">
                       {mcpLogs.map((log) => (
-                        <div key={log.id} className="flex items-start gap-1.5 text-zinc-400 hover:text-zinc-200 transition-colors animate-[fadeIn_0.15s_ease-out]">
-                          <span className="text-zinc-600 shrink-0">[{log.timestamp}]</span>
+                        <div key={log.id} className="flex items-start gap-1.5 text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] transition-colors animate-[fadeIn_0.15s_ease-out]">
+                          <span className="text-[rgb(var(--text-muted))]/70 shrink-0">[{log.timestamp}]</span>
                           <span className="text-violet-400 font-bold shrink-0">{log.client}</span>
-                          <span className="text-zinc-500 shrink-0">→</span>
+                          <span className="text-[rgb(var(--text-muted))] shrink-0">→</span>
                           <span className="text-emerald-400 font-semibold shrink-0">{log.tool}</span>
-                          <span className="text-zinc-500 truncate">{log.params}</span>
+                          <span className="text-[rgb(var(--text-muted))] truncate">{log.params}</span>
                         </div>
                       ))}
                     </div>
@@ -2620,8 +2687,8 @@ export default function Home() {
                           { step: "2️⃣", title: "Open Settings", desc: "Go to your Claude account settings and click on 'Connectors'." },
                           { step: "3️⃣", title: "Paste & Connect", desc: "Add a custom connector, paste your URL, and click save. Done!" }
                         ].map((s, idx) => (
-                          <div key={idx} className="flex flex-col gap-1.5 p-3 rounded-xl bg-zinc-900/30 border border-zinc-800/40">
-                            <span className="font-bold text-sm text-zinc-300">{s.step} {s.title}</span>
+                          <div key={idx} className="flex flex-col gap-1.5 p-3 rounded-xl bg-[rgb(var(--surface-hover))]/40 border border-[rgb(var(--border))]/60">
+                            <span className="font-bold text-sm text-[rgb(var(--text-primary))]/85">{s.step} {s.title}</span>
                             <span className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">{s.desc}</span>
                           </div>
                         ))}
@@ -2640,8 +2707,8 @@ export default function Home() {
                           { step: "2️⃣", title: "Enable Dev mode", desc: "In ChatGPT settings under 'Connectors', toggle developer mode on." },
                           { step: "3️⃣", title: "Paste URL", desc: "Click 'Add custom connector', paste your link, and register. Done!" }
                         ].map((s, idx) => (
-                          <div key={idx} className="flex flex-col gap-1.5 p-3 rounded-xl bg-zinc-900/30 border border-zinc-800/40">
-                            <span className="font-bold text-sm text-zinc-300">{s.step} {s.title}</span>
+                          <div key={idx} className="flex flex-col gap-1.5 p-3 rounded-xl bg-[rgb(var(--surface-hover))]/40 border border-[rgb(var(--border))]/60">
+                            <span className="font-bold text-sm text-[rgb(var(--text-primary))]/85">{s.step} {s.title}</span>
                             <span className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">{s.desc}</span>
                           </div>
                         ))}
@@ -2658,8 +2725,8 @@ export default function Home() {
                         Cursor and Claude Desktop require a local JSON server configuration or command line tool. Follow these simple steps:
                       </p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                        <div className="flex flex-col gap-2 p-3 rounded-xl bg-zinc-900/30 border border-zinc-800/40">
-                          <span className="font-bold text-zinc-300">Option A: Cursor (Simple UI setup)</span>
+                        <div className="flex flex-col gap-2 p-3 rounded-xl bg-[rgb(var(--surface-hover))]/40 border border-[rgb(var(--border))]/60">
+                          <span className="font-bold text-[rgb(var(--text-primary))]/85">Option A: Cursor (Simple UI setup)</span>
                           <span className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">
                             1. Open Cursor Settings → Features → MCP.<br />
                             2. Click "+ Add New MCP Server".<br />
@@ -2667,8 +2734,8 @@ export default function Home() {
                             4. Click the "Advanced Developer Settings" toggle below and copy the command to paste.
                           </span>
                         </div>
-                        <div className="flex flex-col gap-2 p-3 rounded-xl bg-zinc-900/30 border border-zinc-800/40">
-                          <span className="font-bold text-zinc-300">Option B: Claude Desktop Config</span>
+                        <div className="flex flex-col gap-2 p-3 rounded-xl bg-[rgb(var(--surface-hover))]/40 border border-[rgb(var(--border))]/60">
+                          <span className="font-bold text-[rgb(var(--text-primary))]/85">Option B: Claude Desktop Config</span>
                           <span className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">
                             1. Open the Developer options section below.<br />
                             2. Copy the pre-generated JSON configuration.<br />
@@ -2693,8 +2760,8 @@ export default function Home() {
                           { step: "2️⃣", title: "Direct Commands", desc: "Use the built-in MCP server in CLI mode. Run: 'python mcp_server.py --stdio'." },
                           { step: "3️⃣", title: "Verify Actions", desc: "Type a prompt in the chat box or use tools to query/write context in real-time." }
                         ].map((s, idx) => (
-                          <div key={idx} className="flex flex-col gap-1.5 p-3 rounded-xl bg-zinc-900/30 border border-zinc-800/40">
-                            <span className="font-bold text-sm text-zinc-300">{s.step} {s.title}</span>
+                          <div key={idx} className="flex flex-col gap-1.5 p-3 rounded-xl bg-[rgb(var(--surface-hover))]/40 border border-[rgb(var(--border))]/60">
+                            <span className="font-bold text-sm text-[rgb(var(--text-primary))]/85">{s.step} {s.title}</span>
                             <span className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">{s.desc}</span>
                           </div>
                         ))}
@@ -2722,7 +2789,7 @@ export default function Home() {
                     <div key={t.name} className="p-4 rounded-xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 flex flex-col gap-2">
                       <div className="font-mono text-[11px]">
                         <span className="text-violet-400 font-bold">{t.name}</span>
-                        <span className="text-zinc-500">{t.sig}</span>
+                        <span className="text-[rgb(var(--text-muted))]">{t.sig}</span>
                       </div>
                       <p className="text-[10.5px] text-[rgb(var(--text-muted))] leading-relaxed">{t.desc}</p>
                     </div>
@@ -2780,7 +2847,7 @@ export default function Home() {
                             Best for local IDE integrations where the editor manages the server process via standard I/O.
                           </p>
                         </div>
-                        <pre className="bg-zinc-950/75 border border-zinc-800 rounded-xl p-3 font-mono text-[9.5px] text-zinc-300 overflow-x-auto select-all">
+                        <pre className="bg-[rgb(var(--bg))]/75 border border-[rgb(var(--border))] rounded-xl p-3 font-mono text-[9.5px] text-[rgb(var(--text-primary))]/85 overflow-x-auto select-all">
                           python mcp_server.py --stdio
                         </pre>
                       </div>
@@ -2795,7 +2862,7 @@ export default function Home() {
                             Runs a persistent HTTP event stream on port 8002. Useful for remote setups or webhooks.
                           </p>
                         </div>
-                        <pre className="bg-zinc-950/75 border border-zinc-800 rounded-xl p-3 font-mono text-[9.5px] text-zinc-300 overflow-x-auto select-all">
+                        <pre className="bg-[rgb(var(--bg))]/75 border border-[rgb(var(--border))] rounded-xl p-3 font-mono text-[9.5px] text-[rgb(var(--text-primary))]/85 overflow-x-auto select-all">
                           python mcp_server.py
                         </pre>
                       </div>
@@ -2815,7 +2882,7 @@ export default function Home() {
                             {copiedKey === "config" ? "✓ COPIED" : "COPY JSON"}
                           </button>
                         </div>
-                        <pre className="bg-zinc-950 border border-zinc-900 rounded-xl p-4 font-mono text-[10px] text-emerald-400 overflow-x-auto select-all leading-relaxed whitespace-pre">
+                        <pre className="bg-[rgb(var(--bg))] border border-[rgb(var(--border))] rounded-xl p-4 font-mono text-[10px] text-emerald-400 overflow-x-auto select-all leading-relaxed whitespace-pre">
 {mcpConnection?.claude_desktop_config
   ? JSON.stringify(mcpConnection.claude_desktop_config, null, 2)
   : `{
@@ -2823,7 +2890,7 @@ export default function Home() {
     "kairos": {
       "command": "python3",
       "args": [
-        "/Users/baljotchohan/Desktop/Kairos/kairos/mcp_server.py",
+        "/path/to/your/kairos/mcp_server.py",
         "--stdio"
       ],
       "env": {
@@ -2840,15 +2907,15 @@ export default function Home() {
                         <div className="flex justify-between items-center">
                           <span className="text-xs font-semibold text-[rgb(var(--text-primary))]">Cursor Command Line Setup</span>
                           <button
-                            onClick={() => copyToClipboard(`python3 /Users/baljotchohan/Desktop/Kairos/kairos/mcp_server.py --stdio`, "cursor-cmd")}
+                            onClick={() => copyToClipboard(`python3 /path/to/your/kairos/mcp_server.py --stdio`, "cursor-cmd")}
                             className="text-[9px] font-mono font-bold text-[rgb(var(--accent))] hover:underline"
                           >
                             {copiedKey === "cursor-cmd" ? "✓ COPIED" : "COPY COMMAND"}
                           </button>
                         </div>
-                        <div className="bg-zinc-950 border border-zinc-900 p-4 rounded-xl font-mono text-[10px] text-emerald-400 overflow-x-auto select-all whitespace-pre">
+                        <div className="bg-[rgb(var(--bg))] border border-[rgb(var(--border))] p-4 rounded-xl font-mono text-[10px] text-emerald-400 overflow-x-auto select-all whitespace-pre">
 {`command: python3
-args: /Users/baljotchohan/Desktop/Kairos/kairos/mcp_server.py --stdio
+args: /path/to/your/kairos/mcp_server.py --stdio
 env: MCP_TENANT_ID=${user?.uid || "mcp-system"}`}
                         </div>
                       </div>
