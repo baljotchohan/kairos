@@ -49,9 +49,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!code) {
+  if (!code || !code_verifier) {
     return NextResponse.json(
-      { error: "invalid_request", error_description: "code is required" },
+      { error: "invalid_request", error_description: "code and code_verifier are required" },
       { status: 400 }
     );
   }
@@ -72,19 +72,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Verify PKCE when code_verifier is present.
-  // SHA256(code_verifier) base64url (no padding) must match stored code_challenge.
-  if (payload.code_challenge && code_verifier) {
-    const computed = stripPadding(
-      crypto.createHash("sha256").update(code_verifier).digest("base64url")
+  // PKCE is required (authorize/route.ts rejects requests missing
+  // code_challenge), so always verify it here — never skip the check just
+  // because a field was omitted.
+  if (!payload.code_challenge) {
+    return NextResponse.json(
+      { error: "invalid_grant", error_description: "Authorization code has no associated PKCE challenge" },
+      { status: 400 }
     );
-    const stored = stripPadding(payload.code_challenge);
-    if (computed !== stored) {
-      return NextResponse.json(
-        { error: "invalid_grant", error_description: "PKCE verification failed" },
-        { status: 400 }
-      );
-    }
+  }
+  const computed = stripPadding(
+    crypto.createHash("sha256").update(code_verifier).digest("base64url")
+  );
+  const stored = stripPadding(payload.code_challenge);
+  if (computed !== stored) {
+    return NextResponse.json(
+      { error: "invalid_grant", error_description: "PKCE verification failed" },
+      { status: 400 }
+    );
   }
 
   // The MCP token was pre-minted by the backend (which holds MCP_CONNECT_SECRET).
