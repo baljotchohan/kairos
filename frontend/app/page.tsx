@@ -533,6 +533,242 @@ const STEPS = [
   { n: "04", title: "Ask", body: "Query in plain English over chat or any MCP client — cited answers in seconds, or a warning before you repeat a mistake." },
 ];
 
+/* ── Live-answer demo data (drives the animated showcase) ─────────────────── */
+type DemoSource = { label: string; kind: "slack" | "gmail" | "drive" | "notion" | "zoom" | "jira" };
+type DemoScenario = {
+  q: string;
+  answer: { text: string; bold?: boolean }[];
+  sources: DemoSource[];
+  meta: string;
+  risk?: number;
+};
+
+const DEMO_SCENARIOS: DemoScenario[] = [
+  {
+    q: "Why are we paying Vertex Logistics $191K every month?",
+    answer: [
+      { text: "Contract signed " },
+      { text: "November 2019", bold: true },
+      { text: " by John Smith, who left in 2022. It has " },
+      { text: "auto-renewed three times", bold: true },
+      { text: " and was never reviewed. Original rationale: sole-source fulfillment during the Series A ramp. No owner is on record today." },
+    ],
+    sources: [
+      { label: "Email · Nov 2019", kind: "gmail" },
+      { label: "#ops-vendors", kind: "slack" },
+      { label: "Vertex_MSA.pdf", kind: "drive" },
+    ],
+    meta: "3 sources · resolved in 3.9s",
+    risk: 82,
+  },
+  {
+    q: "Why did we choose React over Vue for the web app?",
+    answer: [
+      { text: "The frontend team voted " },
+      { text: "4–2 for React", bold: true },
+      { text: " in a March 2022 thread. Deciding factor: a larger hiring pool in the region. The Vue advocate, " },
+      { text: "Priya, is still on the team", bold: true },
+      { text: " — worth looping in before any reversal." },
+    ],
+    sources: [
+      { label: "#frontend-arch", kind: "slack" },
+      { label: "Stack Decision", kind: "notion" },
+    ],
+    meta: "2 sources · resolved in 3.2s",
+  },
+  {
+    q: "Has anyone tried to build a mobile app before?",
+    answer: [
+      { text: "Yes — attempted in " },
+      { text: "2021", bold: true },
+      { text: ", shut down at the March board meeting. Root cause: no in-house mobile expertise. Cost: " },
+      { text: "₹40 lakh", bold: true },
+      { text: ". The postmortem is in memory — read it before you repeat it." },
+    ],
+    sources: [
+      { label: "Board Call · Mar 2021", kind: "zoom" },
+      { label: "Mobile_Postmortem", kind: "drive" },
+    ],
+    meta: "2 sources · resolved in 4.1s",
+  },
+];
+
+const COMPARE = [
+  {
+    them: "Confluence · Notion · SharePoint",
+    themDesc: "Store the documents you deliberately sit down and write.",
+    us: "Understands the decisions you actually make",
+    usDesc: "Mines Slack threads, email approvals, and meeting calls — where real choices live, unwritten.",
+  },
+  {
+    them: "Full-text search",
+    themDesc: "Returns ten blue links and leaves the reasoning to you.",
+    us: "Returns the answer, with its sources",
+    usDesc: "Who decided, when, why, what was rejected — synthesized and cited in one reply.",
+  },
+  {
+    them: "A passive archive",
+    themDesc: "Waits, silent, until someone thinks to search it.",
+    us: "A proactive watchdog",
+    usDesc: "Scores decision debt, flags contradictions, and warns you before a mistake repeats.",
+  },
+];
+
+/* ── Live-answer demo showcase ───────────────────────────────────────────── */
+const SOURCE_TINT: Record<DemoSource["kind"], string> = {
+  slack: "#E01E5A",
+  gmail: "#ea4335",
+  drive: "#00ac47",
+  notion: "#e5e5e5",
+  zoom: "#2D8CFF",
+  jira: "#0065FF",
+};
+
+function DemoShowcase() {
+  const [idx, setIdx] = useState(0);
+  const [typed, setTyped] = useState("");
+  const [phase, setPhase] = useState<"typing" | "thinking" | "answer">("typing");
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    const scenario = DEMO_SCENARIOS[idx];
+    const q = scenario.q;
+    let cancelled = false;
+    const push = (fn: () => void, ms: number) => {
+      const t = setTimeout(() => {
+        if (!cancelled) fn();
+      }, ms);
+      timers.current.push(t);
+    };
+
+    setTyped("");
+    setPhase("typing");
+
+    // Typewriter for the question
+    let i = 0;
+    const typeNext = () => {
+      if (cancelled) return;
+      i += 1;
+      setTyped(q.slice(0, i));
+      if (i < q.length) {
+        push(typeNext, 26 + Math.random() * 26);
+      } else {
+        push(() => setPhase("thinking"), 420);
+        push(() => setPhase("answer"), 420 + 1150);
+        // Hold the answer, then advance to the next scenario
+        push(() => setIdx((p) => (p + 1) % DEMO_SCENARIOS.length), 420 + 1150 + 5200);
+      }
+    };
+    push(typeNext, 340);
+
+    return () => {
+      cancelled = true;
+      timers.current.forEach(clearTimeout);
+      timers.current = [];
+    };
+  }, [idx]);
+
+  const scenario = DEMO_SCENARIOS[idx];
+
+  return (
+    <div className="relative rounded-2xl border border-violet-500/20 bg-[#0a0a0c]/90 backdrop-blur-xl shadow-[0_30px_80px_-30px_rgba(139,92,246,0.5)] overflow-hidden">
+      {/* window chrome */}
+      <div className="flex items-center gap-2 px-4 h-11 border-b border-white/5 bg-white/[0.02]">
+        <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
+        <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
+        <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
+        <span className="ml-3 text-[11px] font-mono text-zinc-500">kairos · ask anything</span>
+        <span className="ml-auto flex items-center gap-1.5 text-[10px] font-mono text-emerald-400/80">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> live
+        </span>
+      </div>
+
+      <div className="p-5 sm:p-7 min-h-[340px] flex flex-col">
+        {/* user question */}
+        <div className="flex justify-end mb-5">
+          <div className="max-w-[85%] px-4 py-2.5 rounded-2xl rounded-br-md bg-violet-600/90 text-white text-sm sm:text-[15px] leading-relaxed font-sans">
+            {typed}
+            {phase === "typing" && <span className="inline-block w-[2px] h-[1.05em] align-middle ml-0.5 bg-white/80 animate-pulse" />}
+          </div>
+        </div>
+
+        {/* assistant */}
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center text-xs font-black text-white shadow-[0_0_18px_rgba(139,92,246,0.5)]">
+            K
+          </div>
+          <div className="flex-1 min-w-0">
+            {phase === "thinking" && (
+              <div className="flex items-center gap-1.5 h-8" aria-label="KAIROS is thinking">
+                {[0, 1, 2].map((d) => (
+                  <span
+                    key={d}
+                    className="w-1.5 h-1.5 rounded-full bg-violet-400"
+                    style={{ animation: `demoWave 1s ease-in-out ${d * 0.15}s infinite` }}
+                  />
+                ))}
+                <span className="ml-2 text-xs font-mono text-zinc-500">searching decision graph…</span>
+              </div>
+            )}
+
+            {phase === "answer" && (
+              <div style={{ animation: "demoFade .5s cubic-bezier(.16,1,.3,1)" }}>
+                <p className="text-sm sm:text-[15px] text-zinc-200 leading-relaxed font-sans">
+                  {scenario.answer.map((seg, k) =>
+                    seg.bold ? (
+                      <strong key={k} className="text-white font-semibold">{seg.text}</strong>
+                    ) : (
+                      <span key={k}>{seg.text}</span>
+                    )
+                  )}
+                </p>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  {scenario.sources.map((s) => (
+                    <span
+                      key={s.label}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-mono text-zinc-300"
+                      style={{ borderColor: `${SOURCE_TINT[s.kind]}44`, background: `${SOURCE_TINT[s.kind]}12` }}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: SOURCE_TINT[s.kind] }} />
+                      {s.label}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="mt-4 flex items-center gap-3 text-[11px] font-mono text-zinc-500">
+                  <span>{scenario.meta}</span>
+                  {scenario.risk != null && (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-300">
+                      ⚠ risk {scenario.risk}/100
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* scenario dots */}
+        <div className="mt-auto pt-6 flex items-center justify-center gap-2">
+          {DEMO_SCENARIOS.map((_, k) => (
+            <button
+              key={k}
+              onClick={() => setIdx(k)}
+              aria-label={`Show example ${k + 1}`}
+              className="h-1.5 rounded-full transition-all"
+              style={{
+                width: k === idx ? 22 : 6,
+                background: k === idx ? "rgb(167,139,250)" : "rgba(255,255,255,0.18)",
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Page ────────────────────────────────────────────────────────────────── */
 export default function Landing() {
   const router = useRouter();
@@ -589,11 +825,12 @@ export default function Landing() {
             <KairosLogo size={30} />
             <span className="text-lg font-bold tracking-[0.2em]">KAIROS</span>
           </div>
-          <div className="hidden md:flex items-center gap-7 text-xs font-mono tracking-wide text-zinc-400">
+          <div className="hidden md:flex items-center gap-6 text-xs font-mono tracking-wide text-zinc-400">
+            <a href="#demo" className="hover:text-white transition-colors">Demo</a>
             <a href="#problem" className="hover:text-white transition-colors">The Problem</a>
             <a href="#agents" className="hover:text-white transition-colors">Agents</a>
             <a href="#intelligence" className="hover:text-white transition-colors">Intelligence</a>
-            <a href="#connectors" className="hover:text-white transition-colors">Connectors</a>
+            <a href="#why" className="hover:text-white transition-colors">Why KAIROS</a>
             <a href="#mcp" className="hover:text-white transition-colors">MCP</a>
           </div>
           <button
@@ -679,6 +916,25 @@ export default function Landing() {
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
           </svg>
+        </div>
+      </section>
+
+      {/* ── Live demo ── */}
+      <section id="demo" className="relative py-24 md:py-28 px-6">
+        <div className="max-w-5xl mx-auto">
+          <Reveal className="text-center mb-12">
+            <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">See It Answer</p>
+            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">
+              Ask the question everyone forgot.
+            </h2>
+            <p className="mt-4 text-zinc-400 max-w-2xl mx-auto font-sans">
+              Not a search box that hands you links — a straight answer with the who, when, and why,
+              every claim traced to its source.
+            </p>
+          </Reveal>
+          <Reveal delay={120}>
+            <DemoShowcase />
+          </Reveal>
         </div>
       </section>
 
@@ -885,6 +1141,43 @@ export default function Landing() {
                     <div className="text-[11px] text-zinc-500 font-mono mt-0.5">{c.sub}</div>
                   </div>
                 </TiltCard>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Comparison ── */}
+      <section id="why" className="relative py-28 px-6">
+        <div className="max-w-5xl mx-auto">
+          <Reveal className="text-center mb-16">
+            <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">Why Not Just Confluence?</p>
+            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">
+              A wiki stores what you write.
+              <br />
+              <span className="text-zinc-500">KAIROS remembers what you decided.</span>
+            </h2>
+          </Reveal>
+
+          <div className="space-y-4">
+            {COMPARE.map((row, i) => (
+              <Reveal key={row.us} delay={i * 110}>
+                <div className="grid md:grid-cols-2 rounded-2xl border border-violet-500/15 overflow-hidden">
+                  <div className="p-6 md:p-7 bg-white/[0.015] border-b md:border-b-0 md:border-r border-violet-500/10">
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <span className="text-zinc-600 text-lg leading-none">✕</span>
+                      <span className="text-sm font-semibold text-zinc-400">{row.them}</span>
+                    </div>
+                    <p className="text-sm text-zinc-500 leading-relaxed font-sans">{row.themDesc}</p>
+                  </div>
+                  <div className="p-6 md:p-7 bg-gradient-to-br from-violet-600/[0.08] to-transparent">
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <span className="text-violet-400 text-lg leading-none">✓</span>
+                      <span className="text-sm font-semibold text-white">{row.us}</span>
+                    </div>
+                    <p className="text-sm text-zinc-300 leading-relaxed font-sans">{row.usDesc}</p>
+                  </div>
+                </div>
               </Reveal>
             ))}
           </div>
