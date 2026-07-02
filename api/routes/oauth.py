@@ -33,16 +33,37 @@ from core.token_crypto import encrypt_token_data, decrypt_token_data
 
 router = APIRouter(prefix="/oauth", tags=["oauth"])
 
-# Persistent signing key derived from stable environment secret
-_OAUTH_SIGNING_KEY = hashlib.sha256(
-    (os.environ.get("TOKEN_ENCRYPTION_KEY") or os.environ.get("MCP_CONNECT_SECRET") or "kairos-oauth-state-signing-fallback").encode()
-).digest()
+
+def _oauth_signing_key() -> bytes:
+    """Persistent signing key for OAuth state tokens, derived from a stable
+    environment secret. Every /oauth/{service}/callback is unauthenticated
+    and trusts the state token alone to bind a connector token to a
+    user_uid — if this key were guessable, an attacker could forge a state
+    for an arbitrary victim uid and have their own connector credentials
+    written into that victim's oauth_tokens row. So, like
+    core/token_crypto.py's cipher key and core/mcp_auth.py's signing secret,
+    refuse to fall back to a hardcoded value in production; only dev/test
+    may use the deterministic fallback. Computed lazily (not at import time)
+    so the production check runs per-call, matching mcp_auth.py's _secret()
+    — at import time PYTEST_CURRENT_TEST isn't set yet, so an eager,
+    module-level check would wrongly reject test collection too.
+    """
+    explicit = os.environ.get("TOKEN_ENCRYPTION_KEY") or os.environ.get("MCP_CONNECT_SECRET")
+    if explicit:
+        return hashlib.sha256(explicit.encode()).digest()
+    is_testing = "PYTEST_CURRENT_TEST" in os.environ or os.environ.get("TESTING", "").lower() == "true"
+    if not config.DEBUG and not is_testing:
+        raise RuntimeError(
+            "TOKEN_ENCRYPTION_KEY or MCP_CONNECT_SECRET is required in production mode "
+            "to sign OAuth state tokens."
+        )
+    return hashlib.sha256(b"kairos-oauth-state-signing-fallback").digest()
 
 def _generate_state_token(uid: str) -> str:
     """Generates a signed state token containing the user UID and an expiry timestamp."""
     expires = int(time.time()) + 600  # 10 minutes expiry
     payload = f"{uid}:{expires}"
-    sig = hmac.new(_OAUTH_SIGNING_KEY, payload.encode(), hashlib.sha256).hexdigest()
+    sig = hmac.new(_oauth_signing_key(), payload.encode(), hashlib.sha256).hexdigest()
     return f"{payload}:{sig}"
 
 def _verify_state_token(state: str) -> str | None:
@@ -56,7 +77,7 @@ def _verify_state_token(state: str) -> str | None:
         if time.time() > expires:
             return None  # Token expired
         payload = f"{uid}:{expires_str}"
-        expected_sig = hmac.new(_OAUTH_SIGNING_KEY, payload.encode(), hashlib.sha256).hexdigest()
+        expected_sig = hmac.new(_oauth_signing_key(), payload.encode(), hashlib.sha256).hexdigest()
         if hmac.compare_digest(sig, expected_sig):
             return uid
     except Exception:
@@ -182,8 +203,16 @@ def _popup_error(msg: str) -> HTMLResponse:
 
 
 def _callback_url(service: str) -> str:
-    """Redirect URI registered in each OAuth app — points to this backend."""
-    return f"{config.BACKEND_URL}/api/oauth/{service}/callback"
+    """Redirect URI registered in each OAuth app — points to this backend.
+
+    Falls back to the deployed HF Space URL when BACKEND_URL is unset or
+    still pointing at localhost, so a misconfigured/missing env var never
+    sends a provider a redirect_uri they can't reach in production.
+    """
+    backend = config.BACKEND_URL
+    if not backend or "localhost" in backend or "127.0.0.1" in backend:
+        backend = "https://baljot07-kairos-backend.hf.space"
+    return f"{backend}/api/oauth/{service}/callback"
 
 
 # ── SLACK ─────────────────────────────────────────────────────────────────────
@@ -446,18 +475,12 @@ async def jira_callback(code: str = None, state: str = None, error: str = None):
 @router.get("/notion/start")
 async def notion_start(current_user: UserProfile = Depends(get_current_user)):
     state = _generate_state_token(current_user.uid)
-    # Use explicit NOTION_REDIRECT_URI if set, else derive from BACKEND_URL.
-    # Fallback ensures we never send localhost to Notion in production.
-    backend = config.BACKEND_URL
-    if not backend or "localhost" in backend or "127.0.0.1" in backend:
-        backend = "https://baljot07-kairos-backend.hf.space"
-    redirect_uri = f"{backend}/api/oauth/notion/callback"
     url = (
         "https://api.notion.com/v1/oauth/authorize"
         f"?client_id={config.NOTION_CLIENT_ID}"
         "&response_type=code"
         "&owner=user"
-        f"&redirect_uri={quote(redirect_uri, safe='')}"
+        f"&redirect_uri={quote(_callback_url('notion'), safe='')}"
         f"&state={state}"
     )
     return {"service": "notion", "url": url}
@@ -488,11 +511,7 @@ async def notion_callback(code: str = None, state: str = None, error: str = None
                 json={
                     "grant_type": "authorization_code",
                     "code": code,
-                    "redirect_uri": (
-                        f"https://baljot07-kairos-backend.hf.space/api/oauth/notion/callback"
-                        if ("localhost" in config.BACKEND_URL or "127.0.0.1" in config.BACKEND_URL or not config.BACKEND_URL)
-                        else _callback_url("notion")
-                    ),
+                    "redirect_uri": _callback_url("notion"),
                 },
             )
 
@@ -531,7 +550,14 @@ async def zoom_start(current_user: UserProfile = Depends(get_current_user)):
     # screen for this grant type, so opening a popup would just flash our own
     # callback. Connect server-side immediately and tell the frontend it's done
     # (no `url` → the button skips the popup and refreshes to "Connected").
-    if config.ZOOM_ACCOUNT_ID and config.ZOOM_CLIENT_ID and config.ZOOM_CLIENT_SECRET:
+    # This is ONE global account credential for the whole deployment (like
+    # Jira), so — same as Jira — only auto-connect it for the designated
+    # owner uid. Every other user falls through to the real per-user OAuth
+    # popup below instead of silently inheriting the deployer's own Zoom.
+    if (
+        config.ZOOM_ACCOUNT_ID and config.ZOOM_CLIENT_ID and config.ZOOM_CLIENT_SECRET
+        and current_user.uid == config.ZOOM_OWNER_UID
+    ):
         _store_token(current_user.uid, "zoom", {
             "mode": "s2s",
             "account_id": config.ZOOM_ACCOUNT_ID,
@@ -543,7 +569,9 @@ async def zoom_start(current_user: UserProfile = Depends(get_current_user)):
         return {"service": "zoom", "connected": True,
                 "message": "Zoom connected via account credentials."}
 
-    # No real credentials configured → simulated connect (demo mode).
+    # No real per-user OAuth app configured (and not the S2S owner) →
+    # simulated connect (demo mode) rather than granting anyone else the
+    # global Zoom account.
     if not config.ZOOM_CLIENT_ID or config.ZOOM_CLIENT_ID == "your_client_id":
         sim_url = f"{_callback_url('zoom')}?code=sim-zoom-code&state={state}"
         return {"service": "zoom", "url": sim_url}
