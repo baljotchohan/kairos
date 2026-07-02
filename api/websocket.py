@@ -21,6 +21,30 @@ log = logging.getLogger(__name__)
 
 ws_router = APIRouter()
 
+# verify_token(..., check_revoked=True) only runs once, at the initial HTTP
+# handshake — after that, a WebSocket stays open and fully authenticated for
+# its entire lifetime with no further check. If an account is disabled or a
+# token is revoked while a socket is already open, that connection would
+# otherwise keep working until the client happens to reconnect (which could
+# be up to the frontend's ~50-minute token-refresh interval away). Re-check
+# on this cadence instead so a revocation actually cuts the connection.
+_REVALIDATE_INTERVAL_SECONDS = 15 * 60
+
+
+async def _revalidate_loop(websocket: WebSocket, token: str, user_id: str) -> None:
+    try:
+        while True:
+            await asyncio.sleep(_REVALIDATE_INTERVAL_SECONDS)
+            try:
+                await asyncio.to_thread(verify_token, token)
+            except Exception:
+                log.warning("WebSocket re-validation failed for user %s — closing connection", user_id)
+                with contextlib.suppress(Exception):
+                    await websocket.close(code=4401, reason="Session no longer valid")
+                return
+    except asyncio.CancelledError:
+        pass
+
 
 async def _run_cancellably(websocket: WebSocket, work: Awaitable[Any]) -> Any:
     """Run `work` (a query_with_memory/run_ingestion call) racing against the
@@ -84,6 +108,8 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     orchestrator = websocket.app.state.orchestrator
     user_id = user_profile.uid
+
+    revalidate_task = asyncio.ensure_future(_revalidate_loop(websocket, token, user_id))
 
     try:
         while True:
@@ -192,3 +218,7 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.send_json({"type": "error", "message": "An unexpected error occurred. Please refresh and try again."})
         except Exception:
             pass
+    finally:
+        revalidate_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await revalidate_task
