@@ -57,6 +57,12 @@ class Config:
     ZOOM_ACCOUNT_ID: str = os.getenv("ZOOM_ACCOUNT_ID", "")
     ZOOM_CLIENT_ID: str = os.getenv("ZOOM_CLIENT_ID", "")
     ZOOM_CLIENT_SECRET: str = os.getenv("ZOOM_CLIENT_SECRET", "")
+    # Like Jira, a Server-to-Server Zoom app has no per-user OAuth — it's one
+    # account credential for the whole deployment. To avoid silently handing
+    # every signed-up user the deployer's own Zoom recordings, the S2S
+    # auto-connect in /oauth/zoom/start is only allowed for this owner uid.
+    # Other users must use the real per-user OAuth popup flow instead.
+    ZOOM_OWNER_UID: str = os.getenv("ZOOM_OWNER_UID", "") or os.getenv("DEMO_USER_ID", "demo-helios")
 
     # ── Notion ─────────────────────────────────────────────────────────────────
     NOTION_CLIENT_ID: str = os.getenv("NOTION_CLIENT_ID", "")
