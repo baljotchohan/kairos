@@ -439,9 +439,8 @@ const Logos = {
     </svg>
   ),
   notion: (
-    <svg viewBox="0 0 24 24" className="w-7 h-7">
-      <rect width="24" height="24" rx="5.5" fill="#000000" />
-      <path d="M7.1 6.3c0-.66.44-1.1 1.1-1.1h1.62l6.08 9.3V6.3c0-.66.44-1.1 1.1-1.1h.6c.66 0 1.1.44 1.1 1.1v11.4c0 .66-.44 1.1-1.1 1.1h-1.56l-6.14-9.4v8.4c0 .66-.44 1.1-1.1 1.1h-.6c-.66 0-1.1-.44-1.1-1.1V6.3z" fill="#fff" />
+    <svg viewBox="0 0 24 24" className="w-7 h-7" fill="currentColor">
+      <path d="M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L17.86 1.968c-.42-.326-.981-.7-2.055-.607L3.01 2.295c-.466.046-.56.28-.374.466zm.793 3.08v13.904c0 .747.373 1.027 1.214.98l14.523-.84c.841-.046.935-.56.935-1.167V6.354c0-.606-.233-.933-.748-.887l-15.177.887c-.56.047-.747.327-.747.933zm14.337.745c.093.42 0 .84-.42.888l-.7.14v10.264c-.608.327-1.168.514-1.635.514-.748 0-.935-.234-1.495-.933l-4.577-7.19v6.96l1.468.327s0 .84-1.168.84l-3.222.186c-.093-.186 0-.653.327-.746l.84-.233V9.854L7.1 9.76c-.094-.42.14-1.026.793-1.073l3.456-.233 4.764 7.284V9.107l-1.215-.14c-.093-.514.28-.887.747-.933z" />
     </svg>
   ),
 };
@@ -453,34 +452,50 @@ const PROBLEMS = [
     title: "The vendor nobody remembers",
     body: "A contract signed in 2019 auto-renewed three times. The person who signed it left in 2022. Nobody knew why you were still paying.",
     accent: "#f43f5e",
+    mockClip: {
+      type: "email",
+      sender: "Finance Alert Bot",
+      subject: "Auto-Renewal Charge: $191,666.67",
+      snippet: "Charge successful for Account: Enterprise DB Server. Admin Owner on record: Bob Miller (Status: INACTIVE). Contact billing support if this is an error."
+    }
   },
   {
     badge: "6 months lost",
     title: "Onboarding archaeology",
     body: "A new engineer asks 'why React, not Vue?' The decision-maker is gone. The answer is buried in a 2022 Slack thread no one can find.",
     accent: "#8b5cf6",
+    mockClip: {
+      type: "slack",
+      sender: "Sarah (Tech Lead) — 2022",
+      subject: "#engineering-core",
+      snippet: "Sarah: 'Switching to React because the new design system matches our requirements out-of-the-box. Let's document this so nobody re-opens the discussion in 2 years!'"
+    }
   },
   {
     badge: "₹40L burned",
     title: "The mistake you repeat",
     body: "'Has anyone tried a mobile app before?' Yes — it failed in 2021 for a reason you're about to hit again. The postmortem was never read.",
     accent: "#f59e0b",
+    mockClip: {
+      type: "doc",
+      sender: "Postmortem Doc",
+      subject: "Mobile App Pilot (Archived)",
+      snippet: "Status: Abandoned. Key takeaway: DO NOT attempt iOS/Android builds without dedicated native Swift/Kotlin devs. Core web team hit severe package dependency loops."
+    }
   },
 ];
 
 const AGENTS = {
   extraction: [
-    { icon: "💬", name: "Slack Agent", desc: "Reads every channel & thread, flags decision moments, captures participants and outcomes." },
-    { icon: "✉️", name: "Email Agent", desc: "Scans Gmail for approvals, sign-offs and escalations — links threads to the decisions they made." },
-    { icon: "📁", name: "Drive Agent", desc: "Parses docs, specs and proposals in Google Drive for the key choices written down inside them." },
-    { icon: "🗂️", name: "Notion Agent", desc: "Walks pages and databases recursively, extracting decisions logged in specs and wikis." },
-    { icon: "🎥", name: "Meeting Agent", desc: "Transcribes Zoom recordings with Whisper, then pinpoints decisions, timestamps and who was in the room." },
-  ],
-  reasoning: [
-    { icon: "🧠", name: "Synthesis Engine", desc: "Fuses every source into one decision graph and answers your questions with citations." },
-    { icon: "🔀", name: "Router", desc: "Classifies every query — search, live data, general chat, or ingest — before anything else runs." },
-    { icon: "🔎", name: "Retrieval Engine", desc: "Hybrid semantic + keyword + graph-neighbor search, personalized to your profile and history." },
-    { icon: "⚡", name: "Live Agent", desc: "Skips memory entirely for on-demand questions — \"how many unread emails do I have?\" — answered live." },
+    { icon: "💬", name: "Slack Ingestion Agent", desc: "Reads every channel & thread, flags decision moments, captures participants and outcomes." },
+    { icon: "✉️", name: "Email Analysis Agent", desc: "Scans Gmail for approvals, sign-offs and escalations — links threads to the decisions they made." },
+    { icon: "📁", name: "Specs & Docs Agent", desc: "Parses docs, specs and proposals in Google Drive for the key choices written down inside them." },
+    { icon: "🗂️", name: "Notion Extraction Agent", desc: "Walks pages and databases recursively, extracting decisions logged in specs and wikis." },
+    { icon: "🎥", name: "Meeting Transcription Agent", desc: "Transcribes Zoom recordings with Whisper, then pinpoints decisions, timestamps and who was in the room." },
+    { icon: "🔀", name: "Intent Router Agent", desc: "Classifies every query — search, live data, general chat, or ingest — before running downstream agents." },
+    { icon: "🧠", name: "Context Synthesis Hub", desc: "Fuses every source into one unified decision graph and compiles answers with sources." },
+    { icon: "🔎", name: "Research & Retrieval Agent", desc: "Hybrid semantic + keyword + graph-neighbor search, personalized to user profile and history." },
+    { icon: "⚡", name: "Live Data Agent", desc: "Skips memory entirely to pull live counts, active seats, and real-time status dynamically." },
   ],
 };
 
@@ -532,6 +547,234 @@ const STEPS = [
   { n: "03", title: "Graph", body: "Every decision auto-links to related ones by topic, person, and timeframe — a living, physics-simulated web." },
   { n: "04", title: "Ask", body: "Query in plain English over chat or any MCP client — cited answers in seconds, or a warning before you repeat a mistake." },
 ];
+
+const MCP_TOOL_LABELS: Record<string, string> = {
+  get_context: "Get Context",
+  store_context: "Store Context",
+  search_decisions: "Search Decisions",
+  find_similar_decisions: "Precedent Check",
+  detect_decision_patterns: "Pattern Detection",
+  predict_decision_risk: "Risk Assessment",
+};
+
+const SIMULATION_LOGS = [
+  { agent: "Intent Router", text: "Evaluating query... Target: database licensing contract and budget approvals. Activating context extraction loop." },
+  { agent: "Slack Agent", text: "Scanning #billing-v2. Found thread (April 2021) between Sarah & Bob: 'Approved database budget cap increase to $15k/mo.'" },
+  { agent: "Email Agent", text: "Scanned Gmail attachments. Found 'DB_Licensing_Final_Signed.pdf' signed by Sarah on 2021-05-10." },
+  { agent: "Drive Agent", text: "Parsing Google Drive file 'DB Architecture Proposal v4'. Note: 'DB licenses lock us in for 5 years, auto-renewing annually unless cancelled by Q3.'" },
+  { agent: "Notion Agent", text: "Reading Wiki page 'Infrastructure Costs'. Found edit log: 'Vendor contract has a 90-day auto-renew window, managed by Sarah.'" },
+  { agent: "Meeting Agent", text: "Transcribed audio of Zoom meeting 'Q2 Budget Alignment'. Sarah: 'We will retain the current database licensing because transition costs are too high.'" },
+  { agent: "Retrieval Agent", text: "Running hybrid semantic + graph search for 'database licensing'. Linked 5 matching historical data points." },
+  { agent: "Synthesis Agent", text: "Compiling decision profile. Node created: 'Database licensing lock-in (2021)' with 5 supporting citations. Scoring decision risk..." },
+  { agent: "Live Agent", text: "Querying active seat count via CRM API... Status: 45 active seats currently assigned." }
+];
+
+const SIMULATION_VERDICT = {
+  verdict: "Yes, the database contract was signed by Sarah on May 10, 2021. It auto-renews annually every August. The contract has a 5-year lock-in with a budget cap of $15k/month. There are currently 45 active seats assigned.",
+  citations: [
+    { label: "#billing-v2 (Slack Thread)", url: "#" },
+    { label: "DB_Licensing_Final_Signed.pdf (Gmail)", url: "#" },
+    { label: "Infrastructure Costs (Notion Wiki)", url: "#" },
+    { label: "Q2 Budget Alignment (Zoom Recording)", url: "#" }
+  ]
+};
+
+/* ── Logo Container for Connectors ──────────────────────────────────────── */
+function ConnectorMascot({ name, logo }: { name: string; logo: React.ReactNode }) {
+  return (
+    <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-violet-500/15 flex items-center justify-center group-hover:border-violet-500/35 transition-colors duration-300 shadow-[0_0_15px_rgba(139,92,246,0.05)]">
+      <div className="w-7 h-7 flex items-center justify-center select-none">
+        {logo}
+      </div>
+    </div>
+  );
+}
+
+/* ── Interactive Ingestion and Thinking Simulation Demo ─────────────────── */
+function AgentThinkingDemo() {
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [currentStep, setCurrentStep] = useState(-1);
+  const [logs, setLogs] = useState<{ agent: string; text: string }[]>([]);
+  const [nodes, setNodes] = useState<{ id: string; label: string; x: number; y: number; edgeTo?: string }[]>([]);
+  const terminalRef = useRef<HTMLDivElement>(null);
+
+  const simulationSteps = [
+    { id: "router", label: "Intent Router", x: 140, y: 100, agent: "Intent Router", text: "Evaluating query... Target: database licensing contract and budget approvals. Activating context extraction loop." },
+    { id: "slack", label: "Slack Agent", x: 50, y: 50, edgeTo: "router", agent: "Slack Agent", text: "Scanning #billing-v2. Found thread (April 2021) between Sarah & Bob: 'Approved database budget cap increase to $15k/mo.'" },
+    { id: "email", label: "Email Agent", x: 130, y: 30, edgeTo: "router", agent: "Email Agent", text: "Scanned Gmail attachments. Found 'DB_Licensing_Final_Signed.pdf' signed by Sarah on 2021-05-10." },
+    { id: "drive", label: "Drive Agent", x: 210, y: 40, edgeTo: "router", agent: "Drive Agent", text: "Parsing Google Drive file 'DB Architecture Proposal v4'. Note: 'DB licenses lock us in for 5 years, auto-renewing annually unless cancelled by Q3.'" },
+    { id: "notion", label: "Notion Agent", x: 50, y: 150, edgeTo: "router", agent: "Notion Agent", text: "Reading Wiki page 'Infrastructure Costs'. Found edit log: 'Vendor contract has a 90-day auto-renew window, managed by Sarah.'" },
+    { id: "meeting", label: "Meeting Agent", x: 120, y: 170, edgeTo: "router", agent: "Meeting Agent", text: "Transcribed audio of Zoom meeting 'Q2 Budget Alignment'. Sarah: 'We will retain the current database licensing because transition costs are too high.'" },
+    { id: "retrieval", label: "Retrieval Hub", x: 280, y: 100, edgeTo: "drive", agent: "Retrieval Agent", text: "Running hybrid semantic + graph search for 'database licensing'. Linked 5 matching historical data points." },
+    { id: "synthesis", label: "Synthesis Engine", x: 360, y: 120, edgeTo: "retrieval", agent: "Synthesis Agent", text: "Compiling decision profile. Node created: 'Database licensing lock-in (2021)' with 5 supporting citations. Scoring decision risk..." },
+    { id: "live", label: "Live API Agent", x: 430, y: 70, edgeTo: "synthesis", agent: "Live Agent", text: "Querying active seat count via CRM API... Status: 45 active seats currently assigned." }
+  ];
+
+  const startSimulation = () => {
+    setIsSimulating(true);
+    setCurrentStep(0);
+    setLogs([
+      { agent: "System", text: "Initializing multi-agent decision capture protocol..." }
+    ]);
+    setNodes([]);
+  };
+
+  useEffect(() => {
+    if (!isSimulating || currentStep < 0) return;
+
+    if (currentStep < simulationSteps.length) {
+      const timer = setTimeout(() => {
+        const stepData = simulationSteps[currentStep];
+        setLogs(prev => [...prev, { agent: stepData.agent, text: stepData.text }]);
+        setNodes(prev => [...prev, { id: stepData.id, label: stepData.label, x: stepData.x, y: stepData.y, edgeTo: stepData.edgeTo }]);
+        setCurrentStep(prev => prev + 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else {
+      setIsSimulating(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSimulating, currentStep]);
+
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [logs]);
+
+  return (
+    <div className="w-full max-w-4xl mx-auto rounded-2xl border border-violet-500/20 bg-[#0d0d11]/80 backdrop-blur-md overflow-hidden shadow-2xl">
+      {/* Header */}
+      <div className="px-6 py-4 border-b border-violet-500/10 flex items-center justify-between bg-violet-950/10">
+        <div className="flex items-center gap-2">
+          <span className="w-3.5 h-3.5 rounded-full bg-red-500/80" />
+          <span className="w-3.5 h-3.5 rounded-full bg-yellow-500/80" />
+          <span className="w-3.5 h-3.5 rounded-full bg-green-500/80" />
+          <span className="text-xs font-mono text-zinc-500 ml-2">multi-agent-orchestrator.sh</span>
+        </div>
+        <button
+          onClick={startSimulation}
+          disabled={isSimulating && currentStep < simulationSteps.length}
+          className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-violet-600 hover:bg-violet-500 disabled:bg-violet-950/40 text-white transition-all shadow-[0_0_15px_rgba(139,92,246,0.3)]"
+        >
+          {isSimulating && currentStep < simulationSteps.length ? "Processing..." : "Trigger 9 Agents Simulation"}
+        </button>
+      </div>
+
+      <div className="grid md:grid-cols-2 h-[420px]">
+        {/* Left: Terminal logs */}
+        <div ref={terminalRef} className="border-r border-violet-500/10 bg-[#09090c] p-5 font-mono text-xs overflow-y-auto flex flex-col gap-3 scrollbar-thin text-left">
+          {logs.map((log, i) => (
+            <div key={i} className="animate-message-in">
+              <span className="text-violet-400">[{log.agent}]</span>{" "}
+              <span className="text-zinc-300">{log.text}</span>
+            </div>
+          ))}
+          {isSimulating && currentStep < simulationSteps.length && (
+            <div className="flex items-center gap-1.5 text-zinc-500">
+              <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-ping" />
+              <span>Agents processing next layer...</span>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Live Graph Drawing */}
+        <div className="relative bg-[#0d0d12] flex flex-col items-center justify-center p-4">
+          {nodes.length === 0 ? (
+            <div className="text-center text-zinc-600 text-xs font-mono">
+              <p>Waiting to trigger simulation...</p>
+              <p className="mt-2 text-[10px] text-zinc-700">Click the button top-right to watch the 9-agent extraction run live.</p>
+            </div>
+          ) : (
+            <div className="w-full h-full relative">
+              <svg className="w-full h-full min-h-[300px]" viewBox="0 0 500 240">
+                {/* Draw edges */}
+                {nodes.map(node => {
+                  if (!node.edgeTo) return null;
+                  const parent = nodes.find(n => n.id === node.edgeTo);
+                  if (!parent) return null;
+                  return (
+                    <line
+                      key={`edge-${node.id}`}
+                      x1={parent.x}
+                      y1={parent.y}
+                      x2={node.x}
+                      y2={node.y}
+                      stroke="rgba(139,92,246,0.35)"
+                      strokeWidth="1.5"
+                      strokeDasharray="4 4"
+                      className="animate-[fadeIn_0.5s_ease-out]"
+                    />
+                  );
+                })}
+
+                {/* Draw nodes */}
+                {nodes.map(node => (
+                  <g key={node.id} className="animate-[popIn_0.4s_cubic-bezier(.34,1.56,.64,1)]">
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r="7"
+                      fill="#a855f7"
+                      className="animate-pulse"
+                      style={{ animationDuration: "2s" }}
+                    />
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r="12"
+                      fill="none"
+                      stroke="rgba(168,85,247,0.3)"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x={node.x}
+                      y={node.y - 14}
+                      textAnchor="middle"
+                      fill="#e4e4e7"
+                      fontSize="9.5"
+                      fontFamily="monospace"
+                      fontWeight="bold"
+                    >
+                      {node.label}
+                    </text>
+                  </g>
+                ))}
+              </svg>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Synthesis Output box */}
+      {currentStep >= simulationSteps.length && (
+        <div className="p-6 border-t border-violet-500/20 bg-violet-950/15 animate-message-in flex flex-col md:flex-row gap-5 items-start text-left">
+          <div className="shrink-0 w-10 h-10 rounded-full bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-lg">
+            🧠
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-violet-300 font-mono mb-2 uppercase tracking-wide">Synthesized Verdict</h4>
+            <p className="text-sm text-zinc-200 leading-relaxed font-sans italic">
+              &quot;{SIMULATION_VERDICT.verdict}&quot;
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2 items-center">
+              <span className="text-[10.5px] font-mono uppercase tracking-wider text-zinc-500">Cited Sources:</span>
+              {SIMULATION_VERDICT.citations.map((c, i) => (
+                <span
+                  key={i}
+                  className="px-2 py-0.5 rounded border border-violet-500/25 bg-violet-500/5 text-[11px] text-violet-300 hover:border-violet-500/50 hover:bg-violet-500/10 cursor-pointer font-sans"
+                >
+                  {c.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 /* ── Page ────────────────────────────────────────────────────────────────── */
 export default function Landing() {
@@ -585,12 +828,17 @@ export default function Landing() {
         }}
       >
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <KairosLogo size={30} />
-            <span className="text-lg font-bold tracking-[0.2em]">KAIROS</span>
+          <div className="flex items-center gap-2">
+            <KairosLogo size={34} showText={true} className="text-white" />
+            <span className="text-zinc-400 font-sans text-xl font-light select-none inline-flex items-center justify-center h-9">×</span>
+            {/* Real AMD Logo SVG */}
+            <svg viewBox="0 5.5 24 13" className="w-auto fill-current text-white shrink-0" style={{ height: "36px" }} role="img" xmlns="http://www.w3.org/2000/svg">
+              <path d="M18.324 9.137l1.559 1.56h2.556v2.557L24 14.814V9.137zM2 9.52l-2 4.96h1.309l.37-.982H3.9l.408.982h1.338L3.432 9.52zm4.209 0v4.955h1.238v-3.092l1.338 1.562h.188l1.338-1.556v3.091h1.238V9.52H10.47l-1.592 1.845L7.287 9.52zm6.283 0v4.96h2.057c1.979 0 2.88-1.046 2.88-2.472 0-1.36-.937-2.488-2.747-2.488zm1.237.91h.792c1.17 0 1.63.711 1.63 1.57 0 .728-.372 1.572-1.616 1.572h-.806zm-10.985.273l.791 1.932H2.008zm17.137.307l-1.604 1.603v2.25h2.246l1.604-1.607h-2.246z" />
+            </svg>
           </div>
-          <div className="hidden md:flex items-center gap-7 text-xs font-mono tracking-wide text-zinc-400">
+          <div className="hidden md:flex items-center gap-5 text-[10px] font-mono tracking-wide text-zinc-400">
             <a href="#problem" className="hover:text-white transition-colors">The Problem</a>
+            <a href="#how" className="hover:text-white transition-colors">How It Works</a>
             <a href="#agents" className="hover:text-white transition-colors">Agents</a>
             <a href="#intelligence" className="hover:text-white transition-colors">Intelligence</a>
             <a href="#connectors" className="hover:text-white transition-colors">Connectors</a>
@@ -683,7 +931,7 @@ export default function Landing() {
       </section>
 
       {/* ── Problem ── */}
-      <section id="problem" className="relative py-28 px-6">
+      <section id="problem" className="relative py-16 px-6">
         <div className="max-w-6xl mx-auto">
           <Reveal className="text-center mb-16">
             <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">The Problem</p>
@@ -697,15 +945,33 @@ export default function Landing() {
           <div className="grid md:grid-cols-3 gap-6">
             {PROBLEMS.map((p, i) => (
               <Reveal key={p.title} delay={i * 120}>
-                <TiltCard className="h-full p-7 rounded-2xl border border-violet-500/15 bg-gradient-to-b from-violet-500/[0.02] to-transparent hover:border-violet-500/35 transition-colors">
-                  <div
-                    className="inline-block px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold mb-5"
-                    style={{ background: `${p.accent}1a`, color: p.accent }}
-                  >
-                    {p.badge}
+                <TiltCard className="h-full p-7 rounded-2xl border border-violet-500/15 bg-gradient-to-b from-violet-500/[0.02] to-transparent hover:border-violet-500/35 transition-colors flex flex-col justify-between">
+                  <div>
+                    <div
+                      className="inline-block px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold mb-5 text-left"
+                      style={{ background: `${p.accent}1a`, color: p.accent }}
+                    >
+                      {p.badge}
+                    </div>
+                    <h3 className="text-xl font-semibold mb-3 text-left">{p.title}</h3>
+                    <p className="text-sm text-zinc-400 leading-relaxed font-sans mb-6 text-left">{p.body}</p>
                   </div>
-                  <h3 className="text-xl font-semibold mb-3">{p.title}</h3>
-                  <p className="text-sm text-zinc-400 leading-relaxed font-sans">{p.body}</p>
+                  
+                  {/* Contextual mock artifact snippet */}
+                  <div className="mt-auto p-4 rounded-xl bg-black/45 border border-zinc-800/60 font-sans text-left">
+                    <div className="flex items-center justify-between gap-2 mb-2 text-[10px] font-mono text-zinc-500">
+                      <span className="flex items-center gap-1">
+                        {p.mockClip.type === "slack" && <span className="text-[#36C5F0]">💬</span>}
+                        {p.mockClip.type === "email" && <span className="text-[#ea4335]">✉️</span>}
+                        {p.mockClip.type === "doc" && <span className="text-[#a855f7]">📁</span>}
+                        {p.mockClip.sender}
+                      </span>
+                      <span>{p.mockClip.subject}</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-300 leading-relaxed font-mono font-light select-none whitespace-pre-line border-l-2 pl-2.5" style={{ borderColor: p.accent }}>
+                      {p.mockClip.snippet}
+                    </p>
+                  </div>
                 </TiltCard>
               </Reveal>
             ))}
@@ -714,32 +980,24 @@ export default function Landing() {
       </section>
 
       {/* ── How it works ── */}
-      <section id="how" className="relative py-28 px-6">
+      <section id="how" className="relative py-16 px-6">
         <div className="max-w-6xl mx-auto">
           <Reveal className="text-center mb-16">
-            <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">How It Works</p>
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">From raw chatter to cited answers</h2>
+            <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">Live Demonstration</p>
+            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">Watch KAIROS Work in Real-Time</h2>
+            <p className="mt-4 text-zinc-400 max-w-2xl mx-auto font-sans">
+              Watch how our parallel agent grid parses unstructured streams of company chatter, extracts the underlying context, and maps it directly to a unified decision memory graph.
+            </p>
           </Reveal>
 
-          <div className="grid md:grid-cols-4 gap-5 relative">
-            <div className="hidden md:block absolute top-8 left-[12%] right-[12%] h-px bg-gradient-to-r from-violet-500/0 via-violet-500/30 to-violet-500/0" />
-            {STEPS.map((s, i) => (
-              <Reveal key={s.n} delay={i * 100}>
-                <div className="relative flex flex-col items-center text-center gap-3">
-                  <div className="relative z-10 w-16 h-16 rounded-2xl border border-violet-500/25 bg-[#0b0b0d] flex items-center justify-center text-lg font-mono font-bold text-violet-300 shadow-[0_0_24px_rgba(139,92,246,0.15)]">
-                    {s.n}
-                  </div>
-                  <h3 className="text-base font-semibold">{s.title}</h3>
-                  <p className="text-sm text-zinc-400 leading-relaxed font-sans max-w-[15rem]">{s.body}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
+          <Reveal>
+            <AgentThinkingDemo />
+          </Reveal>
         </div>
       </section>
 
       {/* ── Agents ── */}
-      <section id="agents" className="relative py-28 px-6 bg-gradient-to-b from-transparent via-violet-950/10 to-transparent">
+      <section id="agents" className="relative py-16 px-6 bg-gradient-to-b from-transparent via-violet-950/10 to-transparent">
         <div className="max-w-6xl mx-auto">
           <Reveal className="text-center mb-16">
             <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">The Engine</p>
@@ -750,26 +1008,11 @@ export default function Landing() {
             </p>
           </Reveal>
 
-          <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-5">Extraction Agents</p>
+          <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-5">Core Parallel Agents</p>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5 mb-14">
             {AGENTS.extraction.map((a, i) => (
               <Reveal key={a.name} delay={i * 80}>
-                <div className="group h-full p-6 rounded-2xl border border-violet-500/15 bg-white/[0.02] hover:bg-white/[0.04] hover:border-violet-500/40 transition-all">
-                  <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform">
-                    {a.icon}
-                  </div>
-                  <h3 className="text-lg font-semibold mb-2">{a.name}</h3>
-                  <p className="text-sm text-zinc-400 leading-relaxed font-sans">{a.desc}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-
-          <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-5">Reasoning Layer</p>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
-            {AGENTS.reasoning.map((a, i) => (
-              <Reveal key={a.name} delay={i * 80}>
-                <div className="group h-full p-6 rounded-2xl border border-violet-500/15 bg-white/[0.02] hover:bg-white/[0.04] hover:border-violet-500/40 transition-all">
+                <div className="group h-full p-6 rounded-2xl border border-violet-500/15 bg-white/[0.02] hover:bg-white/[0.04] hover:border-violet-500/40 transition-all text-left">
                   <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform">
                     {a.icon}
                   </div>
@@ -781,7 +1024,7 @@ export default function Landing() {
           </div>
 
           <Reveal delay={200}>
-            <div className="mt-8 p-6 rounded-2xl border border-violet-500/25 bg-violet-600/10">
+            <div className="mt-8 p-6 rounded-2xl border border-violet-500/25 bg-violet-600/10 text-left">
               <p className="text-sm text-zinc-300 leading-relaxed font-sans">
                 Powered by <span className="text-violet-300 font-semibold">Fireworks AI</span> on
                 AMD hardware — Qwen-3 for answers, Llama-3.3 for high-volume ingestion, with
@@ -793,7 +1036,7 @@ export default function Landing() {
       </section>
 
       {/* ── Decision Intelligence ── */}
-      <section id="intelligence" className="relative py-28 px-6 overflow-hidden">
+      <section id="intelligence" className="relative py-16 px-6 overflow-hidden">
         <div
           className="absolute top-0 right-0 w-[40rem] h-[40rem] rounded-full bg-fuchsia-700/10 blur-[150px] pointer-events-none"
         />
@@ -812,12 +1055,12 @@ export default function Landing() {
           <div className="grid md:grid-cols-3 gap-5 mb-10">
             {INTELLIGENCE.map((f, i) => (
               <Reveal key={f.tool} delay={i * 110}>
-                <TiltCard className="h-full p-6 rounded-2xl border border-violet-500/15 bg-gradient-to-b from-violet-500/[0.03] to-transparent hover:border-violet-500/40 transition-colors flex flex-col">
+                <TiltCard className="h-full p-6 rounded-2xl border border-violet-500/15 bg-gradient-to-b from-violet-500/[0.03] to-transparent hover:border-violet-500/40 transition-colors flex flex-col text-left">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-11 h-11 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-xl">
                       {f.icon}
                     </div>
-                    <span className="font-mono text-[10.5px] text-violet-400">{f.tool}()</span>
+                    <span className="font-mono text-[10.5px] text-violet-400">{MCP_TOOL_LABELS[f.tool] || f.tool}</span>
                   </div>
                   <h3 className="text-lg font-semibold mb-2.5">{f.title}</h3>
                   <p className="text-sm text-zinc-400 leading-relaxed font-sans mb-4">{f.body}</p>
@@ -830,7 +1073,7 @@ export default function Landing() {
           </div>
 
           <Reveal delay={340}>
-            <div className="p-6 md:p-8 rounded-2xl border border-violet-500/20 bg-[#0b0b0d] flex flex-col md:flex-row items-center gap-8">
+            <div className="p-6 md:p-8 rounded-2xl border border-violet-500/20 bg-[#0b0b0d] flex flex-col md:flex-row items-center gap-8 text-left">
               <div className="relative shrink-0 w-32 h-32">
                 <svg viewBox="0 0 36 36" className="w-32 h-32 -rotate-90">
                   <path d="M18 2.5 a15.5 15.5 0 0 1 0 31 a15.5 15.5 0 0 1 0 -31" fill="none" stroke="rgba(139,92,246,0.15)" strokeWidth="3" />
@@ -862,7 +1105,7 @@ export default function Landing() {
       </section>
 
       {/* ── Connectors ── */}
-      <section id="connectors" className="relative py-28 px-6">
+      <section id="connectors" className="relative py-16 px-6">
         <div className="max-w-6xl mx-auto">
           <Reveal className="text-center mb-16">
             <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">Connectors</p>
@@ -873,16 +1116,14 @@ export default function Landing() {
             </p>
           </Reveal>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 items-stretch">
             {CONNECTORS.map((c, i) => (
-              <Reveal key={c.key} delay={i * 80}>
-                <TiltCard className="h-full p-6 rounded-2xl border border-violet-500/15 bg-white/[0.02] hover:border-violet-500/35 transition-colors flex flex-col items-center text-center gap-3">
-                  <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-violet-500/15 flex items-center justify-center">
-                    {Logos[c.key]}
-                  </div>
+              <Reveal key={c.key} delay={i * 80} className="h-full">
+                <TiltCard className="h-full min-h-[225px] p-6 rounded-2xl border border-violet-500/15 bg-white/[0.02] hover:border-violet-500/35 transition-colors flex flex-col items-center justify-between text-center gap-3">
+                  <ConnectorMascot name={c.name} logo={Logos[c.key]} />
                   <div>
                     <div className="text-sm font-semibold">{c.name}</div>
-                    <div className="text-[11px] text-zinc-500 font-mono mt-0.5">{c.sub}</div>
+                    <div className="text-[11px] text-zinc-500 font-mono mt-1">{c.sub}</div>
                   </div>
                 </TiltCard>
               </Reveal>
@@ -892,40 +1133,28 @@ export default function Landing() {
       </section>
 
       {/* ── MCP ── */}
-      <section id="mcp" className="relative py-28 px-6 bg-gradient-to-b from-transparent via-violet-950/10 to-transparent">
+      <section id="mcp" className="relative py-16 px-6 bg-gradient-to-b from-transparent via-violet-950/10 to-transparent">
         <div className="max-w-6xl mx-auto">
           <Reveal className="text-center mb-16">
-            <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">The Memory Loop</p>
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">A two-way brain for Claude</h2>
+            <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">Integrations</p>
+            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">Kairos MCP</h2>
             <p className="mt-4 text-zinc-400 max-w-2xl mx-auto font-sans">
-              KAIROS exposes an MCP server over streamable HTTP. Claude Desktop, Cursor and Claude
-              Code read from <em>and</em> write to the same organizational memory — both get smarter
-              over time.
+              KAIROS exposes a Model Context Protocol (MCP) server over streamable HTTP. Your AI assistants read from and write to the same organizational memory, keeping your team's context perfectly aligned.
             </p>
           </Reveal>
 
           <div className="grid md:grid-cols-3 gap-5 mb-12">
             {MCP_TOOLS.map((t, i) => (
               <Reveal key={t.name} delay={i * 110}>
-                <div className="h-full p-6 rounded-2xl border border-violet-500/15 bg-[#0c0c0e] hover:border-violet-500/30 transition-all">
+                <div className="h-full p-6 rounded-2xl border border-violet-500/15 bg-[#0c0c0e] hover:border-violet-500/30 transition-all text-left">
                   <div className="font-mono text-sm mb-3">
-                    <span className="text-violet-300">{t.name}</span>
-                    <span className="text-zinc-600">{t.sig}</span>
+                    <span className="text-violet-300">{MCP_TOOL_LABELS[t.name] || t.name}</span>
                   </div>
                   <p className="text-sm text-zinc-400 leading-relaxed font-sans">{t.desc}</p>
                 </div>
               </Reveal>
             ))}
           </div>
-
-          <Reveal>
-            <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-mono text-zinc-400">
-              <span className="px-4 py-2 rounded-lg border border-violet-500/25 bg-violet-500/5 text-violet-200">KAIROS Memory</span>
-              <span className="text-violet-500">⇄</span>
-              <span className="px-4 py-2 rounded-lg border border-violet-500/20 bg-white/[0.03]">Claude</span>
-              <span className="text-zinc-600 ml-2">context out · knowledge in</span>
-            </div>
-          </Reveal>
         </div>
       </section>
 
@@ -935,7 +1164,7 @@ export default function Landing() {
           <div className="w-[36rem] h-[36rem] rounded-full bg-violet-700/15 blur-[150px]" />
         </div>
         <Reveal className="relative max-w-3xl mx-auto text-center">
-          <KairosLogo size={56} className="mx-auto mb-8" />
+          <KairosLogo size={56} showText={true} className="mx-auto mb-8 text-white" />
           <h2 className="text-4xl md:text-6xl font-bold tracking-tight">
             Stop losing the <span className="text-violet-300">why</span>.
           </h2>
@@ -955,8 +1184,7 @@ export default function Landing() {
       <footer className="border-t border-violet-950/40 py-10 px-6">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-zinc-500 font-mono">
           <div className="flex items-center gap-2.5">
-            <KairosLogo size={22} />
-            <span className="tracking-[0.2em] font-semibold text-zinc-300">KAIROS</span>
+            <KairosLogo size={22} showText={true} className="text-zinc-300" />
           </div>
           <p>Built by Antigravity · MIT License · &quot;Every company forgets why. KAIROS never does.&quot;</p>
         </div>
@@ -964,3 +1192,4 @@ export default function Landing() {
     </main>
   );
 }
+
