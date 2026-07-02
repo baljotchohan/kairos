@@ -3,8 +3,9 @@ Fireworks AI client — all LLM and embedding calls go through here.
 Uses AMD GPU hardware via Fireworks API (OpenAI-compatible endpoint).
 Never import openai directly in agents/connectors — use this client.
 
-Provider priority for text completions: Groq → Gemini → Fireworks
-On 429 (rate limit), automatically falls back to the next provider.
+Provider priority for text completions: Fireworks (AMD hardware, hackathon
+requirement) → Groq → Gemini. On 429 (rate limit) or a dead key, automatically
+falls back to the next provider.
 """
 
 import json
