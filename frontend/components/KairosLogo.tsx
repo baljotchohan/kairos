@@ -109,7 +109,7 @@ export default function KairosLogo({ className = "", size = "100%", showText = f
           x="94"
           y="54"
           fill="currentColor"
-          fontFamily="'Alice', serif"
+          fontFamily="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Arial, sans-serif"
           fontSize="46"
           fontWeight="bold"
           letterSpacing="0.18em"

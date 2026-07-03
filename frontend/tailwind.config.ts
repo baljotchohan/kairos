@@ -39,7 +39,15 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        // Apple system-font stack: -apple-system / BlinkMacSystemFont resolve to
+        // the real San Francisco (SF Pro) on Mac/iOS Safari & Chrome automatically —
+        // SF Pro's font files aren't legally distributable on a public website
+        // (Apple licenses them for apps on Apple platforms only), so this system-UI
+        // approach is how sites legitimately get the genuine Apple look. Named
+        // fallbacks cover the rare case where SF Pro Display/Text is locally
+        // installed but the browser doesn't map -apple-system correctly.
+        sans: ["-apple-system", "BlinkMacSystemFont", "SF Pro Display", "SF Pro Text", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
+        serif: ["-apple-system", "BlinkMacSystemFont", "SF Pro Display", "SF Pro Text", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
         mono: ["JetBrains Mono", "Fira Code", "monospace"],
       },
       animation: {
