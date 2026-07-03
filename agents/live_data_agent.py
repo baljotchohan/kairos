@@ -771,7 +771,10 @@ class LiveDataAgent(BaseAgent):
         c = self._connectors.get("github")
         if not c:
             return {"error": "GitHub is not connected."}
-        repos = await c.list_repos(limit=limit)
+        try:
+            repos = await c.list_repos(limit=limit)
+        except Exception as e:
+            return {"error": f"GitHub API error — could not fetch repos: {e}"}
         for r in repos:
             self._add_source(r.get("name", ""), r.get("updated", ""), "GitHub", r.get("url", ""))
         return {"count": len(repos), "repos": repos}
@@ -780,21 +783,30 @@ class LiveDataAgent(BaseAgent):
         c = self._connectors.get("github")
         if not c:
             return {"error": "GitHub is not connected."}
-        prs = await c.my_open_pull_requests(limit=limit)
+        try:
+            prs = await c.my_open_pull_requests(limit=limit)
+        except Exception as e:
+            return {"error": f"GitHub API error — could not fetch pull requests: {e}"}
         return self._fmt_github_items(prs)
 
     async def _tool_github_my_issues(self, limit: int = 15) -> Any:
         c = self._connectors.get("github")
         if not c:
             return {"error": "GitHub is not connected."}
-        issues = await c.my_open_issues(limit=limit)
+        try:
+            issues = await c.my_open_issues(limit=limit)
+        except Exception as e:
+            return {"error": f"GitHub API error — could not fetch issues: {e}"}
         return self._fmt_github_items(issues)
 
     async def _tool_github_search(self, query: str, limit: int = 15) -> Any:
         c = self._connectors.get("github")
         if not c:
             return {"error": "GitHub is not connected."}
-        results = await c.search_issues(query=query, limit=limit)
+        try:
+            results = await c.search_issues(query=query, limit=limit)
+        except Exception as e:
+            return {"error": f"GitHub API error — could not search: {e}"}
         return self._fmt_github_items(results)
 
     def _fmt_github_items(self, items: list[dict]) -> dict:

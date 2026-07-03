@@ -71,7 +71,12 @@ class GitHubConnector:
             return None
 
     async def list_repos(self, limit: int = 15) -> list[dict]:
-        """Repos the user owns/collaborates on, most recently updated first."""
+        """Repos the user owns/collaborates on, most recently updated first.
+
+        Raises RuntimeError on a real API failure (bad/expired token, wrong
+        scope, network error) instead of swallowing it into an empty list —
+        LiveDataAgent needs to tell "0 repos" apart from "couldn't check",
+        otherwise a broken token silently reports as an empty GitHub account."""
         if not self._ok():
             return []
         try:
@@ -93,9 +98,12 @@ class GitHubConnector:
                     }
                     for r in resp.json()
                 ]
+        except httpx.HTTPStatusError as e:
+            print(f"[GitHubConnector] list_repos error: {e.response.status_code} {e.response.text[:200]}")
+            raise RuntimeError(f"GitHub API returned {e.response.status_code}: {e.response.text[:200]}") from e
         except Exception as e:
             print(f"[GitHubConnector] list_repos error: {e}")
-            return []
+            raise RuntimeError(f"GitHub request failed: {e}") from e
 
     async def my_open_pull_requests(self, limit: int = 15) -> list[dict]:
         """PRs authored by the authenticated user, open, across all their repos."""
@@ -121,9 +129,12 @@ class GitHubConnector:
                 )
                 resp.raise_for_status()
                 data = resp.json()
+        except httpx.HTTPStatusError as e:
+            print(f"[GitHubConnector] search_issues error ({q}): {e.response.status_code} {e.response.text[:200]}")
+            raise RuntimeError(f"GitHub API returned {e.response.status_code}: {e.response.text[:200]}") from e
         except Exception as e:
             print(f"[GitHubConnector] search_issues error ({q}): {e}")
-            return []
+            raise RuntimeError(f"GitHub request failed: {e}") from e
 
         out = []
         for item in data.get("items", []):
