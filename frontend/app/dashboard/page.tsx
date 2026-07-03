@@ -240,6 +240,7 @@ export default function Home() {
     drive: "synced",
     jira: "synced",
     zoom: "synced",
+    github: "synced",
   });
 
   const [slackToken, setSlackToken] = useState("xoxb-8241793264-9182371239-••••••••");
@@ -1056,6 +1057,7 @@ export default function Home() {
       case "notion database":
       case "notion_page":
       case "notion_db": return "N";
+      case "github": return "⌥";
       default: return "◆";
     }
   };
@@ -2062,13 +2064,14 @@ export default function Home() {
               {/* Connected APIs */}
               <div className="space-y-4">
                 <h4 className="text-sm font-bold text-[rgb(var(--text-primary))] tracking-tight">Ingestion Connectors</h4>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-3.5">
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-3.5">
                   {[
                     { key: "slack", name: "Slack", details: "Workspace API" },
                     { key: "gmail", name: "Gmail", details: "OAuth Client" },
                     { key: "drive", name: "G Drive", details: "Specs Scraper" },
                     { key: "jira", name: "JIRA Cloud", details: "REST Sync" },
                     { key: "zoom", name: "Zoom Sync", details: "Whisper audio" },
+                    { key: "github", name: "GitHub", details: "PRs & Issues" },
                   ].map((plat) => (
                     <div key={plat.key} className="p-4 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/30 flex flex-col justify-between h-28 hover:border-[rgb(var(--border-focus))] transition-all">
                       <div className="flex items-center justify-between">
@@ -2125,7 +2128,7 @@ export default function Home() {
                   </button>
 
                   <div className="flex gap-1 overflow-x-auto max-w-xs md:max-w-none">
-                    {["all", "slack", "email", "drive", "jira", "meeting"].map((src) => (
+                    {["all", "slack", "email", "drive", "jira", "meeting", "github"].map((src) => (
                       <button
                         key={src}
                         onClick={() => setSelectedSourceFilter(src)}

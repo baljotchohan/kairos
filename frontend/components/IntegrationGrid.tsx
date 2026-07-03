@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import IntegrationButton from "./IntegrationButton";
 
-type ServiceKey = "notion" | "slack" | "gmail" | "drive" | "jira" | "zoom";
+type ServiceKey = "notion" | "slack" | "gmail" | "drive" | "jira" | "zoom" | "github";
 
 interface ServiceStatus {
   connected: boolean;
@@ -17,7 +17,7 @@ interface IntegrationGridProps {
   token: string | null;
 }
 
-const SERVICES: ServiceKey[] = ["notion", "slack", "gmail", "drive", "jira", "zoom"];
+const SERVICES: ServiceKey[] = ["github", "notion", "slack", "gmail", "drive", "jira", "zoom"];
 
 const DEFAULT_STATE: ConnectionsMap = {
   notion: { connected: false },
@@ -26,6 +26,7 @@ const DEFAULT_STATE: ConnectionsMap = {
   drive: { connected: false },
   jira: { connected: false },
   zoom: { connected: false },
+  github: { connected: false },
 };
 
 export default function IntegrationGrid({ token }: IntegrationGridProps) {
