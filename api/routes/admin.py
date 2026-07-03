@@ -23,7 +23,7 @@ async def status(
     # deployer's own connector configuration as another tenant's connection.
     frontend_to_storage = {
         "slack": "slack", "gmail": "google", "drive": "google",
-        "jira": "jira", "zoom": "zoom",
+        "jira": "jira", "zoom": "zoom", "github": "github",
     }
     conn_statuses = {}
     for service_name, storage_key in frontend_to_storage.items():
@@ -36,6 +36,7 @@ async def status(
         {"name": "drive", "connected": conn_statuses["drive"], "last_synced": "2026-06-23T18:00:00Z" if conn_statuses["drive"] else None, "total_items": stats.get("total_decisions", 0) // 4 if conn_statuses["drive"] else 0},
         {"name": "jira", "connected": conn_statuses["jira"], "last_synced": "2026-06-23T18:00:00Z" if conn_statuses["jira"] else None, "total_items": stats.get("total_decisions", 0) // 6 if conn_statuses["jira"] else 0},
         {"name": "zoom", "connected": conn_statuses["zoom"], "last_synced": "2026-06-23T18:00:00Z" if conn_statuses["zoom"] else None, "total_items": stats.get("total_decisions", 0) // 6 if conn_statuses["zoom"] else 0},
+        {"name": "github", "connected": conn_statuses["github"], "last_synced": "2026-06-23T18:00:00Z" if conn_statuses["github"] else None, "total_items": stats.get("total_decisions", 0) // 5 if conn_statuses["github"] else 0},
     ]
 
     return {

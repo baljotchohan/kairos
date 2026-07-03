@@ -69,6 +69,10 @@ class Config:
     NOTION_CLIENT_SECRET: str = os.getenv("NOTION_CLIENT_SECRET", "")
     NOTION_API_KEY: str = os.getenv("NOTION_API_KEY", "")  # fallback / admin key
 
+    # ── GitHub ─────────────────────────────────────────────────────────────────
+    GITHUB_CLIENT_ID: str = os.getenv("GITHUB_CLIENT_ID", "")
+    GITHUB_CLIENT_SECRET: str = os.getenv("GITHUB_CLIENT_SECRET", "")
+
     # ── Jira ───────────────────────────────────────────────────────────────────
     JIRA_URL: str = os.getenv("JIRA_URL", "")
     JIRA_EMAIL: str = os.getenv("JIRA_EMAIL", "")

@@ -400,6 +400,96 @@ async def drive_start(current_user: UserProfile = Depends(get_current_user)):
     return res
 
 
+# ── GITHUB ────────────────────────────────────────────────────────────────────
+
+@router.get("/github/start")
+async def github_start(current_user: UserProfile = Depends(get_current_user)):
+    state = _generate_state_token(current_user.uid)
+    if not config.GITHUB_CLIENT_ID or config.GITHUB_CLIENT_ID == "your_client_id":
+        sim_url = f"{_callback_url('github')}?code=sim-github-code&state={state}"
+        return {"service": "github", "url": sim_url}
+
+    # "repo" covers private+public repo read access (GitHub OAuth Apps only
+    # offer coarse scopes — there's no read-only-repo scope, only GitHub Apps
+    # have per-permission granularity). "read:user" is for the display name.
+    scopes = "repo read:user"
+    url = (
+        "https://github.com/login/oauth/authorize"
+        f"?client_id={config.GITHUB_CLIENT_ID}"
+        f"&redirect_uri={quote(_callback_url('github'), safe='')}"
+        f"&scope={quote(scopes)}"
+        f"&state={state}"
+    )
+    return {"service": "github", "url": url}
+
+
+@router.get("/github/callback")
+async def github_callback(code: str = None, state: str = None, error: str = None):
+    if error or not code or not state:
+        return _popup_error(error or "Missing authorization code")
+
+    verified_uid = _verify_state_token(state)
+    if not verified_uid:
+        return _popup_error("Security Check Failed: Invalid or expired OAuth state parameter.")
+
+    if code == "sim-github-code":
+        if not _sim_codes_allowed():
+            return _popup_error("Simulated connections are not allowed in production.")
+        username = "helios-dev (Simulated)"
+        _store_token(verified_uid, "github", {
+            "access_token": "sim-github-token-12345",
+            "username": username,
+            "service": "github",
+        })
+        print(f"[OAuth] ✅ Simulated GitHub connected uid={verified_uid} user={username}")
+        return _popup_success("GitHub", f"Connected as {username} (Simulation)")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://github.com/login/oauth/access_token",
+                headers={"Accept": "application/json"},
+                data={
+                    "client_id": config.GITHUB_CLIENT_ID,
+                    "client_secret": config.GITHUB_CLIENT_SECRET,
+                    "code": code,
+                    "redirect_uri": _callback_url("github"),
+                },
+            )
+            data = resp.json()
+            if "error" in data:
+                return _popup_error(data.get("error_description") or data["error"])
+
+            access_token = data.get("access_token")
+            if not access_token:
+                return _popup_error("GitHub did not return an access token.")
+
+            username = "your account"
+            try:
+                user_resp = await client.get(
+                    "https://api.github.com/user",
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Accept": "application/vnd.github+json",
+                    },
+                )
+                username = user_resp.json().get("login", username)
+            except Exception:
+                pass
+
+        _store_token(verified_uid, "github", {
+            "access_token": access_token,
+            "username": username,
+            "service": "github",
+        })
+        print(f"[OAuth] ✅ GitHub connected uid={verified_uid} user={username}")
+        return _popup_success("GitHub", f"Connected as {username}")
+
+    except Exception as e:
+        print(f"[OAuth] 🔴 GitHub callback error: {e}")
+        return _popup_error("We couldn't complete the connection. Please try again.")
+
+
 # ── JIRA ──────────────────────────────────────────────────────────────────────
 
 @router.get("/jira/start")
@@ -669,7 +759,7 @@ async def get_status(current_user: UserProfile = Depends(get_current_user)):
     # Gmail + Drive both read the single Google grant (one consent covers both).
     frontend_to_storage = {
         "slack": "slack", "gmail": "google", "drive": "google",
-        "jira": "jira", "zoom": "zoom", "notion": "notion",
+        "jira": "jira", "zoom": "zoom", "notion": "notion", "github": "github",
     }
 
     result = {}
@@ -691,7 +781,7 @@ async def disconnect_service(
     service: str,
     current_user: UserProfile = Depends(get_current_user),
 ):
-    valid = {"slack", "gmail", "drive", "jira", "zoom", "notion"}
+    valid = {"slack", "gmail", "drive", "jira", "zoom", "notion", "github"}
     if service not in valid:
         raise HTTPException(400, f"Unknown service: {service}")
     # "gmail" and "drive" both map to the single "google" grant in the token store

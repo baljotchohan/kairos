@@ -255,6 +255,7 @@ class KairosMemory:
         SOURCE_KEYWORDS = {
             "slack": "slack", "email": "email", "drive": "drive",
             "jira": "jira", "zoom": "zoom", "meeting": "meeting",
+            "github": "github", "pull request": "github", "pr": "github",
         }
         for kw, src in SOURCE_KEYWORDS.items():
             if kw in query.lower():

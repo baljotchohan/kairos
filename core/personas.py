@@ -33,6 +33,7 @@ DEFAULT_PERSONAS: dict[str, dict] = {
     "email_agent":     {"display_name": "Email Extraction Agent",  "group": "Extraction Agents"},
     "drive_agent":     {"display_name": "Drive Extraction Agent",  "group": "Extraction Agents"},
     "notion_agent":    {"display_name": "Notion Extraction Agent", "group": "Extraction Agents"},
+    "github_agent":    {"display_name": "GitHub Extraction Agent", "group": "Extraction Agents"},
     "meeting_agent":   {"display_name": "Meeting Extraction Agent","group": "Extraction Agents"},
     "synthesis_agent": {"display_name": "Synthesis Engine",        "group": "Reasoning"},
     "intent_agent":    {"display_name": "Router",                  "group": "Reasoning"},

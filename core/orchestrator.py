@@ -40,6 +40,7 @@ class KairosState(TypedDict):
     meeting_data: list[dict]
     jira_data: list[dict]
     notion_data: list[dict]
+    github_data: list[dict]
     decisions_extracted: int
     errors: list[str]
     status: str
@@ -64,6 +65,7 @@ class KairosOrchestrator:
         from agents.drive_agent import DriveAgent
         from agents.meeting_agent import MeetingAgent
         from agents.notion_agent import NotionAgent
+        from agents.github_agent import GitHubAgent
         from agents.synthesis_agent import SynthesisAgent
         from agents.intent_agent import IntentAgent
         from agents.context_agent import ContextAgent
@@ -77,6 +79,7 @@ class KairosOrchestrator:
         self.drive_agent = DriveAgent()
         self.meeting_agent = MeetingAgent()
         self.notion_agent = NotionAgent()
+        self.github_agent = GitHubAgent()
         self.jira_connector = JiraConnector()
         self.synthesis_agent = SynthesisAgent(memory=memory)
 
@@ -106,6 +109,7 @@ class KairosOrchestrator:
         g.add_node("gather_meetings", self._gather_meetings)
         g.add_node("gather_jira", self._gather_jira)
         g.add_node("gather_notion", self._gather_notion)
+        g.add_node("gather_github", self._gather_github)
         g.add_node("synthesize", self._synthesize)
 
         g.set_entry_point("gather_slack")
@@ -114,7 +118,8 @@ class KairosOrchestrator:
         g.add_edge("gather_drive", "gather_meetings")
         g.add_edge("gather_meetings", "gather_jira")
         g.add_edge("gather_jira", "gather_notion")
-        g.add_edge("gather_notion", "synthesize")
+        g.add_edge("gather_notion", "gather_github")
+        g.add_edge("gather_github", "synthesize")
         g.add_edge("synthesize", END)
 
         return g.compile()
@@ -160,6 +165,14 @@ class KairosOrchestrator:
         except Exception as e:
             errs = state.get("errors", []) + [f"Notion: {e}"]
             return {"notion_data": [], "errors": errs}
+
+    async def _gather_github(self, state: KairosState) -> dict:
+        try:
+            data = await self.github_agent.fetch(user_id=state.get("user_id"))
+            return {"github_data": data, "status": "github_done"}
+        except Exception as e:
+            errs = state.get("errors", []) + [f"GitHub: {e}"]
+            return {"github_data": [], "errors": errs}
 
     async def _gather_jira(self, state: KairosState) -> dict:
         # Jira creds are global env (no per-user OAuth yet) — only ingest the
@@ -209,6 +222,7 @@ class KairosOrchestrator:
         # decision-rich ones (Jira tickets, email approvals).
         sources = [
             state.get("jira_data", []),     # tickets/epics — richest in decisions
+            state.get("github_data", []),   # PRs/issues — richest in engineering decisions
             state.get("notion_data", []),   # pages/databases — structured decisions
             state.get("email_data", []),    # approvals/threads
             state.get("drive_data", []),    # docs/specs
@@ -307,6 +321,7 @@ class KairosOrchestrator:
                 "meeting_data": [],
                 "jira_data": [],
                 "notion_data": [],
+                "github_data": [],
                 "decisions_extracted": 0,
                 "errors": [],
                 "status": "starting",
@@ -566,8 +581,8 @@ class KairosOrchestrator:
         'no recorded decision' message for casual chat."""
         system = (
             "You are KAIROS, a Company Organizational Memory AI. You connect to a "
-            "company's Slack, Gmail, Drive, Jira and Zoom, extract every decision and "
-            "its context, and let people ask why past decisions were made. "
+            "company's Slack, Gmail, Drive, Jira, Zoom, Notion and GitHub, extract every "
+            "decision and its context, and let people ask why past decisions were made. "
             "Right now the user is making small talk or greeting you — reply warmly, "
             "briefly (1-3 sentences), in a confident, friendly tone. Do NOT say you "
             "have no records. Invite them to ask about a past decision, and give one "
