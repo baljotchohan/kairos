@@ -90,6 +90,14 @@ def get_notion_token(user_id: str) -> Optional[str]:
     return None
 
 
+def get_github_token(user_id: str) -> Optional[str]:
+    for data in _read_token_rows(user_id, "github"):
+        token = data.get("access_token")
+        if token:
+            return token
+    return None
+
+
 def build_connectors_for_user(user_id: str) -> dict:
     """
     Build connector instances for every source the user has connected.
@@ -103,10 +111,11 @@ def build_connectors_for_user(user_id: str) -> dict:
     from connectors.jira_connector import JiraConnector
     from connectors.zoom_connector import ZoomConnector
     from connectors.notion_connector import NotionConnector
+    from connectors.github_connector import GitHubConnector
 
     out: dict = {
         "drive": None, "gmail": None, "slack": None,
-        "jira": None, "zoom": None, "notion": None, "connected": [],
+        "jira": None, "zoom": None, "notion": None, "github": None, "connected": [],
     }
 
     google = get_google_token(user_id)
@@ -161,5 +170,10 @@ def build_connectors_for_user(user_id: str) -> dict:
     if notion_token:
         out["notion"] = NotionConnector(api_key=notion_token)
         out["connected"].append("notion")
+
+    github_token = get_github_token(user_id)
+    if github_token:
+        out["github"] = GitHubConnector(access_token=github_token)
+        out["connected"].append("github")
 
     return out

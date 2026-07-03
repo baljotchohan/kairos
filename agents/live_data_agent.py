@@ -1,6 +1,6 @@
 """
 KAIROS Live Data Agent — answers questions about the user's CURRENT data by
-querying their connected sources on-demand (Drive, Gmail, Slack, Jira, Zoom).
+querying their connected sources on-demand (Drive, Gmail, Slack, Jira, Zoom, GitHub).
 
 Full tool set:
   Gmail  — recent, last, search, unread count, sender stats, thread stats, by-label
@@ -9,6 +9,7 @@ Full tool set:
   Jira   — list issues, my issues, project list, sprint status, issue stats,
             search issues, get single issue
   Zoom   — list recordings
+  GitHub — list repos, my open PRs, my open issues, search issues/PRs
   Multi  — dashboard snapshot (all sources at once), list connected sources
 """
 
@@ -70,6 +71,12 @@ _SOURCE_KEYWORDS: dict[str, list[str]] = {
     "jira": ["jira", "ticket", "issue", "sprint", "backlog", "epic", "bug", "task", "story"],
     "zoom": ["zoom", "recording", "meeting", "call", "video"],
     "notion": ["notion", "page", "database", "wiki", "notes", "notion page", "notion db"],
+    "github": ["github", "pull request", "pull requests", "repo", "repository", "repositories", "commit", "code review"],
+}
+
+_SOURCE_DISPLAY_NAMES: dict[str, str] = {
+    "gmail": "Gmail", "drive": "Google Drive", "slack": "Slack",
+    "jira": "Jira", "zoom": "Zoom", "notion": "Notion", "github": "GitHub",
 }
 
 
@@ -77,7 +84,7 @@ class LiveDataAgent(BaseAgent):
     def __init__(self, memory=None):
         super().__init__(
             name="live_data_agent",
-            description="Queries the user's connected Drive/Gmail/Slack/Jira/Zoom live to answer questions about their current data",
+            description="Queries the user's connected Drive/Gmail/Slack/Jira/Zoom/GitHub live to answer questions about their current data",
             max_iterations=12,
         )
         self.memory = memory
@@ -94,7 +101,7 @@ class LiveDataAgent(BaseAgent):
         # ── Meta / multi-source ──────────────────────────────────────────────
         self.register_tool(AgentTool(
             name="list_connected_sources",
-            description="List which sources (drive, gmail, slack, jira, zoom) the user has connected. Call first if unsure what's available.",
+            description="List which sources (drive, gmail, slack, jira, zoom, github, notion) the user has connected. Call first if unsure what's available.",
             handler=self._tool_list_connected,
             parameters={"type": "object", "properties": {}},
         ))
@@ -285,6 +292,34 @@ class LiveDataAgent(BaseAgent):
                 "required": ["query"]},
         ))
 
+        # ── GitHub ───────────────────────────────────────────────────────────
+        self.register_tool(AgentTool(
+            name="github_list_repos",
+            description="List the user's GitHub repos (owned + collaborator), most recently updated first, with stars/open-issue counts. Optional 'limit' (default 15). Use for 'what repos do I have', 'list my GitHub repos'.",
+            handler=self._tool_github_repos,
+            parameters={"type": "object", "properties": {"limit": {"type": "integer"}}},
+        ))
+        self.register_tool(AgentTool(
+            name="github_my_open_prs",
+            description="List open pull requests authored by the user across all their repos. Optional 'limit' (default 15). Use for 'what are my open PRs', 'my pull requests'.",
+            handler=self._tool_github_my_prs,
+            parameters={"type": "object", "properties": {"limit": {"type": "integer"}}},
+        ))
+        self.register_tool(AgentTool(
+            name="github_my_open_issues",
+            description="List open GitHub issues assigned to the user across all their repos. Optional 'limit' (default 15). Use for 'what issues am I assigned', 'my GitHub tasks'.",
+            handler=self._tool_github_my_issues,
+            parameters={"type": "object", "properties": {"limit": {"type": "integer"}}},
+        ))
+        self.register_tool(AgentTool(
+            name="github_search",
+            description="Full-text search across the user's accessible GitHub issues and PRs. Args: 'query' (required), 'limit' (default 15). Use for 'find PRs about X', 'search GitHub for Y'.",
+            handler=self._tool_github_search,
+            parameters={"type": "object", "properties": {
+                "query": {"type": "string"}, "limit": {"type": "integer"}},
+                "required": ["query"]},
+        ))
+
         # ── Memory cache fallback ─────────────────────────────────────────────
         self.register_tool(AgentTool(
             name="search_cached_items",
@@ -337,7 +372,7 @@ class LiveDataAgent(BaseAgent):
         connected = self._connectors.get("connected", [])
         return {
             "connected": connected,
-            "not_connected": [s for s in ("notion", "drive", "gmail", "slack", "jira", "zoom") if s not in connected],
+            "not_connected": [s for s in _SOURCE_DISPLAY_NAMES if s not in connected],
         }
 
     async def _tool_dashboard(self) -> dict:
@@ -390,6 +425,16 @@ class LiveDataAgent(BaseAgent):
             except Exception as e:
                 result["slack"] = {"error": str(e)}
 
+        async def _github_summary():
+            c = self._connectors.get("github")
+            if not c:
+                return
+            try:
+                prs, issues = await asyncio.gather(c.my_open_pull_requests(limit=30), c.my_open_issues(limit=30))
+                result["github"] = {"open_prs": len(prs), "open_issues": len(issues)}
+            except Exception as e:
+                result["github"] = {"error": str(e)}
+
         if "gmail" in connected:
             tasks.append(_gmail_summary())
         if "drive" in connected:
@@ -398,6 +443,8 @@ class LiveDataAgent(BaseAgent):
             tasks.append(_jira_summary())
         if "slack" in connected:
             tasks.append(_slack_summary())
+        if "github" in connected:
+            tasks.append(_github_summary())
 
         await asyncio.gather(*tasks)
         return result
@@ -719,6 +766,54 @@ class LiveDataAgent(BaseAgent):
             })
         return {"count": len(out), "results": out}
 
+    # GitHub
+    async def _tool_github_repos(self, limit: int = 15) -> Any:
+        c = self._connectors.get("github")
+        if not c:
+            return {"error": "GitHub is not connected."}
+        repos = await c.list_repos(limit=limit)
+        for r in repos:
+            self._add_source(r.get("name", ""), r.get("updated", ""), "GitHub", r.get("url", ""))
+        return {"count": len(repos), "repos": repos}
+
+    async def _tool_github_my_prs(self, limit: int = 15) -> Any:
+        c = self._connectors.get("github")
+        if not c:
+            return {"error": "GitHub is not connected."}
+        prs = await c.my_open_pull_requests(limit=limit)
+        return self._fmt_github_items(prs)
+
+    async def _tool_github_my_issues(self, limit: int = 15) -> Any:
+        c = self._connectors.get("github")
+        if not c:
+            return {"error": "GitHub is not connected."}
+        issues = await c.my_open_issues(limit=limit)
+        return self._fmt_github_items(issues)
+
+    async def _tool_github_search(self, query: str, limit: int = 15) -> Any:
+        c = self._connectors.get("github")
+        if not c:
+            return {"error": "GitHub is not connected."}
+        results = await c.search_issues(query=query, limit=limit)
+        return self._fmt_github_items(results)
+
+    def _fmt_github_items(self, items: list[dict]) -> dict:
+        out = []
+        for i in items:
+            kind = "PR" if i.get("is_pr") else "Issue"
+            self._add_source(f"[{i.get('repo','')}] {kind} #{i.get('number','')}: {i.get('title','')}", i.get("updated", ""), "GitHub", i.get("url", ""))
+            out.append({
+                "type": kind,
+                "number": i.get("number"),
+                "title": i.get("title", ""),
+                "repo": i.get("repo", ""),
+                "state": i.get("state", ""),
+                "author": i.get("author", ""),
+                "updated": i.get("updated", ""),
+                "url": i.get("url", ""),
+            })
+        return {"count": len(out), "items": out}
+
     # Cache fallback
     async def _tool_search_inventory(self, query: str = None, source: str = None) -> Any:
         if not self.memory:
@@ -742,7 +837,7 @@ class LiveDataAgent(BaseAgent):
         if not connected:
             answer = (
                 "No data sources are connected yet. Go to **KAIROS → Connectors** and connect "
-                "Notion, Google Drive, Gmail, Slack, Jira, or Zoom to start querying your live data."
+                "Notion, Google Drive, Gmail, Slack, Jira, Zoom, or GitHub to start querying your live data."
             )
             await self._maybe_stream(answer, kwargs.get("stream_callback"))
             return {"answer": answer, "sources": [], "query": question}
@@ -759,8 +854,7 @@ class LiveDataAgent(BaseAgent):
         if not (mentioned_sources & set(connected)):
             for source_name, keywords in _SOURCE_KEYWORDS.items():
                 if source_name not in connected and any(kw in q_lower for kw in keywords):
-                    source_display = {"gmail": "Gmail", "drive": "Google Drive", "slack": "Slack",
-                                      "jira": "Jira", "zoom": "Zoom", "notion": "Notion"}.get(source_name, source_name.title())
+                    source_display = _SOURCE_DISPLAY_NAMES.get(source_name, source_name.title())
                     answer = (
                         f"**{source_display} is not connected.** Go to **KAIROS → Connectors** and "
                         f"click Connect on {source_display} to enable this. Once connected, ask me again."
@@ -828,7 +922,7 @@ class LiveDataAgent(BaseAgent):
                 )
                 final_answer = f"## 🔍 Results Found\n\n{items}"
             else:
-                not_connected = [s for s in ("notion", "gmail", "drive", "slack", "jira", "zoom") if s not in connected]
+                not_connected = [s for s in _SOURCE_DISPLAY_NAMES if s not in connected]
                 tip = f" (Not yet connected: {', '.join(not_connected)})" if not_connected else ""
                 final_answer = (
                     f"I couldn't fetch data for this query from your connected sources "
