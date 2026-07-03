@@ -444,6 +444,12 @@ const Logos = {
       <path d="M7.1 6.3c0-.66.44-1.1 1.1-1.1h1.62l6.08 9.3V6.3c0-.66.44-1.1 1.1-1.1h.6c.66 0 1.1.44 1.1 1.1v11.4c0 .66-.44 1.1-1.1 1.1h-1.56l-6.14-9.4v8.4c0 .66-.44 1.1-1.1 1.1h-.6c-.66 0-1.1-.44-1.1-1.1V6.3z" fill="#fff" />
     </svg>
   ),
+  github: (
+    <svg viewBox="0 0 24 24" className="w-7 h-7">
+      <rect width="24" height="24" rx="5.5" fill="#181717" />
+      <path fill="#fff" transform="translate(3.5 3.5) scale(0.7)" d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+    </svg>
+  ),
 };
 
 /* ── Static data ─────────────────────────────────────────────────────────── */
@@ -474,6 +480,7 @@ const AGENTS = {
     { icon: "✉️", name: "Email Agent", desc: "Scans Gmail for approvals, sign-offs and escalations — links threads to the decisions they made." },
     { icon: "📁", name: "Drive Agent", desc: "Parses docs, specs and proposals in Google Drive for the key choices written down inside them." },
     { icon: "🗂️", name: "Notion Agent", desc: "Walks pages and databases recursively, extracting decisions logged in specs and wikis." },
+    { icon: "🐙", name: "GitHub Agent", desc: "Reads pull requests and issues — with review comments and discussion — across your most active repos." },
     { icon: "🎥", name: "Meeting Agent", desc: "Transcribes Zoom recordings with Whisper, then pinpoints decisions, timestamps and who was in the room." },
   ],
   reasoning: [
@@ -491,6 +498,7 @@ const CONNECTORS = [
   { key: "notion", name: "Notion", sub: "Pages & databases" },
   { key: "zoom", name: "Zoom", sub: "Meeting recordings" },
   { key: "jira", name: "Jira", sub: "Tickets & epics" },
+  { key: "github", name: "GitHub", sub: "PRs & issues" },
 ] as const;
 
 const MCP_TOOLS = [
@@ -527,8 +535,8 @@ const INTELLIGENCE = [
 ];
 
 const STEPS = [
-  { n: "01", title: "Connect", body: "One-click OAuth into Slack, Gmail, Drive, Notion, Zoom and Jira. No admin install, no IT ticket." },
-  { n: "02", title: "Extract", body: "Nine agents read continuously, catching every decision-shaped moment with sources, people, and outcomes." },
+  { n: "01", title: "Connect", body: "One-click OAuth into Slack, Gmail, Drive, Notion, Zoom, GitHub and Jira. No admin install, no IT ticket." },
+  { n: "02", title: "Extract", body: "Ten agents read continuously, catching every decision-shaped moment with sources, people, and outcomes." },
   { n: "03", title: "Graph", body: "Every decision auto-links to related ones by topic, person, and timeframe — a living, physics-simulated web." },
   { n: "04", title: "Ask", body: "Query in plain English over chat or any MCP client — cited answers in seconds, or a warning before you repeat a mistake." },
 ];
@@ -905,9 +913,9 @@ export default function Landing() {
           </div>
 
           <div className="mt-14 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-[11px] font-mono tracking-wide text-zinc-500">
-            <span><span className="text-violet-300 font-semibold">9</span> parallel agents</span>
+            <span><span className="text-violet-300 font-semibold">10</span> parallel agents</span>
             <span className="text-zinc-700">·</span>
-            <span><span className="text-violet-300 font-semibold">6</span> connectors</span>
+            <span><span className="text-violet-300 font-semibold">7</span> connectors</span>
             <span className="text-zinc-700">·</span>
             <span><span className="text-violet-300 font-semibold">6</span> MCP tools</span>
             <span className="text-zinc-700">·</span>

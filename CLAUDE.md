@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-KAIROS is a **Company Organizational Memory OS** — AI agents connect to a person's Slack, Gmail, Drive, Jira, Zoom, and Notion, extract every decision and its context, and store it in a vector + relational + graph memory layer. Users query it in natural language over chat or WebSocket and get full decision history with sources in seconds. A hand-written canvas physics engine renders the decision graph as an interactive force-directed network.
+KAIROS is a **Company Organizational Memory OS** — AI agents connect to a person's Slack, Gmail, Drive, Jira, Zoom, Notion, and GitHub, extract every decision and its context, and store it in a vector + relational + graph memory layer. Users query it in natural language over chat or WebSocket and get full decision history with sources in seconds. A hand-written canvas physics engine renders the decision graph as an interactive force-directed network.
 
 **Hackathon:** AMD Developer Hackathon ACT II — deadline July 11, 2026. $10K+ prize.
 **Demo company name for all fake data:** Helios Tech (gated behind `DEMO_USER_ID` / `DEMO_LOGIN_EMAIL` — real users never see it).
@@ -48,15 +48,16 @@ Connectors → Agents → Core (Memory + Graph + Orchestration) → API + MCP + 
 - `jira_connector.py` — Jira REST API + JQL search (global credentials, see above)
 - `zoom_connector.py` — Zoom API (recordings + transcription URLs)
 - `notion_connector.py` — Notion API (page/database query, recursive block retrieval)
+- `github_connector.py` — GitHub REST API (PRs with review comments, issues with discussion, across the user's most-active repos); also exposes live-query methods (list_repos, my_open_pull_requests, my_open_issues, search_issues) used by `live_data_agent.py`
 
 **Agents** (`agents/`) — wrap connectors, call the LLM to classify content as decisions and extract structured `DecisionNode` objects. All inherit `base_agent.py`'s `BaseAgent`, which implements a ReAct loop (Reason → Act → Observe → Reflect) with a tool registry and execution tracing (`TraceStep`, `AgentResult`):
-- `slack_agent.py`, `email_agent.py`, `drive_agent.py`, `notion_agent.py` — fetch + extract decisions from their source
+- `slack_agent.py`, `email_agent.py`, `drive_agent.py`, `notion_agent.py`, `github_agent.py` — fetch + extract decisions from their source
 - `meeting_agent.py` — Zoom transcription; **gracefully degrades to `[]`** if `openai-whisper` isn't installed (it's excluded from the HF Docker image — ~2-3GB of PyTorch)
 - `synthesis_agent.py` — the extraction brain: `extract_decisions()` turns raw content into `DecisionNode`s, `synthesize_answer()` answers user questions from retrieved memory with confidence scoring
 - `intent_agent.py` — classifies each incoming query into `search` / `live_data` / `general_qa` / `ingest` and routes it
 - `context_agent.py` — `resolve_context()` runs hybrid (semantic + keyword + source + graph-neighbor) retrieval plus user-profile lookup before synthesis
 - `research_agent.py` — multi-step mode: decompose topic → search → refine → synthesize into a structured report
-- `live_data_agent.py` — the largest agent (~850 lines): answers on-demand questions against a user's **live** connected accounts (e.g. "how many unread emails do I have") rather than stored memory, via its own ReAct tool loop over Gmail/Drive/Slack/Jira/Zoom/Notion, with an early-exit if the source isn't connected
+- `live_data_agent.py` — the largest agent (~900 lines): answers on-demand questions against a user's **live** connected accounts (e.g. "how many unread emails do I have", "what are my open PRs") rather than stored memory, via its own ReAct tool loop over Gmail/Drive/Slack/Jira/Zoom/Notion/GitHub, with an early-exit if the source isn't connected
 
 **Core** (`core/`):
 - `fireworks.py` — `FireworksClient`: async, multi-provider LLM client behind one interface. Text: **Fireworks (primary, AMD hardware) → Groq → Gemini**, auto-fallback on 429/dead key, provider probed before commit. Embeddings: **Gemini (primary) → Fireworks `nomic-embed-text-v1.5` (fallback) → ChromaDB local embeddings (last resort)**. Never calls OpenAI or Anthropic directly — always an OpenAI-compatible client pointed at one of the three base URLs above.
@@ -174,7 +175,7 @@ All defined in `config.py`. Copy `.env.example` → `.env`. Key vars:
 - **LLM (priority order):** `FIREWORKS_API_KEY` / `FIREWORKS_MODEL` (default `qwen3p7-plus`) / `FIREWORKS_MODEL_FAST` (default `llama-v3p3-70b-instruct`) — required for AMD hackathon compliance; `GROQ_API_KEY` / `GROQ_MODEL`; `GEMINI_API_KEY` / `GEMINI_MODEL` / `GEMINI_EMBED_MODEL` — fallback chain, all optional but recommended for resilience
 - **Memory paths:** `CHROMA_PERSIST_DIR`, `SQLITE_PATH`, `OBSIDIAN_VAULT`
 - **Security:** `TOKEN_ENCRYPTION_KEY` (Fernet key for stored OAuth tokens), `MCP_CONNECT_SECRET` (signs MCP tokens; also used as an oauth-state fallback secret), `FIREBASE_SERVICE_ACCOUNT` (JSON, or use `GOOGLE_APPLICATION_CREDENTIALS` / ADC)
-- **Connectors:** `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN` / `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET`; `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REFRESH_TOKEN` (Gmail + Drive share one grant); `ZOOM_ACCOUNT_ID` / `ZOOM_CLIENT_ID` / `ZOOM_CLIENT_SECRET`; `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET`; `JIRA_URL` / `JIRA_EMAIL` / `JIRA_API_TOKEN` / `JIRA_OWNER_UID` (global, single-tenant until per-user Jira OAuth ships)
+- **Connectors:** `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN` / `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET`; `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REFRESH_TOKEN` (Gmail + Drive share one grant); `ZOOM_ACCOUNT_ID` / `ZOOM_CLIENT_ID` / `ZOOM_CLIENT_SECRET`; `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET`; `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` (real per-user OAuth, `repo read:user` scope); `JIRA_URL` / `JIRA_EMAIL` / `JIRA_API_TOKEN` / `JIRA_OWNER_UID` (global, single-tenant until per-user Jira OAuth ships)
 - **App:** `PORT` (8000), `HOST`, `DEBUG`, `FRONTEND_URL`, `BACKEND_URL`, `SEED_DEMO_DATA`, `DEMO_USER_ID`, `DEMO_LOGIN_EMAIL`
 - **Ingestion tuning:** `SLACK_LOOKBACK_DAYS` / `EMAIL_LOOKBACK_DAYS` (30), `INGEST_INTERVAL_MINUTES` (12), `MAX_MESSAGES_PER_CHANNEL` (500), `MAX_EXTRACT_PER_CYCLE` (24), `EXTRACT_DELAY_SECONDS` (4) — throttle LLM calls per ingestion cycle to stay under provider TPM limits
 
@@ -182,7 +183,7 @@ Frontend (`frontend/.env.local`, all `NEXT_PUBLIC_*`): `NEXT_PUBLIC_API_URL`, `N
 
 ## Current Status
 
-All 7 connectors/agents, dual-transport MCP, WebSocket streaming, the physics-based decision graph, and fail-closed multi-tenant isolation are implemented and live (see `docs/REMOTE_MCP.md` for the remote MCP model). Known open gaps:
+All 8 connectors/agents (Slack, Gmail, Drive, Jira, Zoom, Notion, GitHub, plus meeting/Zoom transcription), dual-transport MCP, WebSocket streaming, the physics-based decision graph, and fail-closed multi-tenant isolation are implemented and live (see `docs/REMOTE_MCP.md` for the remote MCP model). Known open gaps:
 - Jira is still single-tenant (global credentials, one `JIRA_OWNER_UID`) — per-user Jira OAuth is the remaining connector migration.
 - Meeting transcription needs `openai-whisper` installed locally; it's intentionally excluded from the HF Docker image, so Zoom recordings list but don't transcribe in the hosted deployment.
 - The MCP "Activity Monitor" panel in the dashboard's MCP tab renders from a simulated/hardcoded log, not live call telemetry yet.

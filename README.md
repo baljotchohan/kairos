@@ -56,7 +56,7 @@ Four seconds. Fully sourced. No tribal knowledge required.
 | | Document stores (Confluence, Notion, SharePoint) | **KAIROS** |
 |---|---|---|
 | What it captures | What you deliberately write down | What actually got decided, wherever it happened |
-| Where it looks | One app | Slack, Gmail, Drive, Notion, Zoom, Jira |
+| Where it looks | One app | Slack, Gmail, Drive, Notion, Zoom, Jira, GitHub |
 | Data model | Pages and folders | A **decision graph** — nodes are decisions, people, and sources; edges are shared topics, causality, and follow-ups |
 | Retrieval | Keyword search | Semantic + structured + graph-neighbor hybrid search, routed by intent |
 | Freshness | Only what got written up | On-demand **live** queries against your actual connected accounts, not just stored memory |
@@ -198,7 +198,7 @@ The result: KAIROS gives the model context before it answers, and the model push
 </td><td valign="top">
 
 **Connectors & Infra**
-- Slack (Web API + Socket Mode bot), Gmail, Drive, Notion, Zoom, Jira
+- Slack (Web API + Socket Mode bot), Gmail, Drive, Notion, Zoom, Jira, GitHub
 - MCP: local stdio + remote OAuth/HTTP
 - Docker + docker-compose (2 services, health-checked)
 - Hosted: Hugging Face Space (backend) + Vercel (frontend)
@@ -286,9 +286,9 @@ Full request/response shapes live in `api/routes/`.
 
 ```
 kairos/
-├── agents/          9 agents — base_agent (ReAct), slack/email/drive/notion/meeting,
+├── agents/          10 agents — base_agent (ReAct), slack/email/drive/notion/github/meeting,
 │                    synthesis, intent, context, live_data
-├── connectors/      slack (+ bot), gmail, drive, notion, zoom, jira
+├── connectors/      slack (+ bot), gmail, drive, notion, zoom, jira, github
 ├── core/            fireworks (LLM chain), memory (Chroma+SQLite), graph (NetworkX+Obsidian),
 │                    orchestrator (LangGraph), user_memory, live_connectors, mcp_auth, token_crypto
 ├── api/
