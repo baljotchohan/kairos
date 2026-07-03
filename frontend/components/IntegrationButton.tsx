@@ -11,6 +11,16 @@ interface ServiceConfig {
   keyPlaceholder?: string;
   keyHelpUrl?: string;
   keyHelpLabel?: string;
+  /** Shows a secondary button (alongside Disconnect) once connected, that
+   * re-runs the same OAuth popup flow — for services where access is
+   * granted incrementally (e.g. Notion's page picker) rather than all at
+   * once, so a user can grant access to more content without disconnecting. */
+  manageAccessLabel?: string;
+  /** Short explainer shown under the connected state, for services where
+   * "connected" doesn't mean "sees everything" — sets expectations about
+   * how to grant more access (via manageAccessLabel here, or directly in
+   * the source app for services we can't re-trigger, like Slack channels). */
+  manageAccessHint?: string;
 }
 
 const SERVICE_CONFIG: Record<string, ServiceConfig> = {
@@ -33,12 +43,15 @@ const SERVICE_CONFIG: Record<string, ServiceConfig> = {
     ),
     accentColor: "#37352f",
     description: "Read Notion pages and databases, extract decisions",
+    manageAccessLabel: "Add pages",
+    manageAccessHint: "Only pages you've explicitly shared are visible to KAIROS. Click \"Add pages\" anytime to share more from Notion's picker — nothing already shared is affected.",
   },
   slack: {
     name: "Slack",
     icon: (<svg viewBox="0 0 24 24" className="w-6 h-6"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z" fill="#E01E5A"/><path d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z" fill="#36C5F0"/><path d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zm-1.27 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.163 0a2.528 2.528 0 0 1 2.523 2.522v6.312z" fill="#2EB67D"/><path d="M15.163 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.163 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zm0-1.27a2.527 2.527 0 0 1-2.52-2.523 2.527 2.527 0 0 1 2.52-2.52h6.315A2.528 2.528 0 0 1 24 15.163a2.528 2.528 0 0 1-2.522 2.523h-6.315z" fill="#ECB22E"/></svg>),
     accentColor: "#36C5F0",
     description: "Read channel messages and extract decision threads",
+    manageAccessHint: "Public channels are already visible. For private channels, invite @KAIROS to them directly in Slack — there's no picker here since Slack manages private-channel access from inside the workspace, not via OAuth.",
   },
   gmail: {
     name: "Gmail",
@@ -275,22 +288,38 @@ export default function IntegrationButton({
                 )}
               </p>
             )}
+            {isConnected && cfg.manageAccessHint && (
+              <p className="text-[10px] text-[rgb(var(--text-muted))]/70 mt-1 leading-relaxed">
+                {cfg.manageAccessHint}
+              </p>
+            )}
             {error && (
               <p className="text-[10px] text-rose-400 mt-1">⚠ {error}</p>
             )}
           </div>
         </div>
 
-        {/* Right: action button */}
+        {/* Right: action button(s) */}
         <div className="shrink-0 ml-4">
           {isConnected ? (
-            <button
-              onClick={handleDisconnect}
-              disabled={isLoading}
-              className="px-3 py-1.5 rounded-lg border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 text-[11px] font-semibold disabled:opacity-40 transition-all"
-            >
-              {isLoading ? "…" : "Disconnect"}
-            </button>
+            <div className="flex items-center gap-2">
+              {cfg.manageAccessLabel && (
+                <button
+                  onClick={handleConnect}
+                  disabled={isLoading}
+                  className="px-3 py-1.5 rounded-lg border border-[rgb(var(--border))] text-[rgb(var(--text-primary))]/80 hover:bg-[rgb(var(--surface-hover))] text-[11px] font-semibold disabled:opacity-40 transition-all whitespace-nowrap"
+                >
+                  {isLoading ? "…" : cfg.manageAccessLabel}
+                </button>
+              )}
+              <button
+                onClick={handleDisconnect}
+                disabled={isLoading}
+                className="px-3 py-1.5 rounded-lg border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 text-[11px] font-semibold disabled:opacity-40 transition-all whitespace-nowrap"
+              >
+                {isLoading ? "…" : "Disconnect"}
+              </button>
+            </div>
           ) : showKeyInput ? (
             <button
               onClick={() => { setShowKeyInput(false); setApiKey(""); setError(null); }}
