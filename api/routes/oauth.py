@@ -59,6 +59,16 @@ def _oauth_signing_key() -> bytes:
         )
     return hashlib.sha256(b"kairos-oauth-state-signing-fallback").digest()
 
+def _sim_codes_allowed() -> bool:
+    """Simulated OAuth codes (code=sim-*-code) are a dev/demo convenience only.
+    In production they must be rejected: the Jira sim path in particular would
+    otherwise write the deployer's REAL global JIRA_API_TOKEN into any calling
+    user's oauth_tokens row (zoom_callback already had this check; slack/gmail/
+    jira did not)."""
+    is_testing = "PYTEST_CURRENT_TEST" in os.environ or os.environ.get("TESTING", "").lower() == "true"
+    return config.DEBUG or is_testing
+
+
 def _generate_state_token(uid: str) -> str:
     """Generates a signed state token containing the user UID and an expiry timestamp."""
     expires = int(time.time()) + 600  # 10 minutes expiry
@@ -245,6 +255,8 @@ async def slack_callback(code: str = None, state: str = None, error: str = None)
         return _popup_error("Security Check Failed: Invalid or expired OAuth state parameter.")
 
     if code == "sim-slack-code":
+        if not _sim_codes_allowed():
+            return _popup_error("Simulated connections are not allowed in production.")
         team_name = "Helios Tech (Simulated)"
         _store_token(verified_uid, "slack", {
             "bot_token": "sim-slack-token-12345",
@@ -323,6 +335,8 @@ async def gmail_callback(code: str = None, state: str = None, error: str = None)
         return _popup_error("Security Check Failed: Invalid or expired OAuth state parameter.")
 
     if code == "sim-gmail-code":
+        if not _sim_codes_allowed():
+            return _popup_error("Simulated connections are not allowed in production.")
         email = "developer@heliostech.com"
         _store_token(verified_uid, "google", {
             "refresh_token": "sim-google-refresh-token",
@@ -418,6 +432,10 @@ async def jira_callback(code: str = None, state: str = None, error: str = None):
         return _popup_error("Security Check Failed: Invalid or expired OAuth state parameter.")
 
     if code == "sim-jira-code":
+        # Extra-sensitive: this branch stores the deployer's REAL global Jira
+        # credential (JIRA_API_TOKEN) into the calling user's row — never in prod.
+        if not _sim_codes_allowed():
+            return _popup_error("Simulated connections are not allowed in production.")
         workspace = config.JIRA_URL.replace("https://", "") if config.JIRA_URL else "Jira"
         _store_token(verified_uid, "jira", {
             "access_token": config.JIRA_API_TOKEN,

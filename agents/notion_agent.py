@@ -33,29 +33,37 @@ class NotionAgent(BaseAgent):
         return await self.fetch(lookback_days=days)
 
     def _get_notion_key(self, user_id: str | None = None) -> str | None:
-        # Per-user Notion tokens stored via OAuth (future). For now, use global env key.
-        try:
-            import sqlite3
-            conn = sqlite3.connect(config.SQLITE_PATH)
-            conn.row_factory = sqlite3.Row
-            query = (
-                "SELECT token_data FROM oauth_tokens WHERE service = 'notion' AND user_uid = ?"
-                if user_id
-                else "SELECT token_data FROM oauth_tokens WHERE service = 'notion'"
-            )
-            params = (user_id,) if user_id else ()
-            row = conn.execute(query, params).fetchone()
-            conn.close()
-            if row:
-                from core.token_crypto import decrypt_token_data
-                data = decrypt_token_data(row["token_data"])
-                token = data.get("access_token") or data.get("api_key")
-                if token and not data.get("disconnected"):
-                    return token
-        except Exception:
-            pass
+        """Per-user Notion token, FAIL-CLOSED like every other connector.
 
-        # Fall back to global env key
+        When a user_id is given, only that user's own stored OAuth/API-key row
+        may be used — never the global NOTION_API_KEY env var and never another
+        user's row. Falling back to the env key here meant the background
+        ingestion loop silently ingested the DEPLOYER's private Notion workspace
+        into every active user's memory. The env key remains available only for
+        the legacy no-user (local dev / single-tenant) path, matching the
+        slack/email/drive agents' `not user_id` env-fallback pattern.
+        """
+        if user_id:
+            try:
+                import sqlite3
+                conn = sqlite3.connect(config.SQLITE_PATH)
+                conn.row_factory = sqlite3.Row
+                row = conn.execute(
+                    "SELECT token_data FROM oauth_tokens WHERE service = 'notion' AND user_uid = ?",
+                    (user_id,),
+                ).fetchone()
+                conn.close()
+                if row:
+                    from core.token_crypto import decrypt_token_data
+                    data = decrypt_token_data(row["token_data"])
+                    token = data.get("access_token") or data.get("api_key")
+                    if token and not data.get("disconnected"):
+                        return token
+            except Exception:
+                pass
+            return None  # fail closed: no per-user token → no Notion for this user
+
+        # Legacy/no-user path only (local dev, single-tenant scripts).
         if config.NOTION_API_KEY:
             return config.NOTION_API_KEY
         return None
