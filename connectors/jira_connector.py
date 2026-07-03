@@ -1,12 +1,21 @@
 """
 Jira connector — full read access via Jira REST API v3.
 Pure httpx, no Jira Python client dependency.
+
+Two auth modes:
+  - OAuth (per-user): access_token/refresh_token/cloud_id supplied — Bearer
+    auth against the Atlassian API gateway (api.atlassian.com/ex/jira/{cloud_id}),
+    the required proxy for Atlassian's 3LO OAuth apps. Tokens auto-refresh.
+  - Legacy (global): no OAuth args supplied — falls back to HTTP Basic Auth
+    against config.JIRA_URL/JIRA_EMAIL/JIRA_API_TOKEN directly, exactly as
+    before. This is what JIRA_OWNER_UID's ingestion still uses.
 """
 
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
+import time
+from typing import Optional, Callable
 
 import httpx
 
@@ -14,18 +23,119 @@ from config import config
 
 
 class JiraConnector:
-    def __init__(self):
-        self._base = config.JIRA_URL.rstrip("/") if config.JIRA_URL else ""
-        self._auth = (config.JIRA_EMAIL, config.JIRA_API_TOKEN)
+    OAUTH_TOKEN_URL = "https://auth.atlassian.com/oauth/token"
+    ACCESSIBLE_RESOURCES_URL = "https://api.atlassian.com/oauth/token/accessible-resources"
+
+    def __init__(
+        self,
+        access_token: str | None = None,
+        refresh_token: str | None = None,
+        cloud_id: str | None = None,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        expires_at: int | None = None,
+        on_token_refresh: Callable[[dict], None] | None = None,
+    ):
+        self._oauth_mode = bool(access_token or refresh_token)
+        self._access_token = access_token
+        self.refresh_token = refresh_token
+        self.cloud_id = cloud_id
+        self.client_id = client_id or config.JIRA_CLIENT_ID
+        self.client_secret = client_secret or config.JIRA_CLIENT_SECRET
+        self.expires_at = expires_at
+        self.on_token_refresh = on_token_refresh
+
+        if self._oauth_mode:
+            # Atlassian 3LO OAuth apps MUST call through the API gateway proxy —
+            # the site's own https://yoursite.atlassian.net/rest/api/3/... URLs
+            # only accept Basic Auth / API tokens, not OAuth Bearer tokens.
+            self._base = f"https://api.atlassian.com/ex/jira/{cloud_id}" if cloud_id else ""
+            self._auth = None
+            self._headers = {"Accept": "application/json"}
+        else:
+            self._base = config.JIRA_URL.rstrip("/") if config.JIRA_URL else ""
+            self._auth = (config.JIRA_EMAIL, config.JIRA_API_TOKEN)
+            self._headers = {"Accept": "application/json"}
 
     def _ok(self) -> bool:
+        if self._oauth_mode:
+            return bool(self.cloud_id and (self._access_token or self.refresh_token))
         return bool(config.JIRA_URL and config.JIRA_EMAIL and config.JIRA_API_TOKEN)
+
+    # ── OAuth token refresh (per-user mode only) ─────────────────────────────────
+
+    async def _ensure_fresh_token(self):
+        """Refresh the Bearer token if it's missing/expired. No-op in legacy
+        Basic Auth mode. Called at the top of every public async method,
+        before dispatching work to the thread executor — the sync methods
+        just read self._headers/self._auth, which this sets."""
+        if not self._oauth_mode:
+            return
+        if self._access_token and (self.expires_at is None or time.time() < self.expires_at - 60):
+            self._headers = {"Accept": "application/json", "Authorization": f"Bearer {self._access_token}"}
+            return
+        if not self.refresh_token:
+            raise RuntimeError("Jira connection expired and there's no refresh token — please reconnect Jira.")
+
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.post(
+                self.OAUTH_TOKEN_URL,
+                json={
+                    "grant_type": "refresh_token",
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                    "refresh_token": self.refresh_token,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        self._access_token = data["access_token"]
+        if "refresh_token" in data:
+            self.refresh_token = data["refresh_token"]
+        expires_in = data.get("expires_in", 3600)
+        self.expires_at = int(time.time()) + expires_in
+        self._headers = {"Accept": "application/json", "Authorization": f"Bearer {self._access_token}"}
+
+        if self.on_token_refresh:
+            self.on_token_refresh({
+                "access_token": self._access_token,
+                "refresh_token": self.refresh_token,
+                "expires_at": self.expires_at,
+                "cloud_id": self.cloud_id,
+            })
+
+    @staticmethod
+    async def resolve_accessible_site(access_token: str) -> Optional[dict]:
+        """One-time post-authorization step (called from the OAuth callback,
+        not per-request): exchange the access token for the list of Atlassian
+        sites the user granted, and return the first one as
+        {cloud_id, url, name}. A user with multiple Jira Cloud sites can
+        re-run the OAuth flow (Atlassian's consent screen lets them pick a
+        different/additional site) to switch which one KAIROS reads."""
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                resp = await client.get(
+                    JiraConnector.ACCESSIBLE_RESOURCES_URL,
+                    headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+                )
+                resp.raise_for_status()
+                resources = resp.json()
+        except Exception as e:
+            print(f"[JiraConnector] resolve_accessible_site error: {e}")
+            return None
+
+        if not resources:
+            return None
+        site = resources[0]
+        return {"cloud_id": site.get("id"), "url": site.get("url"), "name": site.get("name")}
 
     # ── Public async API ───────────────────────────────────────────────────────
 
     async def get_recent_issues(self, days_back: int = 30) -> list[dict]:
         if not self._ok():
             return []
+        await self._ensure_fresh_token()
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._get_issues_sync, days_back)
 
@@ -33,6 +143,7 @@ class JiraConnector:
         """Issues assigned to the authenticated user, optionally filtered by status."""
         if not self._ok():
             return []
+        await self._ensure_fresh_token()
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._get_my_issues_sync, status_filter)
 
@@ -40,6 +151,7 @@ class JiraConnector:
         """List all Jira projects in the workspace."""
         if not self._ok():
             return []
+        await self._ensure_fresh_token()
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._get_projects_sync)
 
@@ -47,6 +159,7 @@ class JiraConnector:
         """Full-text search across issue summaries and descriptions."""
         if not self._ok():
             return []
+        await self._ensure_fresh_token()
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._search_issues_text_sync, query, limit)
 
@@ -54,6 +167,7 @@ class JiraConnector:
         """Return counts of issues by status across the whole workspace."""
         if not self._ok():
             return {}
+        await self._ensure_fresh_token()
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._issue_stats_sync)
 
@@ -61,6 +175,7 @@ class JiraConnector:
         """Get active sprint information for a project (or all projects)."""
         if not self._ok():
             return {}
+        await self._ensure_fresh_token()
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sprint_status_sync, project_key)
 
@@ -68,6 +183,7 @@ class JiraConnector:
         """Fetch a single issue by key (e.g. 'KAI-42')."""
         if not self._ok():
             return None
+        await self._ensure_fresh_token()
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._get_issue_sync, issue_key)
 
@@ -112,7 +228,7 @@ class JiraConnector:
             resp = httpx.get(
                 f"{self._base}/rest/api/3/project/search",
                 auth=self._auth,
-                headers={"Accept": "application/json"},
+                headers=self._headers,
                 params={"maxResults": 50, "orderBy": "lastIssueUpdatedTime"},
                 timeout=20,
             )
@@ -148,7 +264,7 @@ class JiraConnector:
                     f"{self._base}/rest/api/3/search/jql",
                     auth=self._auth,
                     json={"jql": jql, "maxResults": 0, "fields": []},
-                    headers={"Accept": "application/json", "Content-Type": "application/json"},
+                    headers={**self._headers, "Content-Type": "application/json"},
                     timeout=15,
                 )
                 resp.raise_for_status()
@@ -169,7 +285,7 @@ class JiraConnector:
             resp = httpx.get(
                 f"{self._base}/rest/agile/1.0/board",
                 auth=self._auth,
-                headers={"Accept": "application/json"},
+                headers=self._headers,
                 params=params,
                 timeout=20,
             )
@@ -186,7 +302,7 @@ class JiraConnector:
                     sprint_resp = httpx.get(
                         f"{self._base}/rest/agile/1.0/board/{board_id}/sprint",
                         auth=self._auth,
-                        headers={"Accept": "application/json"},
+                        headers=self._headers,
                         params={"state": "active"},
                         timeout=15,
                     )
@@ -213,7 +329,7 @@ class JiraConnector:
             resp = httpx.get(
                 f"{self._base}/rest/api/3/issue/{issue_key}",
                 auth=self._auth,
-                headers={"Accept": "application/json"},
+                headers=self._headers,
                 timeout=20,
             )
             resp.raise_for_status()
@@ -271,7 +387,7 @@ class JiraConnector:
                         "status", "issuetype", "labels", "project",
                     ],
                 },
-                headers={"Accept": "application/json", "Content-Type": "application/json"},
+                headers={**self._headers, "Content-Type": "application/json"},
                 timeout=30,
             )
             resp.raise_for_status()
@@ -285,7 +401,7 @@ class JiraConnector:
             resp = httpx.get(
                 f"{self._base}/rest/api/3/issue/{issue_key}/comment",
                 auth=self._auth,
-                headers={"Accept": "application/json"},
+                headers=self._headers,
                 timeout=20,
             )
             resp.raise_for_status()

@@ -81,6 +81,16 @@ def save_refreshed_token(user_id: str, service: str, token_data: dict):
     _store_token(user_id, service, merged)
 
 
+def get_jira_oauth(user_id: str) -> Optional[dict]:
+    """Return this user's real per-user Jira OAuth token_data, if any usable
+    one is stored (needs cloud_id — a row without it can't be used for OAuth
+    mode; see jira_connector.py's two auth modes)."""
+    for data in _read_token_rows(user_id, "jira"):
+        if data.get("cloud_id") and (data.get("access_token") or data.get("refresh_token")):
+            return data
+    return None
+
+
 def get_notion_token(user_id: str) -> Optional[str]:
     """Return the Notion access_token (OAuth) or api_key (legacy) for this user."""
     for data in _read_token_rows(user_id, "notion"):
@@ -156,10 +166,24 @@ def build_connectors_for_user(user_id: str) -> dict:
         )
         out["connected"].append("zoom")
 
-    # Jira is configured globally (no per-user OAuth stored yet). Only attach it for
-    # the authorized owner uid — otherwise every user (incl. anonymous guests) would
-    # be served the deployer's private Jira workspace.
-    if (
+    # Jira: prefer a real per-user OAuth token when this user has connected
+    # their own Jira (Bearer auth against their own accessible site — see
+    # jira_connector.py's OAuth mode). Only fall back to the global
+    # single-tenant admin credential for the configured owner uid, and only
+    # when they haven't done real per-user OAuth — otherwise every user
+    # (incl. anonymous guests) would be served the deployer's private Jira.
+    jira_oauth = get_jira_oauth(user_id)
+    if jira_oauth:
+        jira_refresh_cb = lambda data: save_refreshed_token(user_id, "jira", data)
+        out["jira"] = JiraConnector(
+            access_token=jira_oauth.get("access_token"),
+            refresh_token=jira_oauth.get("refresh_token"),
+            cloud_id=jira_oauth.get("cloud_id"),
+            expires_at=jira_oauth.get("expires_at"),
+            on_token_refresh=jira_refresh_cb,
+        )
+        out["connected"].append("jira")
+    elif (
         user_id and user_id == config.JIRA_OWNER_UID
         and config.JIRA_URL and config.JIRA_EMAIL and config.JIRA_API_TOKEN
     ):

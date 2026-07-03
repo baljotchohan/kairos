@@ -562,14 +562,30 @@ async def jira_callback(code: str = None, state: str = None, error: str = None):
             except Exception:
                 pass
 
+        # Atlassian 3LO OAuth tokens are scoped to a set of accessible sites,
+        # not a single fixed URL — resolve which Jira Cloud site (cloud_id)
+        # this token can actually read, since every API call has to go
+        # through https://api.atlassian.com/ex/jira/{cloud_id}/... rather
+        # than the site's own domain. Without this, the stored token has no
+        # cloud_id and jira_connector.py can't use it at all.
+        from connectors.jira_connector import JiraConnector
+        site = await JiraConnector.resolve_accessible_site(data.get("access_token"))
+        if not site or not site.get("cloud_id"):
+            return _popup_error(
+                "Connected, but no accessible Jira site was found — make sure you "
+                "granted access to a site during authorization, then try again."
+            )
+
         _store_token(verified_uid, "jira", {
             "access_token": data.get("access_token"),
             "refresh_token": data.get("refresh_token"),
+            "cloud_id": site.get("cloud_id"),
+            "workspace": site.get("name") or site.get("url") or "Jira",
             "email": email,
             "service": "jira",
         })
-        print(f"[OAuth] ✅ Jira connected uid={verified_uid} email={email}")
-        return _popup_success("Jira", f"Connected as {email}")
+        print(f"[OAuth] ✅ Jira connected uid={verified_uid} email={email} site={site.get('name')}")
+        return _popup_success("Jira", f"Connected as {email} ({site.get('name') or 'Jira'})")
 
     except Exception as e:
         print(f"[OAuth] 🔴 Jira callback error: {e}")

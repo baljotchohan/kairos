@@ -175,12 +175,33 @@ class KairosOrchestrator:
             return {"github_data": [], "errors": errs}
 
     async def _gather_jira(self, state: KairosState) -> dict:
-        # Jira creds are global env (no per-user OAuth yet) — only ingest the
-        # deployer's Jira for the authorized owner uid, never for other users.
-        if state.get("user_id") != config.JIRA_OWNER_UID:
+        user_id = state.get("user_id")
+
+        # Prefer this user's own real per-user Jira OAuth connection when
+        # they have one (see core/live_connectors.py + jira_connector.py's
+        # OAuth mode). Fall back to the global single-tenant admin
+        # credential only for the configured owner uid, and only when they
+        # haven't connected their own Jira — never for anyone else, so no
+        # user (including anonymous guests) is served the deployer's
+        # private global Jira workspace.
+        from core.live_connectors import get_jira_oauth, save_refreshed_token
+        jira_oauth = get_jira_oauth(user_id) if user_id else None
+        if jira_oauth:
+            from connectors.jira_connector import JiraConnector
+            connector = JiraConnector(
+                access_token=jira_oauth.get("access_token"),
+                refresh_token=jira_oauth.get("refresh_token"),
+                cloud_id=jira_oauth.get("cloud_id"),
+                expires_at=jira_oauth.get("expires_at"),
+                on_token_refresh=lambda d: save_refreshed_token(user_id, "jira", d),
+            )
+        elif user_id == config.JIRA_OWNER_UID:
+            connector = self.jira_connector
+        else:
             return {"jira_data": [], "status": "jira_skipped"}
+
         try:
-            issues = await self.jira_connector.get_recent_issues(days_back=30)
+            issues = await connector.get_recent_issues(days_back=30)
             data = []
             for issue in issues:
                 data.append({

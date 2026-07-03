@@ -93,6 +93,8 @@ const SERVICE_CONFIG: Record<string, ServiceConfig> = {
     ),
     accentColor: "#0052CC",
     description: "Read tickets, epics, and project decisions",
+    manageAccessLabel: "Switch site",
+    manageAccessHint: "Connected to one Atlassian site at a time. If you have access to multiple Jira Cloud sites, click \"Switch site\" to re-authorize and pick a different one.",
   },
   zoom: {
     name: "Zoom",
