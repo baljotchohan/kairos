@@ -50,17 +50,18 @@ CRITICAL RULES:
 1. DISCONNECTED SOURCE: If the user asks about a source NOT in the connected sources list, IMMEDIATELY output Final Answer explaining what's not connected. Do NOT call any tool. Do NOT loop.
 2. SPECIFIC ANSWERS: Use real numbers, names, dates, and [text](url) markdown links from tool output. Never invent data.
 3. HOW-MANY QUESTIONS: Call the count/stats tool first, then Final Answer with the exact number.
-4. TOOL ERRORS: If a tool returns {{"error": "..."}}, report that error in Final Answer — do not retry the same tool.
+4. TOOL ERRORS: If a tool returns {{"error": "..."}}, quote that error message VERBATIM in your Final Answer (e.g. "GitHub API error: 401 Unauthorized — your token may have expired") — never flatten it into a vague "an error occurred". The exact error is what lets the user (or a developer) actually fix the problem.
 5. NEVER CONTRADICT YOUR OWN OBSERVATIONS. Before writing "not found", "no results", or "nothing related to X", re-read every Observation you received this turn. If ANY of them contain items, your Final Answer MUST reference those items — it is a hard failure to say "nothing found" while your own tool output is sitting right there with real results. This especially applies to literal-name questions ("what's in the X repo") where a search tool won't find an exact repo/file named X but WILL surface things that mention X (PRs, issues, discussions) — in that case say so precisely: "There's no repo/file literally named X, but I found related activity: [item](url), [item](url)..." — never collapse "no exact match" into "nothing found at all."
 6. UNDERSTAND INTENT, DON'T PATTERN-MATCH THE WORDING. A question naming something ("the auth repo", "my BCA project") is usually asking about a TOPIC, not requiring an exact literal name match. If a direct lookup comes back empty, broaden to a keyword/content search before concluding there's nothing — only report "not connected" or "genuinely nothing found" after you've actually tried the broader search and it also came back empty.
-7. FORMAT YOUR FINAL ANSWER like a professional AI assistant:
-   - Start with a one-line summary of what you found
-   - Use ## Section Headers with emojis for different categories (e.g. "## 📄 Files Found", "## 👤 Key People", "## 📅 Recent Activity")
-   - Use bullet lists (- item) for multiple results
-   - **Bold** the file names, key metrics, and important facts
-   - Format links as [display name](url) — never raw URLs
-   - Add a brief "## 💡 Summary" at the end for queries with 3+ results
-   - Keep it concise but complete
+7. FORMAT YOUR FINAL ANSWER like a professional AI assistant. The renderer only turns "## Header" into an actual heading when it starts its own line — a header glued onto the end of a sentence renders as literal "## " text, which looks broken. So:
+   - Start with ONE short bold summary line — no separate "Summary:" prefix, just **bold the sentence itself**.
+   - Every "## Section Header" MUST be on its own line, with a blank line before AND after it. Never write a header in the middle of a paragraph or right after a period — always emit "\n\n## Header\n\n" as its own block.
+   - One category = one section. Don't split the same category across two headers, and don't repeat information across sections.
+   - Use bullet lists (- item) for multiple results within a section.
+   - **Bold** file names, key metrics, and important facts — sparingly, only the genuinely important ones.
+   - Format links as [display name](url) — never raw URLs.
+   - End with ONE "## 💡 Summary" only if there are 3+ distinct results AND it adds something beyond the opening line — otherwise skip it. Never have both an opening summary line and a closing "## Summary" that just repeat each other.
+   - Keep it concise but complete — this is a chat answer, not a report.
 
 Do not output anything after the Final Answer block."""
 
@@ -335,17 +336,23 @@ class LiveDataAgent(BaseAgent):
     # ── Tool handlers ──────────────────────────────────────────────────────────
 
     def _add_source(self, title: str, date: str, source: str, url: str):
-        if url and len(self._collected_sources) < 12:
-            # Use deterministic ID matching memory.make_id() so frontend /api/decisions/<id> works
-            node_id = (
-                self.memory.make_id(title=title, source_url=url, user_id=self._current_user_id)
-                if self.memory and title
-                else url
-            )
-            self._collected_sources.append({
-                "id": node_id, "title": title or source, "date": date or "",
-                "source": source, "source_url": url,
-            })
+        if not url or len(self._collected_sources) >= 12:
+            return
+        # A single ReAct turn can call more than one tool that surfaces the same
+        # item (e.g. a broad search followed by a targeted lookup) — skip exact
+        # duplicates so the Sources panel doesn't show the same chip twice.
+        if any(s["source_url"] == url for s in self._collected_sources):
+            return
+        # Use deterministic ID matching memory.make_id() so frontend /api/decisions/<id> works
+        node_id = (
+            self.memory.make_id(title=title, source_url=url, user_id=self._current_user_id)
+            if self.memory and title
+            else url
+        )
+        self._collected_sources.append({
+            "id": node_id, "title": title or source, "date": date or "",
+            "source": source, "source_url": url,
+        })
 
     def _write_sources_to_graph(self):
         """Store collected live-data sources as DecisionNodes in KAIROS memory."""
@@ -583,7 +590,13 @@ class LiveDataAgent(BaseAgent):
                 date = datetime.utcfromtimestamp(float(m.get("ts", "0"))).strftime("%Y-%m-%d %H:%M")
             except (ValueError, TypeError):
                 date = ""
-            self._add_source(f"#{m.get('channel_name','')} — {m.get('user','')}", date[:10], "Slack", m.get("permalink", ""))
+            # Include a text snippet so multiple messages from the same person in
+            # the same channel don't all render as identical, indistinguishable
+            # source chips in the UI ("#channel — user" x8 with no way to tell
+            # them apart).
+            snippet = (m.get("text", "") or "").strip().replace("\n", " ")[:60]
+            title = f"#{m.get('channel_name','')} — {m.get('user','')}: {snippet}" if snippet else f"#{m.get('channel_name','')} — {m.get('user','')}"
+            self._add_source(title, date[:10], "Slack", m.get("permalink", ""))
             out.append({
                 "channel": f"#{m.get('channel_name', '')}",
                 "user": m.get("user", ""),

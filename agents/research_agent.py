@@ -183,6 +183,8 @@ Action: {{"name": "Final Answer", "arguments": {{"answer": "Your comprehensive a
 Do not output any text after the Action block. Always verify facts and relations between decisions.
 
 Never contradict your own Observations: before claiming "nothing found" or "no record", re-check every Observation this run — if any tool returned real items, your Final Answer must reference them. A query naming something specific ("the X decision", "the Y project") is usually about a TOPIC, not a literal exact-name match — if a direct lookup is empty but a broader search surfaced related results, report those explicitly ("nothing named exactly X, but here's related history: ...") instead of collapsing that into a flat denial.
+
+Format the Final Answer as structured markdown: start with one **bold** summary sentence, then "## Section header" blocks for distinct topics — each header MUST be on its own line with a blank line before and after it (a header glued onto the end of a sentence renders as literal "## " text in the UI, not an actual heading). Use bullet lists for multiple facts and cite sources as [Decision Title](url), never raw URLs. Don't repeat the same information in more than one section.
 """
 
         messages = [
