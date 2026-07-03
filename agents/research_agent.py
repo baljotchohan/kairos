@@ -181,6 +181,8 @@ When you have collected all necessary facts to answer the question, output your 
 Action: {{"name": "Final Answer", "arguments": {{"answer": "Your comprehensive answer with specific details and citations here."}}}}
 
 Do not output any text after the Action block. Always verify facts and relations between decisions.
+
+Never contradict your own Observations: before claiming "nothing found" or "no record", re-check every Observation this run — if any tool returned real items, your Final Answer must reference them. A query naming something specific ("the X decision", "the Y project") is usually about a TOPIC, not a literal exact-name match — if a direct lookup is empty but a broader search surfaced related results, report those explicitly ("nothing named exactly X, but here's related history: ...") instead of collapsing that into a flat denial.
 """
 
         messages = [
