@@ -49,11 +49,17 @@ export function useAuth() {
 
     let refreshInterval: ReturnType<typeof setInterval> | null = null;
 
-    // Live Firebase mode with auto-token refresh
+    // Live Firebase mode with auto-token refresh.
+    // IMPORTANT: never call getIdToken(true) inside onIdTokenChanged — a forced
+    // refresh mints a NEW token, which fires onIdTokenChanged again, creating an
+    // infinite refresh loop. Every loop iteration set a new `token` state, which
+    // tore down and reconnected the WebSocket and flashed the whole app back into
+    // its loading state ("hang / glitch / Reconnecting…" on every page change).
+    // The non-forced getIdToken() returns the cached token (auto-refreshing only
+    // when it's near expiry), so the listener converges instead of looping.
     const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
-      setLoading(true);
       if (firebaseUser) {
-        const idToken = await firebaseUser.getIdToken(true);
+        const idToken = await firebaseUser.getIdToken();
         setToken(idToken);
         setUser({
           uid: firebaseUser.uid,

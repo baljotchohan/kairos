@@ -25,6 +25,11 @@ class KairosWebSocket {
     }
 
     if (tokenChanged && this.ws) {
+      // Intentional swap to a new token: detach handlers first so the old
+      // socket's onclose doesn't emit a spurious "disconnected" (flashing
+      // "Reconnecting…" in the UI) or schedule a pointless reconnect while
+      // the replacement socket is already connecting.
+      this.silenceSocket(this.ws);
       this.ws.close();
       this.ws = null;
     }
@@ -110,9 +115,21 @@ class KairosWebSocket {
       this.reconnectTimer = null;
     }
     if (this.ws) {
+      this.silenceSocket(this.ws);
       this.ws.close();
       this.ws = null;
     }
+    // Listeners still need to know the connection is gone (e.g. logout).
+    this.emit("connection", { connected: false });
+  }
+
+  /** Detach all handlers from a socket we're intentionally discarding, so its
+   * async close event can't emit stale state or schedule a reconnect. */
+  private silenceSocket(ws: WebSocket): void {
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onclose = null;
+    ws.onerror = null;
   }
 
   /** Returns true if the message was actually sent, false if the socket

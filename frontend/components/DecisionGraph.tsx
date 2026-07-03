@@ -284,6 +284,15 @@ export default function DecisionGraph({
     const container = containerRef.current;
     if (!container) return;
 
+    // Measure synchronously on mount — dimensions start at 0×0 and the
+    // observer's first delivery lands a frame later, which painted the canvas
+    // as a blank/shrunken flash every time this component remounted (e.g.
+    // switching dashboard tabs). Seed the real size immediately instead.
+    setDimensions({
+      width: container.clientWidth,
+      height: container.clientHeight,
+    });
+
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         setDimensions({

@@ -57,7 +57,9 @@ function generateId(): string {
 
 export function useKairosChat(token: string | null) {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isConnected, setIsConnected] = useState(false);
+  // The socket is a singleton that survives route changes — a remounting page
+  // must start from its real state, not assume "disconnected".
+  const [isConnected, setIsConnected] = useState(() => wsClient.isConnected());
   const [isReconnectExhausted, setIsReconnectExhausted] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [stats, setStats] = useState<KairosStats | null>(null);
@@ -169,6 +171,13 @@ export function useKairosChat(token: string | null) {
     }
 
     wsClient.connect(token);
+
+    // If the singleton was already open (returning to this page), there's no
+    // "connection" event coming — sync state and fetch stats immediately.
+    if (wsClient.isConnected()) {
+      setIsConnected(true);
+      wsClient.send({ type: "stats" });
+    }
 
     const unsubConnection = wsClient.on(
       "connection",
@@ -347,7 +356,11 @@ export function useKairosChat(token: string | null) {
       });
     });
 
-    // Cleanup on unmount
+    // Cleanup on unmount: remove listeners but DON'T disconnect the singleton
+    // socket. Tearing it down here meant every route change (dashboard ↔
+    // integrations) closed and re-opened the WebSocket, flashing "Reconnecting…"
+    // and cancelling any in-flight query. The socket now survives navigation;
+    // it's only closed explicitly on logout (the !token branch above).
     return () => {
       unsubConnection();
       unsubStart();
@@ -359,7 +372,6 @@ export function useKairosChat(token: string | null) {
       unsubIngestDone();
       unsubStats();
       unsubError();
-      wsClient.disconnect();
     };
   }, [token, fetchSessions, fetchUserProfile]);
 
