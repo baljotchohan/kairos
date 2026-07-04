@@ -233,15 +233,15 @@ _rl_last_sweep = [0.0]
 async def rate_limit_middleware(request: Request, call_next):
     path = request.url.path
     if path.startswith("/api/") or path.startswith("/mcp/"):
-        # This deployment always sits behind a reverse proxy (HF Space /
-        # Vercel's rewrite proxy), so request.client.host is the proxy's own
-        # IP for every request — keying the limiter on it would collapse
-        # "120 req/min per IP" into one shared budget for all traffic.
-        # X-Forwarded-For's leftmost entry is the original client in that
-        # standard proxy chain.
+        # This deployment always sits behind exactly one trusted reverse proxy
+        # (HF Space / Vercel's rewrite proxy). That proxy appends the real
+        # connecting IP as the RIGHTMOST entry of X-Forwarded-For — anything
+        # to its left is client-supplied and trivially forgeable, so trusting
+        # the leftmost entry let any caller fake a fresh IP on every request
+        # and bypass the limiter entirely. Only the rightmost hop is trustworthy.
         forwarded = request.headers.get("x-forwarded-for")
         if forwarded:
-            ip = forwarded.split(",")[0].strip()
+            ip = forwarded.split(",")[-1].strip()
         else:
             ip = request.client.host if request.client else "unknown"
         now = _time.time()
