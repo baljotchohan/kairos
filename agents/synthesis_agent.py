@@ -116,12 +116,15 @@ class SynthesisAgent(BaseAgent):
         Given a content dict (from any connector), extract decisions using LLM
         and store them in memory. Used in background ingestion.
         """
-        text = content.get("text", "")
+        # Connectors are not consistent about key naming — Slack/Email/Notion/
+        # GitHub use text/source_url, while Drive/Meeting/Jira use content/url.
+        # Accept either shape so no source silently produces zero decisions.
+        text = content.get("text") or content.get("content") or ""
         if len(text.strip()) < 10:
             return []
 
         source_type = content.get("source", "unknown")
-        source_url = content.get("source_url", "")
+        source_url = content.get("source_url") or content.get("url") or ""
         content_date = content.get("date", "")
 
         prompt = f"""Source type: {source_type}
