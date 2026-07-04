@@ -32,10 +32,12 @@ const DEFAULT_STATE: ConnectionsMap = {
 export default function IntegrationGrid({ token }: IntegrationGridProps) {
   const [connections, setConnections] = useState<ConnectionsMap>(DEFAULT_STATE);
   const [isFetching, setIsFetching] = useState(true);
+  const [fetchFailed, setFetchFailed] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     setConnections(DEFAULT_STATE);
     setIsFetching(true);
+    setFetchFailed(false);
     if (!token) {
       setIsFetching(false);
       return;
@@ -49,9 +51,12 @@ export default function IntegrationGrid({ token }: IntegrationGridProps) {
       if (res.ok) {
         const data = await res.json();
         setConnections((prev) => ({ ...prev, ...data }));
+      } else {
+        setFetchFailed(true);
       }
     } catch {
-      // backend may not be running — keep default disconnected state
+      // backend unreachable — surface this distinctly from "nothing connected"
+      setFetchFailed(true);
     } finally {
       setIsFetching(false);
     }
@@ -102,6 +107,19 @@ export default function IntegrationGrid({ token }: IntegrationGridProps) {
         <p className="text-[10px] text-amber-500/70 font-mono text-center mt-2">
           Sign in to connect your work apps
         </p>
+      )}
+      {token && fetchFailed && (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 mt-2">
+          <p className="text-[10px] text-rose-300 font-mono">
+            Couldn&apos;t reach the server to check connection status — this isn&apos;t necessarily &quot;all disconnected&quot;.
+          </p>
+          <button
+            onClick={fetchStatus}
+            className="text-[10px] font-semibold text-rose-300 hover:text-rose-200 underline shrink-0"
+          >
+            Retry
+          </button>
+        </div>
       )}
     </div>
   );
