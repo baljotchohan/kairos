@@ -9,6 +9,21 @@ interface StreamingTextProps {
   className?: string;
 }
 
+// Link targets originate from ingested Slack/email/Notion/GitHub content and
+// LLM output, not just the user — only allow schemes a browser can't turn
+// into script execution on click (e.g. javascript:, data:).
+function isSafeHref(url: string): boolean {
+  const trimmed = url.trim();
+  if (trimmed.startsWith("/") || trimmed.startsWith("#")) return true;
+  try {
+    const scheme = trimmed.match(/^([a-z][a-z0-9+.-]*):/i)?.[1]?.toLowerCase();
+    if (!scheme) return true; // relative URL, no scheme to abuse
+    return ["http", "https", "mailto"].includes(scheme);
+  } catch {
+    return false;
+  }
+}
+
 // ── Inline formatter ──────────────────────────────────────────────────────────
 // Handles: **bold**, *italic*, `code`, [text](url)
 function renderInline(text: string, keyPrefix: string): React.ReactNode {
@@ -45,15 +60,21 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode {
       );
     } else if (match[4] !== undefined && match[5] !== undefined) {
       parts.push(
-        <a
-          key={`${keyPrefix}-l${k++}`}
-          href={match[5]}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 decoration-indigo-500/40 hover:decoration-indigo-400 transition-colors break-all"
-        >
-          {match[4]}
-        </a>
+        isSafeHref(match[5]) ? (
+          <a
+            key={`${keyPrefix}-l${k++}`}
+            href={match[5]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 decoration-indigo-500/40 hover:decoration-indigo-400 transition-colors break-all"
+          >
+            {match[4]}
+          </a>
+        ) : (
+          <span key={`${keyPrefix}-l${k++}`} className="text-[rgb(var(--text-muted))]" title={`Blocked unsafe link target: ${match[5]}`}>
+            {match[4]}
+          </span>
+        )
       );
     }
     lastIndex = regex.lastIndex;
