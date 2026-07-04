@@ -374,27 +374,41 @@ class JiraConnector:
         }
 
     def _search_issues(self, jql: str, max_results: int = 100) -> list[dict]:
+        issues: list[dict] = []
+        next_page_token = None
         try:
-            resp = httpx.post(
-                f"{self._base}/rest/api/3/search/jql",
-                auth=self._auth,
-                json={
+            while len(issues) < max_results:
+                body = {
                     "jql": jql,
-                    "maxResults": max_results,
+                    "maxResults": min(100, max_results - len(issues)),
                     "fields": [
                         "summary", "description", "assignee", "reporter",
                         "created", "updated", "duedate", "comment", "priority",
                         "status", "issuetype", "labels", "project",
                     ],
-                },
-                headers={**self._headers, "Content-Type": "application/json"},
-                timeout=30,
-            )
-            resp.raise_for_status()
-            return resp.json().get("issues", [])
+                }
+                if next_page_token:
+                    body["nextPageToken"] = next_page_token
+
+                resp = httpx.post(
+                    f"{self._base}/rest/api/3/search/jql",
+                    auth=self._auth,
+                    json=body,
+                    headers={**self._headers, "Content-Type": "application/json"},
+                    timeout=30,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                page_issues = data.get("issues", [])
+                issues.extend(page_issues)
+
+                next_page_token = data.get("nextPageToken")
+                if data.get("isLast", not next_page_token) or not page_issues:
+                    break
+            return issues[:max_results]
         except Exception as e:
             print(f"[JiraConnector] search error: {e}")
-            return []
+            return issues
 
     def _get_comments(self, issue_key: str) -> list[str]:
         try:
