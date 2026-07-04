@@ -86,7 +86,7 @@ class MeetingAgent:
         try:
             import whisper  # type: ignore[import-untyped]  # optional dep
         except ImportError:
-            return rec.get("topic", "")
+            return ""
 
         download_url = rec.get("download_url", "")
         if not download_url:
