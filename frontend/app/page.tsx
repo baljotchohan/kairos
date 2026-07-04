@@ -441,7 +441,11 @@ const Logos = {
   notion: (
     <svg viewBox="0 0 24 24" className="w-7 h-7">
       <rect width="24" height="24" rx="5.5" fill="#000000" />
-      <path d="M7.1 6.3c0-.66.44-1.1 1.1-1.1h1.62l6.08 9.3V6.3c0-.66.44-1.1 1.1-1.1h.6c.66 0 1.1.44 1.1 1.1v11.4c0 .66-.44 1.1-1.1 1.1h-1.56l-6.14-9.4v8.4c0 .66-.44 1.1-1.1 1.1h-.6c-.66 0-1.1-.44-1.1-1.1V6.3z" fill="#fff" />
+      <path
+        transform="translate(2.7, 3) scale(0.72)"
+        fill="#fff"
+        d="M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L17.86 1.968c-.42-.326-.981-.7-2.055-.607L3.01 2.295c-.466.046-.56.28-.374.466zm.793 3.08v13.904c0 .747.373 1.027 1.214.98l14.523-.84c.841-.046.935-.56.935-1.167V6.354c0-.606-.233-.933-.748-.887l-15.177.887c-.56.047-.747.327-.747.933zm14.337.745c.093.42 0 .84-.42.888l-.7.14v10.264c-.608.327-1.168.514-1.635.514-.748 0-.935-.234-1.495-.933l-4.577-7.19v6.96l1.468.327s0 .84-1.168.84l-3.222.186c-.093-.186 0-.653.327-.746l.84-.233V9.854L7.1 9.76c-.094-.42.14-1.026.793-1.073l3.456-.233 4.764 7.284V9.107l-1.215-.14c-.093-.514.28-.887.747-.933z"
+      />
     </svg>
   ),
   github: (
@@ -451,6 +455,164 @@ const Logos = {
     </svg>
   ),
 };
+
+/* ── Agent mascots ───────────────────────────────────────────────────────────
+   One consistent glossy 3D robot head (built from an SVG gooey-blob filter so
+   the cat-ear bumps fuse seamlessly into the head, no visible seams) for every
+   extraction agent — the head color matches that service's real brand color,
+   and each gets its own expression for personality. */
+function Mascot({ id, light, dark, face }: { id: string; light: string; dark: string; face: React.ReactNode }) {
+  return (
+    <svg viewBox="0 0 200 210" className="w-16 h-16">
+      <defs>
+        <filter id={`goo-${id}`} x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
+          <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 24 -12" result="goo" />
+        </filter>
+        <radialGradient id={`bodygrad-${id}`} cx="32%" cy="26%" r="85%">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="42%" stopColor={light} />
+          <stop offset="100%" stopColor={dark} />
+        </radialGradient>
+        <radialGradient id={`screengrad-${id}`} cx="35%" cy="18%" r="95%">
+          <stop offset="0%" stopColor="#38383e" />
+          <stop offset="40%" stopColor="#101013" />
+          <stop offset="100%" stopColor="#000000" />
+        </radialGradient>
+        <radialGradient id={`highlight-${id}`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity={0.9} />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+        </radialGradient>
+      </defs>
+
+      <ellipse cx="100" cy="192" rx="52" ry="9" fill="rgba(0,0,0,0.25)" />
+
+      <g filter={`url(#goo-${id})`}>
+        <circle cx="60" cy="40" r="16" fill={`url(#bodygrad-${id})`} />
+        <circle cx="140" cy="40" r="16" fill={`url(#bodygrad-${id})`} />
+        <rect x="38" y="36" width="124" height="120" rx="45" fill={`url(#bodygrad-${id})`} />
+      </g>
+
+      <ellipse cx="72" cy="62" rx="28" ry="16" fill={`url(#highlight-${id})`} opacity={0.6} />
+
+      <rect x="53" y="68" width="94" height="74" rx="22" fill={`url(#screengrad-${id})`} />
+      <rect x="53" y="68" width="94" height="28" rx="22" fill="#ffffff" opacity={0.06} />
+
+      <g opacity={0.97}>{face}</g>
+
+      <rect x="38" y="36" width="124" height="120" rx="45" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="1.5" opacity={0.5} />
+    </svg>
+  );
+}
+
+const MASCOTS = {
+  // Slack — laughing, wide open grin (chatty, always in the channel)
+  slack: (
+    <Mascot id="slack" light="#8b5f96" dark="#2d0d33" face={
+      <>
+        <circle cx="81.5" cy="102" r="6.5" fill="#fff" />
+        <circle cx="118.5" cy="102" r="6.5" fill="#fff" />
+        <path d="M 78 118 Q 100 140 122 118 Q 100 132 78 118 Z" fill="#fff" />
+      </>
+    } />
+  ),
+  // Gmail — calm, content smile (steady and attentive)
+  gmail: (
+    <Mascot id="gmail" light="#f08b7f" dark="#8f130a" face={
+      <>
+        <rect x="76" y="94" width="11" height="18" rx="5.5" fill="#fff" />
+        <rect x="113" y="94" width="11" height="18" rx="5.5" fill="#fff" />
+        <path d="M 82 120 Q 100 134 118 120" stroke="#fff" strokeWidth="6" strokeLinecap="round" fill="none" />
+      </>
+    } />
+  ),
+  // Drive — curious, one eye raised, slight smirk (digging through docs)
+  drive: (
+    <Mascot id="drive" light="#7fd39a" dark="#0f5c28" face={
+      <>
+        <rect x="75" y="90" width="12" height="20" rx="6" fill="#fff" />
+        <rect x="113" y="97" width="12" height="12" rx="6" fill="#fff" />
+        <path d="M 82 121 Q 100 130 122 116" stroke="#fff" strokeWidth="6" strokeLinecap="round" fill="none" />
+      </>
+    } />
+  ),
+  // Notion — closed happy eyes, quiet smile (organizing, at peace)
+  notion: (
+    <Mascot id="notion" light="#f0d3ab" dark="#8a5f2e" face={
+      <>
+        <path d="M 74 100 Q 81.5 92 89 100" stroke="#fff" strokeWidth="5.5" strokeLinecap="round" fill="none" />
+        <path d="M 111 100 Q 118.5 92 126 100" stroke="#fff" strokeWidth="5.5" strokeLinecap="round" fill="none" />
+        <path d="M 90 122 Q 100 128 110 122" stroke="#fff" strokeWidth="5.5" strokeLinecap="round" fill="none" />
+      </>
+    } />
+  ),
+  // GitHub — a wink and a smirk (clever, in on the joke)
+  github: (
+    <Mascot id="github" light="#a5a8f7" dark="#312e81" face={
+      <>
+        <rect x="76" y="94" width="11" height="18" rx="5.5" fill="#fff" />
+        <path d="M 113 103 Q 118.5 99 124 103" stroke="#fff" strokeWidth="5" strokeLinecap="round" fill="none" />
+        <path d="M 82 118 Q 104 132 124 114" stroke="#fff" strokeWidth="6" strokeLinecap="round" fill="none" />
+      </>
+    } />
+  ),
+  // Zoom — big excited grin, wide eyes (greeting you on camera)
+  zoom: (
+    <Mascot id="zoom" light="#8ec0ff" dark="#0c4aa0" face={
+      <>
+        <circle cx="81.5" cy="101" r="7.5" fill="#fff" />
+        <circle cx="118.5" cy="101" r="7.5" fill="#fff" />
+        <path d="M 76 117 Q 100 142 124 117 Q 100 128 76 117 Z" fill="#fff" />
+      </>
+    } />
+  ),
+};
+
+/* ── Reasoning-layer icons ────────────────────────────────────────────────────
+   These four are internal KAIROS components, not brands, so they get a
+   different treatment from the agent mascots — a chip/brain/lens/bolt set,
+   each in its own accent color. */
+function ReasoningIcon({ color, children }: { color: string; children: React.ReactNode }) {
+  return (
+    <svg viewBox="0 0 40 40" className="w-8 h-8">
+      <rect x="4" y="4" width="32" height="32" rx="10" fill={color} fillOpacity={0.14} stroke={color} strokeOpacity={0.35} />
+      <g stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" fill="none" transform="translate(20,20)">
+        {children}
+      </g>
+    </svg>
+  );
+}
+
+const REASONING_ICONS = {
+  // Synthesis Engine — a brain
+  synthesis: (
+    <ReasoningIcon color="#7c3aed">
+      <path d="M-5 -1 Q-6.5 -6.5 0 -7 Q6.5 -6.5 5 -1 Q7 3 3 6 Q1.5 7.4 0 6.2 Q-1.5 7.4 -3 6 Q-7 3 -5 -1 Z" />
+      <path d="M0 -7 V6.2 M-5 -1 Q-2 -2 0 0 Q2 -2 5 -1" />
+    </ReasoningIcon>
+  ),
+  // Router — a circuit/chip
+  router: (
+    <ReasoningIcon color="#6366f1">
+      <rect x="-4.5" y="-4.5" width="9" height="9" rx="1.5" />
+      <path d="M-4.5 -2 H-7.5 M-4.5 2 H-7.5 M4.5 -2 H7.5 M4.5 2 H7.5 M-2 -4.5 V-7.5 M2 -4.5 V-7.5 M-2 4.5 V7.5 M2 4.5 V7.5" />
+    </ReasoningIcon>
+  ),
+  // Retrieval Engine — a magnifying lens
+  retrieval: (
+    <ReasoningIcon color="#d946ef">
+      <circle cx="-1.3" cy="-1.3" r="4.6" />
+      <line x1="1.9" y1="1.9" x2="6.3" y2="6.3" />
+    </ReasoningIcon>
+  ),
+  // Live Agent — a lightbulb (instant, on-demand)
+  live: (
+    <ReasoningIcon color="#f59e0b">
+      <path d="M0 -6.5 A5 5 0 0 1 3 3 L2 5.5 H-2 L-3 3 A5 5 0 0 1 0 -6.5 Z" />
+      <path d="M-1.8 7.5 H1.8" />
+    </ReasoningIcon>
+  ),
+} as const;
 
 /* ── Static data ─────────────────────────────────────────────────────────── */
 const PROBLEMS = [
@@ -476,18 +638,18 @@ const PROBLEMS = [
 
 const AGENTS = {
   extraction: [
-    { icon: "💬", name: "Slack Agent", desc: "Reads every channel & thread, flags decision moments, captures participants and outcomes." },
-    { icon: "✉️", name: "Email Agent", desc: "Scans Gmail for approvals, sign-offs and escalations — links threads to the decisions they made." },
-    { icon: "📁", name: "Drive Agent", desc: "Parses docs, specs and proposals in Google Drive for the key choices written down inside them." },
-    { icon: "🗂️", name: "Notion Agent", desc: "Walks pages and databases recursively, extracting decisions logged in specs and wikis." },
-    { icon: "🐙", name: "GitHub Agent", desc: "Reads pull requests and issues — with review comments and discussion — across your most active repos." },
-    { icon: "🎥", name: "Meeting Agent", desc: "Transcribes Zoom recordings with Whisper, then pinpoints decisions, timestamps and who was in the room." },
+    { icon: MASCOTS.slack, name: "Slack Agent", desc: "Reads every channel & thread, flags decision moments, captures participants and outcomes." },
+    { icon: MASCOTS.gmail, name: "Email Agent", desc: "Scans Gmail for approvals, sign-offs and escalations — links threads to the decisions they made." },
+    { icon: MASCOTS.drive, name: "Drive Agent", desc: "Parses docs, specs and proposals in Google Drive for the key choices written down inside them." },
+    { icon: MASCOTS.notion, name: "Notion Agent", desc: "Walks pages and databases recursively, extracting decisions logged in specs and wikis." },
+    { icon: MASCOTS.github, name: "GitHub Agent", desc: "Reads pull requests and issues — with review comments and discussion — across your most active repos." },
+    { icon: MASCOTS.zoom, name: "Meeting Agent", desc: "Transcribes Zoom recordings with Whisper, then pinpoints decisions, timestamps and who was in the room." },
   ],
   reasoning: [
-    { icon: "🧠", name: "Synthesis Engine", desc: "Fuses every source into one decision graph and answers your questions with citations." },
-    { icon: "🔀", name: "Router", desc: "Classifies every query — search, live data, general chat, or ingest — before anything else runs." },
-    { icon: "🔎", name: "Retrieval Engine", desc: "Hybrid semantic + keyword + graph-neighbor search, personalized to your profile and history." },
-    { icon: "⚡", name: "Live Agent", desc: "Skips memory entirely for on-demand questions — \"how many unread emails do I have?\" — answered live." },
+    { icon: REASONING_ICONS.synthesis, name: "Synthesis Engine", desc: "Fuses every source into one decision graph and answers your questions with citations." },
+    { icon: REASONING_ICONS.router, name: "Router", desc: "Classifies every query — search, live data, general chat, or ingest — before anything else runs." },
+    { icon: REASONING_ICONS.retrieval, name: "Retrieval Engine", desc: "Hybrid semantic + keyword + graph-neighbor search, personalized to your profile and history." },
+    { icon: REASONING_ICONS.live, name: "Live Agent", desc: "Skips memory entirely for on-demand questions — \"how many unread emails do I have?\" — answered live." },
   ],
 };
 
@@ -502,12 +664,12 @@ const CONNECTORS = [
 ] as const;
 
 const MCP_TOOLS = [
-  { name: "get_context", sig: "(query)", desc: "Claude pulls relevant company memory before it answers anything." },
-  { name: "store_context", sig: "(decision, …)", desc: "Claude writes new decisions back into KAIROS the moment it learns them." },
-  { name: "search_decisions", sig: "(topic, person, date)", desc: "Structured search across the decision graph with full source citations." },
-  { name: "find_similar_decisions", sig: "(query)", desc: "Checks whether a new plan has real precedent — or if you're about to repeat a mistake." },
-  { name: "detect_decision_patterns", sig: "(scope)", desc: "Proactively scans the whole graph for contradictions, stale spend, and bus-factor risk." },
-  { name: "predict_decision_risk", sig: "(scope)", desc: "Scores every decision 0–100 for staleness, ownership gaps, and unreviewed impact." },
+  { title: "Remembers before it answers", desc: "Claude pulls relevant company memory before it answers anything." },
+  { title: "Saves what it learns", desc: "Claude writes new decisions back into KAIROS the moment it learns them." },
+  { title: "Searches by topic, person, or date", desc: "Structured search across the decision graph with full source citations." },
+  { title: "Checks for precedent", desc: "Checks whether a new plan has real precedent — or if you're about to repeat a mistake." },
+  { title: "Finds contradictions", desc: "Proactively scans the whole graph for contradictions, stale spend, and bus-factor risk." },
+  { title: "Scores decision risk", desc: "Scores every decision 0–100 for staleness, ownership gaps, and unreviewed impact." },
 ];
 
 const INTELLIGENCE = [
@@ -715,7 +877,7 @@ function DemoShowcase() {
                     style={{ animation: `demoWave 1s ease-in-out ${d * 0.15}s infinite` }}
                   />
                 ))}
-                <span className="ml-2 text-xs font-mono text-zinc-500">searching decision graph…</span>
+                <span className="ml-2 text-xs font-mono text-zinc-500">checking your company&apos;s memory…</span>
               </div>
             )}
 
@@ -825,14 +987,12 @@ export default function Landing() {
       <CursorGlow />
       {/* ── Nav ── */}
       <nav
-        className="fixed top-0 inset-x-0 z-50 transition-all duration-300"
+        className="fixed top-0 inset-x-0 z-50 transition-all duration-300 bg-[#080808]"
         style={{
-          background: scrolled ? "rgba(8,8,8,0.72)" : "transparent",
-          backdropFilter: scrolled ? "blur(14px)" : "none",
           borderBottom: scrolled ? "1px solid rgba(139,92,246,0.12)" : "1px solid transparent",
         }}
       >
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="w-full px-6 md:px-10 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <KairosLogo size={30} />
             <span className="text-lg font-bold tracking-[0.2em]">KAIROS</span>
@@ -1030,7 +1190,7 @@ export default function Landing() {
             {AGENTS.extraction.map((a, i) => (
               <Reveal key={a.name} delay={i * 80}>
                 <div className="group h-full p-6 rounded-2xl border border-violet-500/15 bg-white/[0.02] hover:bg-white/[0.04] hover:border-violet-500/40 transition-all">
-                  <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform">
+                  <div className="w-16 h-16 -ml-1 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                     {a.icon}
                   </div>
                   <h3 className="text-lg font-semibold mb-2">{a.name}</h3>
@@ -1045,7 +1205,7 @@ export default function Landing() {
             {AGENTS.reasoning.map((a, i) => (
               <Reveal key={a.name} delay={i * 80}>
                 <div className="group h-full p-6 rounded-2xl border border-violet-500/15 bg-white/[0.02] hover:bg-white/[0.04] hover:border-violet-500/40 transition-all">
-                  <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform">
+                  <div className="w-12 h-12 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
                     {a.icon}
                   </div>
                   <h3 className="text-lg font-semibold mb-2">{a.name}</h3>
@@ -1054,16 +1214,6 @@ export default function Landing() {
               </Reveal>
             ))}
           </div>
-
-          <Reveal delay={200}>
-            <div className="mt-8 p-6 rounded-2xl border border-violet-500/25 bg-violet-600/10">
-              <p className="text-sm text-zinc-300 leading-relaxed font-sans">
-                Powered by <span className="text-violet-300 font-semibold">Fireworks AI</span> on
-                AMD hardware — Qwen-3 for answers, Llama-3.3 for high-volume ingestion, with
-                automatic Groq + Gemini fallback so it never stalls.
-              </p>
-            </div>
-          </Reveal>
         </div>
       </section>
 
@@ -1141,14 +1291,14 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto">
           <Reveal className="text-center mb-16">
             <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">Connectors</p>
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">One-click OAuth. No token wrangling.</h2>
+            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">Connect once. No passwords to hand over.</h2>
             <p className="mt-4 text-zinc-400 max-w-2xl mx-auto font-sans">
-              An admin connects each workspace tool once. KAIROS reads continuously and keeps the
-              decision graph fresh.
+              You sign in and connect your own accounts — no admin, no IT ticket. KAIROS keeps
+              reading in the background and your decision graph stays up to date.
             </p>
           </Reveal>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
             {CONNECTORS.map((c, i) => (
               <Reveal key={c.key} delay={i * 80}>
                 <TiltCard className="h-full p-6 rounded-2xl border border-violet-500/15 bg-white/[0.02] hover:border-violet-500/35 transition-colors flex flex-col items-center text-center gap-3">
@@ -1207,37 +1357,26 @@ export default function Landing() {
       <section id="mcp" className="relative py-28 px-6 bg-gradient-to-b from-transparent via-violet-950/10 to-transparent">
         <div className="max-w-6xl mx-auto">
           <Reveal className="text-center mb-16">
-            <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">The Memory Loop</p>
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">A two-way brain for Claude</h2>
+            <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">Works With Your AI</p>
+            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">KAIROS MCP</h2>
             <p className="mt-4 text-zinc-400 max-w-2xl mx-auto font-sans">
-              KAIROS exposes an MCP server over streamable HTTP. Claude Desktop, Cursor and Claude
-              Code read from <em>and</em> write to the same organizational memory — both get smarter
-              over time.
+              Connect Claude, ChatGPT, or Cursor straight to your company&apos;s memory. Before it
+              answers you, your AI checks what KAIROS already knows. The moment it learns something
+              new and important, it saves that back to KAIROS too — so the next question, from
+              anyone, gets a smarter answer.
             </p>
           </Reveal>
 
           <div className="grid md:grid-cols-3 gap-5 mb-12">
             {MCP_TOOLS.map((t, i) => (
-              <Reveal key={t.name} delay={i * 110}>
+              <Reveal key={t.title} delay={i * 110}>
                 <div className="h-full p-6 rounded-2xl border border-violet-500/15 bg-[#0c0c0e] hover:border-violet-500/30 transition-all">
-                  <div className="font-mono text-sm mb-3">
-                    <span className="text-violet-300">{t.name}</span>
-                    <span className="text-zinc-600">{t.sig}</span>
-                  </div>
+                  <h3 className="text-[15px] font-semibold text-white mb-2.5">{t.title}</h3>
                   <p className="text-sm text-zinc-400 leading-relaxed font-sans">{t.desc}</p>
                 </div>
               </Reveal>
             ))}
           </div>
-
-          <Reveal>
-            <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-mono text-zinc-400">
-              <span className="px-4 py-2 rounded-lg border border-violet-500/25 bg-violet-500/5 text-violet-200">KAIROS Memory</span>
-              <span className="text-violet-500">⇄</span>
-              <span className="px-4 py-2 rounded-lg border border-violet-500/20 bg-white/[0.03]">Claude</span>
-              <span className="text-zinc-600 ml-2">context out · knowledge in</span>
-            </div>
-          </Reveal>
         </div>
       </section>
 
