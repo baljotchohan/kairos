@@ -492,6 +492,9 @@ async def mcp_streamable_http(token: str, request: Request):
             return Response(status_code=202)
         return _format_response(responses)
 
+    if not isinstance(body, dict):
+        return JSONResponse(_error(None, -32600, "Invalid Request: expected a JSON object or array"), status_code=400)
+
     extra_headers = {}
     if body.get("method") == "initialize":
         # Keep incoming or issue new session id
@@ -552,6 +555,9 @@ async def mcp_bearer_http(request: Request):
         if not responses:
             return Response(status_code=202)
         return _format_response(responses)
+
+    if not isinstance(body, dict):
+        return JSONResponse(_error(None, -32600, "Invalid Request: expected a JSON object or array"), status_code=400)
 
     extra_headers = {}
     if body.get("method") == "initialize":
