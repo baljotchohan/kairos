@@ -1,11 +1,18 @@
 """
-KAIROS MCP Server — exposes 3 tools over Streamable HTTP.
+KAIROS MCP Server — exposes 8 tools over Streamable HTTP.
 Uses FastMCP from the mcp package.
 
-Tools:
+Memory tools:
   get_context(query, limit)                    → semantic search, returns top decisions
   store_context(decision, context, ...)        → manually store a decision
   search_decisions(topic, date_from, ...)      → structured search by filters
+  find_similar_decisions(query, limit)         → precedent check
+  detect_decision_patterns(scope, ...)         → proactive risk scan
+  predict_decision_risk(decision_id, scope)    → per-decision risk score
+
+Control tools (act on the app, not just memory):
+  ask_kairos(question)                          → full chat-pipeline answer
+  trigger_ingestion()                           → on-demand sync of connected sources
 
 Run: python mcp_server.py
   → Serves at http://localhost:8001/mcp (streamable-http transport)
@@ -22,7 +29,9 @@ Add to Claude Desktop / Cursor MCP config:
 
 from __future__ import annotations
 
+import asyncio
 import os
+import time
 import uuid
 from typing import Optional
 
@@ -31,6 +40,7 @@ from mcp.server.fastmcp import FastMCP
 from core.memory import KairosMemory
 from core.graph import DecisionNode
 from core import decision_intelligence as di
+from core.orchestrator import KairosOrchestrator
 
 # ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -43,16 +53,24 @@ mcp = FastMCP(
         "Call get_context() before answering ANY question about company history, "
         "decisions, architecture, vendors, or strategy. "
         "Call store_context() whenever the user shares important decisions or "
-        "organizational knowledge that should be permanently remembered."
+        "organizational knowledge that should be permanently remembered. "
+        "Call ask_kairos() for a ready-to-use synthesized answer instead of raw "
+        "records, or trigger_ingestion() to sync connected sources on demand."
     ),
 )
 
 memory = KairosMemory()
+orchestrator = KairosOrchestrator(memory=memory)
 
 # MCP_TENANT_ID scopes all reads/writes to a single tenant (user_id).
 # Set this env var to the Firebase UID of the workspace you want this MCP
 # server to access. If unset, falls back to "mcp-system" (isolated namespace).
 MCP_TENANT_ID: str = os.environ.get("MCP_TENANT_ID", "mcp-system")
+
+# trigger_ingestion has real side effects (live connector API calls + LLM spend),
+# so it's throttled independently of normal tool usage.
+INGESTION_COOLDOWN_SECONDS = 180
+_last_ingestion_trigger = 0.0
 
 
 # ── Tool 1: get_context ───────────────────────────────────────────────────────
@@ -374,6 +392,74 @@ async def predict_decision_risk(decision_id: str = "", scope: str = "all") -> st
             f"   Recommendation: {r['recommendation']}"
         )
     return "\n".join(lines)
+
+
+# ── Tool 7: ask_kairos ─────────────────────────────────────────────────────────
+
+@mcp.tool()
+async def ask_kairos(question: str) -> str:
+    """Ask KAIROS a full question and get a synthesized, sourced answer.
+
+    Runs the same multi-agent pipeline as the KAIROS chat UI (intent routing,
+    hybrid retrieval, a live account lookup when the question needs one, then
+    synthesis). Prefer this over get_context() when you want a ready-to-use
+    answer instead of raw decision records to reason over yourself.
+
+    Args:
+        question: Natural-language question, e.g. "What are my open PRs?" or
+                  "Why did we pick AWS?".
+
+    Returns:
+        The synthesized answer with cited sources.
+    """
+    if not question or not question.strip():
+        return "KAIROS: Please provide a question to ask."
+    result = await orchestrator.query_with_memory(question=question, user_id=MCP_TENANT_ID)
+    answer = (result.get("answer") or "").strip()
+    if not answer:
+        return "KAIROS: No answer was generated for that question."
+    lines = [answer]
+    sources = result.get("sources") or []
+    if sources:
+        lines.append("\nSources:")
+        for s in sources:
+            title = s.get("title") or s.get("id") or "source"
+            url = s.get("source_url") or s.get("url") or ""
+            lines.append(f"  - {title}" + (f" ({url})" if url else ""))
+    return "\n".join(lines)
+
+
+# ── Tool 8: trigger_ingestion ──────────────────────────────────────────────────
+
+@mcp.tool()
+async def trigger_ingestion() -> str:
+    """Trigger a background sync of connected sources to extract new decisions now.
+
+    Syncs Slack, Gmail, Drive, Jira, Zoom, Notion, and GitHub (only the ones
+    actually connected) instead of waiting for the automatic 12-minute cycle.
+    Runs in the background and returns immediately — this confirms the sync
+    started, it does not return the extraction results. Has real side effects
+    (calls live connector APIs and spends LLM calls), so it's rate-limited to
+    once every few minutes.
+
+    Returns:
+        A confirmation message, or a rate-limit notice if triggered too recently.
+    """
+    global _last_ingestion_trigger
+    lock = orchestrator.ingestion_locks.get(MCP_TENANT_ID)
+    if lock is not None and lock.locked():
+        return "KAIROS: A sync is already running. Try again shortly."
+
+    elapsed = time.time() - _last_ingestion_trigger
+    if elapsed < INGESTION_COOLDOWN_SECONDS:
+        return f"KAIROS: Sync was triggered recently. Please wait {int(INGESTION_COOLDOWN_SECONDS - elapsed)}s before triggering again."
+
+    _last_ingestion_trigger = time.time()
+    asyncio.create_task(orchestrator.run_ingestion(MCP_TENANT_ID))
+    return (
+        "KAIROS: Sync started in the background across your connected sources. "
+        "New decisions will appear in memory within a minute or two — ask again then."
+    )
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

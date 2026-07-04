@@ -83,16 +83,23 @@ Connectors → Agents → Core (Memory + Graph + Orchestration) → API + MCP + 
 - `routes/admin.py` — `GET /admin/status`
 - `routes/oauth.py` — per-service OAuth 2.0 start/callback for `slack`, `gmail`, `drive`, `jira`, `notion`, `zoom`, plus `GET /status` and `POST /disconnect/{service}`. State tokens are HMAC-signed with a 10-min expiry. Tokens are stored per `(user_uid, service)` in `oauth_tokens`, encrypted via `token_crypto.py`. **No env-var fallback** — `/status` reflects only that user's stored rows.
 - `routes/mcp_oauth.py` — OAuth 2.0 discovery (`/.well-known/oauth-authorization-server`) + RFC 7591 dynamic client registration + authorize/token endpoints, so remote MCP clients (ChatGPT, Cursor, Antigravity, etc.) can authenticate a specific KAIROS user without a Claude-Desktop-style local config file.
-- `routes/mcp_remote.py` — JSON-RPC 2.0 over HTTP (`tools/list`, `tools/call`, `resources/list`, `resources/read`) for the OAuth-authenticated remote MCP transport described above. See `docs/REMOTE_MCP.md`.
+- `routes/mcp_remote.py` — JSON-RPC 2.0 over HTTP (`initialize`, `ping`, `tools/list`, `tools/call`) for the OAuth-authenticated remote MCP transport described above. See `docs/REMOTE_MCP.md`.
 
-**MCP** — two transports exposing the same 3 tools:
+**MCP** — two transports exposing the same 8 tools:
 1. `mcp_server.py` — local, `FastMCP` over stdio, for Claude Desktop / Cursor config files. Scoped to `MCP_TENANT_ID`.
 2. `api/routes/mcp_remote.py` + `mcp_oauth.py` — remote, Streamable HTTP with full OAuth, for any web-based MCP client, scoped per-user via a signed token from `mcp_auth.py`.
 
-Tools (identical signature on both transports):
+Memory tools (identical signature on both transports):
 - `get_context(query, limit=5)` — semantic search, call before answering any question about the company/user's history
 - `store_context(decision, context, participants, date, source, project)` — save a new decision to memory
 - `search_decisions(topic, date_from, date_to, person, limit)` — structured filter search
+- `find_similar_decisions(query, limit=5)` — precedent check via `core/decision_intelligence.py`
+- `detect_decision_patterns(scope="all", lookback_days=365)` — proactive risk scan (contradictions, unreviewed vendor spend, bus-factor risk)
+- `predict_decision_risk(decision_id="", scope="all")` — per-decision 0-100 risk score + recommendation
+
+Control tools — act on the app, not just memory:
+- `ask_kairos(question)` — runs the full `orchestrator.query_with_memory()` pipeline (intent → context → synthesis/live-data) and returns a sourced answer, same as the chat UI, instead of raw records
+- `trigger_ingestion()` — fires `orchestrator.run_ingestion(user_id)` as a background task instead of waiting for the automatic 12-minute cycle. Has real side effects (live connector calls + LLM spend), so both transports independently rate-limit it to once per 3 minutes per user (`INGESTION_COOLDOWN_SECONDS`), and skip if that user's `ingestion_locks` entry is already held
 
 ## Frontend (`frontend/`)
 

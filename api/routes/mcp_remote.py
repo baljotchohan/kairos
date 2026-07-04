@@ -23,6 +23,7 @@ one-click; the documented upgrade is OAuth 2.1 + dynamic client registration
 from __future__ import annotations
 
 import json
+import time
 import uuid
 import logging
 
@@ -207,7 +208,45 @@ TOOLS = [
             },
         },
     },
+    {
+        "name": "ask_kairos",
+        "description": (
+            "Ask KAIROS a full question and get a synthesized, sourced answer — runs the same "
+            "multi-agent pipeline as the KAIROS chat UI (intent routing, hybrid retrieval, a live "
+            "account lookup when the question needs one, then synthesis). Prefer this over "
+            "get_context when you want a ready-to-use answer instead of raw decision records to "
+            "reason over yourself."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "Natural-language question, e.g. 'What are my open PRs?' or 'Why did we pick AWS?'."},
+            },
+            "required": ["question"],
+        },
+    },
+    {
+        "name": "trigger_ingestion",
+        "description": (
+            "Trigger a background sync of this user's connected sources (Slack, Gmail, Drive, "
+            "Jira, Zoom, Notion, GitHub — only the ones actually connected) to extract new "
+            "decisions right now, instead of waiting for the automatic 12-minute cycle. Runs in "
+            "the background and returns immediately with a confirmation, not the extraction "
+            "results. Has real side effects (calls live connector APIs and spends LLM calls), so "
+            "it's rate-limited to once every few minutes per user."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
 ]
+
+# trigger_ingestion has real side effects (live connector API calls + LLM spend), so it's
+# throttled separately from the general request rate limit — a leaked/misused MCP token
+# should not be able to hammer a user's connected accounts on every call.
+INGESTION_COOLDOWN_SECONDS = 180
+_ingestion_cooldowns: dict[str, float] = {}
 
 
 # ── Tool implementations (always scoped to the resolved user_id) ────────────────
@@ -330,7 +369,42 @@ def _format_decision_risk(result: dict) -> str:
     return "\n".join(lines)
 
 
-async def _call_tool(memory, user_id: str, name: str, args: dict) -> str:
+async def _tool_ask_kairos(orchestrator, user_id: str, question: str) -> str:
+    if not question or not question.strip():
+        return "KAIROS: Please provide a question to ask."
+    result = await orchestrator.query_with_memory(question=question, user_id=user_id)
+    answer = (result.get("answer") or "").strip()
+    if not answer:
+        return "KAIROS: No answer was generated for that question."
+    lines = [answer]
+    sources = result.get("sources") or []
+    if sources:
+        lines.append("\nSources:")
+        for s in sources:
+            title = s.get("title") or s.get("id") or "source"
+            url = s.get("source_url") or s.get("url") or ""
+            lines.append(f"  - {title}" + (f" ({url})" if url else ""))
+    return "\n".join(lines)
+
+
+async def _tool_trigger_ingestion(orchestrator, user_id: str) -> str:
+    lock = orchestrator.ingestion_locks.get(user_id)
+    if lock is not None and lock.locked():
+        return "KAIROS: A sync is already running for this account. Try again shortly."
+
+    elapsed = time.time() - _ingestion_cooldowns.get(user_id, 0.0)
+    if elapsed < INGESTION_COOLDOWN_SECONDS:
+        return f"KAIROS: Sync was triggered recently. Please wait {int(INGESTION_COOLDOWN_SECONDS - elapsed)}s before triggering again."
+
+    _ingestion_cooldowns[user_id] = time.time()
+    asyncio.create_task(orchestrator.run_ingestion(user_id))
+    return (
+        "KAIROS: Sync started in the background across your connected sources. New "
+        "decisions will appear in memory within a minute or two — ask again then."
+    )
+
+
+async def _call_tool(memory, orchestrator, user_id: str, name: str, args: dict) -> str:
     if name == "get_context":
         return _tool_get_context(memory, user_id, args.get("query"), int(args.get("limit") or 5))
     if name == "store_context":
@@ -365,6 +439,10 @@ async def _call_tool(memory, user_id: str, name: str, args: dict) -> str:
             memory, user_id, decision_id=args.get("decision_id") or None, scope=args.get("scope") or "all"
         )
         return _format_decision_risk(result)
+    if name == "ask_kairos":
+        return await _tool_ask_kairos(orchestrator, user_id, args.get("question"))
+    if name == "trigger_ingestion":
+        return await _tool_trigger_ingestion(orchestrator, user_id)
     raise ValueError(f"Unknown tool name: {name}")
 
 
@@ -378,7 +456,7 @@ def _error(req_id, code, message):
     return {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
 
 
-async def _handle_message(msg: dict, memory, user_id: str, request: Request = None) -> dict | None:
+async def _handle_message(msg: dict, memory, orchestrator, user_id: str, request: Request = None) -> dict | None:
     """Process one JSON-RPC message. Returns a response dict, or None for notifications."""
     method = msg.get("method")
     req_id = msg.get("id")
@@ -406,7 +484,9 @@ async def _handle_message(msg: dict, memory, user_id: str, request: Request = No
             "instructions": (
                 "KAIROS is your company's organizational memory. Call get_context before "
                 "answering questions about past company decisions; call store_context to "
-                "permanently remember new decisions."
+                "permanently remember new decisions. Call ask_kairos for a ready-to-use "
+                "synthesized answer instead of raw records, or trigger_ingestion to sync "
+                "connected sources on demand."
             ),
         })
     if method == "ping":
@@ -417,7 +497,7 @@ async def _handle_message(msg: dict, memory, user_id: str, request: Request = No
         name = params.get("name")
         args = params.get("arguments") or {}
         try:
-            text = await _call_tool(memory, user_id, name, args)
+            text = await _call_tool(memory, orchestrator, user_id, name, args)
             return _result(req_id, {"content": [{"type": "text", "text": text}], "isError": False})
         except Exception as e:
             log.warning("MCP tool '%s' failed for %s", name, user_id, exc_info=True)
@@ -466,6 +546,7 @@ async def mcp_streamable_http(token: str, request: Request):
         )
 
     memory = request.app.state.memory
+    orchestrator = request.app.state.orchestrator
     try:
         body = await request.json()
     except Exception:
@@ -480,7 +561,7 @@ async def mcp_streamable_http(token: str, request: Request):
     if isinstance(body, list):
         responses = []
         for m in body:
-            resp = await _handle_message(m, memory, user_id, request)
+            resp = await _handle_message(m, memory, orchestrator, user_id, request)
             if resp is not None:
                 if sse_queue is not None:
                     await sse_queue.put(resp)
@@ -500,7 +581,7 @@ async def mcp_streamable_http(token: str, request: Request):
         # Keep incoming or issue new session id
         extra_headers["Mcp-Session-Id"] = session_id or uuid.uuid4().hex
 
-    resp = await _handle_message(body, memory, user_id, request)
+    resp = await _handle_message(body, memory, orchestrator, user_id, request)
     if resp is None:
         return Response(status_code=202)  # notification — no body
 
@@ -531,6 +612,7 @@ async def mcp_bearer_http(request: Request):
             status_code=401,
         )
     memory = request.app.state.memory
+    orchestrator = request.app.state.orchestrator
     try:
         body = await request.json()
     except Exception:
@@ -544,7 +626,7 @@ async def mcp_bearer_http(request: Request):
     if isinstance(body, list):
         responses = []
         for m in body:
-            resp = await _handle_message(m, memory, user_id, request)
+            resp = await _handle_message(m, memory, orchestrator, user_id, request)
             if resp is not None:
                 if sse_queue is not None:
                     await sse_queue.put(resp)
@@ -564,7 +646,7 @@ async def mcp_bearer_http(request: Request):
         # Keep incoming or issue new session id
         extra_headers["Mcp-Session-Id"] = session_id or uuid.uuid4().hex
 
-    resp = await _handle_message(body, memory, user_id, request)
+    resp = await _handle_message(body, memory, orchestrator, user_id, request)
     if resp is None:
         return Response(status_code=202)
 

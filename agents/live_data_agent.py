@@ -9,7 +9,8 @@ Full tool set:
   Jira   — list issues, my issues, project list, sprint status, issue stats,
             search issues, get single issue
   Zoom   — list recordings
-  GitHub — list repos, my open PRs, my open issues, search issues/PRs
+  GitHub — list repos, my open PRs, my open issues, search issues/PRs,
+            get a specific repo's description/topics/README content
   Multi  — dashboard snapshot (all sources at once), list connected sources
 """
 
@@ -62,6 +63,7 @@ CRITICAL RULES:
    - Format links as [display name](url) — never raw URLs.
    - End with ONE "## 💡 Summary" only if there are 3+ distinct results AND it adds something beyond the opening line — otherwise skip it. Never have both an opening summary line and a closing "## Summary" that just repeat each other.
    - Keep it concise but complete — this is a chat answer, not a report.
+8. NEVER FABRICATE AN ERROR. Only claim "API error" or "could not retrieve X" if a tool call THIS TURN actually returned {{"error": "..."}} — quote that real error per rule 4. If no tool exists for what the user is asking (e.g. they want raw file contents and you only have search/list tools), say so honestly — "I don't have a way to read X directly, but here's what I found via search: ..." — instead of inventing a plausible-sounding technical excuse.
 
 Do not output anything after the Final Answer block."""
 
@@ -321,6 +323,12 @@ class LiveDataAgent(BaseAgent):
             parameters={"type": "object", "properties": {
                 "query": {"type": "string"}, "limit": {"type": "integer"}},
                 "required": ["query"]},
+        ))
+        self.register_tool(AgentTool(
+            name="github_get_repo",
+            description="Get a specific repo's description, language, topics, star count, and README content. Args: 'repo' (repo name or 'owner/name' — a bare name resolves against the user's own account). This is the ONLY tool that reads a repo's actual content — use it for 'what's in the X repo', 'read my X repo', 'summarize repo Y', 'what does repo Z do'. github_search only finds issues/PRs, not repo contents.",
+            handler=self._tool_github_get_repo,
+            parameters={"type": "object", "properties": {"repo": {"type": "string"}}, "required": ["repo"]},
         ))
 
         # ── Memory cache fallback ─────────────────────────────────────────────
@@ -823,6 +831,19 @@ class LiveDataAgent(BaseAgent):
         except Exception as e:
             return {"error": f"GitHub API error — could not search: {e}"}
         return self._fmt_github_items(results)
+
+    async def _tool_github_get_repo(self, repo: str) -> Any:
+        c = self._connectors.get("github")
+        if not c:
+            return {"error": "GitHub is not connected."}
+        try:
+            summary = await c.get_repo_summary(repo)
+        except Exception as e:
+            return {"error": f"GitHub API error — could not fetch repo '{repo}': {e}"}
+        if not summary:
+            return {"error": f"GitHub API error — could not fetch repo '{repo}': no data returned."}
+        self._add_source(summary.get("name", repo), "", "GitHub", summary.get("url", ""))
+        return summary
 
     def _fmt_github_items(self, items: list[dict]) -> dict:
         out = []

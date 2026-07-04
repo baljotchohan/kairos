@@ -19,8 +19,17 @@ user, scoped per-user — no cross-tenant leakage.
      { "mcpServers": { "kairos": { "url": "https://<backend>/mcp/u/<token>" } } }
      ```
 
-The client then sees three tools — `get_context`, `store_context`,
-`search_decisions` — all scoped to the connecting user's decisions.
+The client then sees **8 tools**, all scoped to the connecting user's decisions:
+
+- **Memory** — `get_context`, `store_context`, `search_decisions`,
+  `find_similar_decisions`, `detect_decision_patterns`, `predict_decision_risk`.
+- **Control** (act on the app, not just memory) — `ask_kairos` (runs the full
+  chat pipeline for a sourced answer, same as the chat UI) and
+  `trigger_ingestion` (syncs connected sources on demand instead of waiting
+  for the automatic 12-minute cycle). `trigger_ingestion` has real side
+  effects — it calls live connector APIs and spends LLM calls — so it's
+  rate-limited to once every 3 minutes per user, independent of the general
+  request rate limit.
 
 ## How it works
 

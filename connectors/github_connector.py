@@ -7,6 +7,7 @@ standard OAuth App flow in api/routes/oauth.py (github.com/settings/developers).
 from __future__ import annotations
 
 import asyncio
+import base64
 from datetime import datetime, timedelta
 
 import httpx
@@ -117,6 +118,62 @@ class GitHubConnector:
         """Full-text search across the user's accessible issues + PRs."""
         safe_query = query.replace('"', '\\"')
         return await self._search_issues(f'"{safe_query}" in:title,body', limit)
+
+    async def get_repo_summary(self, repo: str) -> dict:
+        """Fetch a repo's metadata (description, language, topics, stars) plus
+        its README content. `repo` may be "owner/name" or a bare name, which
+        is resolved against the authenticated user's own account.
+
+        Raises RuntimeError on a real API failure (not found, bad token,
+        rate limit) instead of swallowing it — this is what lets
+        LiveDataAgent quote the real reason instead of guessing."""
+        if not self._ok():
+            return {}
+
+        full_name = repo
+        if "/" not in full_name:
+            login = await self.get_user_login()
+            if not login:
+                raise RuntimeError("Could not resolve GitHub username to look up the repo.")
+            full_name = f"{login}/{repo}"
+
+        try:
+            async with httpx.AsyncClient(timeout=20, headers=self._headers) as client:
+                meta_resp = await client.get(f"{GITHUB_API_BASE}/repos/{full_name}")
+                meta_resp.raise_for_status()
+                meta = meta_resp.json()
+
+                readme_text = ""
+                readme_resp = await client.get(f"{GITHUB_API_BASE}/repos/{full_name}/readme")
+                if readme_resp.status_code == 200:
+                    data = readme_resp.json()
+                    if data.get("encoding") == "base64" and data.get("content"):
+                        try:
+                            readme_text = base64.b64decode(data["content"]).decode("utf-8", errors="replace")[:4000]
+                        except Exception:
+                            readme_text = ""
+                elif readme_resp.status_code != 404:
+                    readme_resp.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise RuntimeError(f"Repo '{full_name}' not found, or not accessible with this token.") from e
+            print(f"[GitHubConnector] get_repo_summary error ({full_name}): {e.response.status_code} {e.response.text[:200]}")
+            raise RuntimeError(f"GitHub API returned {e.response.status_code}: {e.response.text[:200]}") from e
+        except Exception as e:
+            print(f"[GitHubConnector] get_repo_summary error ({full_name}): {e}")
+            raise RuntimeError(f"GitHub request failed: {e}") from e
+
+        return {
+            "name": meta.get("full_name", full_name),
+            "description": meta.get("description") or "",
+            "language": meta.get("language"),
+            "topics": meta.get("topics", []),
+            "stars": meta.get("stargazers_count", 0),
+            "open_issues": meta.get("open_issues_count", 0),
+            "default_branch": meta.get("default_branch", "main"),
+            "url": meta.get("html_url", ""),
+            "readme": readme_text,
+        }
 
     async def _search_issues(self, q: str, limit: int) -> list[dict]:
         if not self._ok():

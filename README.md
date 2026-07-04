@@ -11,7 +11,7 @@
 [![Next.js 15](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org/)
 [![Docker](https://img.shields.io/badge/Docker-containerized-2496ED.svg)](https://www.docker.com/)
 [![Fireworks AI](https://img.shields.io/badge/AI-Fireworks%20AI%20(AMD)-orange.svg)](https://fireworks.ai)
-[![MCP](https://img.shields.io/badge/MCP-6%20tools-6E56CF.svg)](./docs/REMOTE_MCP.md)
+[![MCP](https://img.shields.io/badge/MCP-8%20tools-6E56CF.svg)](./docs/REMOTE_MCP.md)
 
 **[Live App](https://kairos-coral-nine.vercel.app)** · **[API](https://baljot07-kairos-backend.hf.space/health)** · **[Remote MCP](./docs/REMOTE_MCP.md)** · Built for the **AMD Developer Hackathon ACT II**
 
@@ -61,7 +61,7 @@ Four seconds. Fully sourced. No tribal knowledge required.
 | Retrieval | Keyword search | Semantic + structured + graph-neighbor hybrid search, routed by intent |
 | Freshness | Only what got written up | On-demand **live** queries against your actual connected accounts, not just stored memory |
 | Proactivity | Passive — waits to be searched | **Decision Intelligence** — surfaces contradictions, stale vendor spend, bus-factor risk, and a rolling Decision Debt Score without being asked |
-| AI integration | None, or bolted-on chat | A bidirectional MCP memory loop, 6 tools deep — any Claude/ChatGPT/Cursor session can pull context from and push new knowledge back into KAIROS |
+| AI integration | None, or bolted-on chat | A bidirectional MCP loop, 8 tools deep — any Claude/ChatGPT/Cursor session can pull context, push new knowledge back, and even trigger actions (ask a full question, sync sources on demand) |
 
 ---
 
@@ -133,24 +133,24 @@ infra hire needs to make the same calls blind.
   encrypted at     intent_agent (routing)    ├─ SQLite (structured,     │
   rest — Jira is   context_agent (hybrid     │  one shared file)        └─ MCP — local stdio +
   the one global   retrieval)                └─ Obsidian auto-export        remote OAuth/HTTP
-  exception)       live_data_agent                                          6 tools: get_context,
+  exception)       live_data_agent                                          8 tools: get_context,
                    (on-demand live queries)  graph.py                       store_context,
                    research_agent            ├─ NetworkX decision graph     search_decisions,
                    (multi-step deep dives)   ├─ Auto-linked by topic/       find_similar_decisions,
                                               │  person, never cross-user   detect_decision_patterns,
-                   All 11 agents share a     └─ Rendered live as an        predict_decision_risk
-                   BaseAgent ReAct loop         interactive physics graph
-                   with full execution                                    Next.js 15 frontend
-                   tracing, fanned out       decision_intelligence.py     ├─ Hand-written canvas
-                   via LangGraph             ├─ find_similar_decisions    │  force-directed physics
-                                              │  (precedent vs. noise)     │  graph (no D3/WebGL)
-                   personas.py                ├─ detect_decision_patterns ├─ Streaming markdown +
-                   per-user agent display     │  (contradictions, stale   │  "Thinking" indicator
-                   name + tone, presentation  │  vendors, bus-factor)     ├─ Settings → Agents
-                   layer only                 ├─ predict_decision_risk    │  (rename/tune personas)
-                                              └─ compute_debt_score        └─ Firebase Auth
-                                                 (pure SQL/graph, no LLM)
-                                              orchestrator.py
+                   All 11 agents share a     └─ Rendered live as an        predict_decision_risk —
+                   BaseAgent ReAct loop         interactive physics graph  + ask_kairos, trigger_ingestion
+                   with full execution                                    (control tools ⚡, act on the
+                   tracing, fanned out       decision_intelligence.py     app itself, not just memory)
+                   via LangGraph             ├─ find_similar_decisions    Next.js 15 frontend
+                                              │  (precedent vs. noise)     ├─ Hand-written canvas
+                   personas.py                ├─ detect_decision_patterns │  force-directed physics
+                   per-user agent display     │  (contradictions, stale   │  graph (no D3/WebGL)
+                   name + tone, presentation  │  vendors, bus-factor)     ├─ Streaming markdown +
+                   layer only                 ├─ predict_decision_risk    │  "Thinking" indicator
+                                              └─ compute_debt_score        ├─ Settings → Agents
+                                                 (pure SQL/graph, no LLM)  │  (rename/tune personas)
+                                              orchestrator.py              └─ Firebase Auth
                                               ├─ Ingestion StateGraph
                                               │  (per-user, every 12min)
                                               └─ Query pipeline: intent →
@@ -180,7 +180,7 @@ Every one of these is also a first-class MCP tool (below), so any connected AI c
 
 ## Bidirectional MCP Memory Loop
 
-KAIROS exposes **six tools** over the Model Context Protocol — **on two transports**, so it works whether you're local or remote:
+KAIROS exposes **8 tools** over the Model Context Protocol — **on two transports**, so it works whether you're local or remote. Six are memory tools (read/write the decision log); two are **control tools** that act on the app itself:
 
 | Tool | What it does |
 |---|---|
@@ -190,11 +190,15 @@ KAIROS exposes **six tools** over the Model Context Protocol — **on two transp
 | `find_similar_decisions(query, limit)` | Precedent check — has anything like this been decided before, and what happened? |
 | `detect_decision_patterns(scope, lookback_days)` | Scan for contradictions, unreviewed vendor spend, and bus-factor risk |
 | `predict_decision_risk(decision_id, scope)` | Risk-score one decision or the whole log, with a concrete recommendation |
+| `ask_kairos(question)` ⚡ | Runs the full chat pipeline (intent → context → synthesis/live-data) and returns a sourced answer — same as the chat UI, not just raw records |
+| `trigger_ingestion()` ⚡ | Syncs connected sources on demand instead of waiting for the automatic 12-minute cycle |
+
+⚡ = control tool with real side effects. `trigger_ingestion` calls live connector APIs and spends LLM calls, so it's rate-limited to once every 3 minutes per user (independent of the general API rate limit) and skips if a sync for that user is already running.
 
 - **Local** — `mcp_server.py`, stdio transport, drop into your Claude Desktop or Cursor config.
 - **Remote** — full OAuth 2.0 + RFC 7591 dynamic client registration (`api/routes/mcp_oauth.py`, `mcp_remote.py`), so ChatGPT, Cursor, Antigravity, or any web-based MCP client can connect with a one-click per-user login — no config file needed. See [`docs/REMOTE_MCP.md`](./docs/REMOTE_MCP.md).
 
-The result: KAIROS gives the model context (and now, risk analysis) before it answers, and the model pushes new knowledge back into KAIROS as it learns things — both sides get smarter over time.
+The result: KAIROS gives the model context (and now, risk analysis) before it answers, the model pushes new knowledge back into KAIROS as it learns things, and it can even act — ask a full question or trigger a sync — without a human touching the dashboard.
 
 ## Agent Personas
 
@@ -239,7 +243,7 @@ Every internal agent (`slack_agent`, `synthesis_agent`, `live_data_agent`, etc.)
 
 **Connectors & Infra**
 - Slack (Web API + Socket Mode bot), Gmail, Drive, Notion, Zoom, Jira, GitHub
-- MCP: local stdio + remote OAuth/HTTP, 6 tools
+- MCP: local stdio + remote OAuth/HTTP, 8 tools (6 memory + 2 control)
 - Docker + docker-compose (2 services, health-checked)
 - Hosted: Hugging Face Space (backend) + Vercel (frontend)
 - MIT Licensed
@@ -343,7 +347,7 @@ kairos/
 │   ├── websocket.py streamed query / ingest / stats
 │   └── routes/      health, query, ingest, decisions, memory, admin, agents (personas),
 │                     oauth, mcp_oauth, mcp_remote
-├── mcp_server.py    local stdio MCP server — 6 tools (memory + decision intelligence)
+├── mcp_server.py    local stdio MCP server — 8 tools (6 memory + 2 control: ask_kairos, trigger_ingestion)
 ├── frontend/        Next.js 15 app — dashboard (chat/metrics/decisions/connectors/agents/mcp),
 │                    integrations, settings/agents (persona editor), landing page
 ├── data/demo/       Helios Tech demo dataset

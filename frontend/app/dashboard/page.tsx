@@ -754,16 +754,21 @@ export default function Home() {
       const tools = [
         { name: "get_context", params: ['query: "obsidian sync config"', 'query: "redis caching decision"', 'query: "AWS billing alerts"'] },
         { name: "store_context", params: ['decision: "Use Tailwind v3"', 'decision: "Set token expiration to 24h"', 'decision: "Migrate auth to Firebase"'] },
-        { name: "search_decisions", params: ['person: "Priya Sharma"', 'project: "Helios Tech"', 'date: "Q3 2024"'] }
+        { name: "search_decisions", params: ['person: "Priya Sharma"', 'project: "Helios Tech"', 'date: "Q3 2024"'] },
+        { name: "find_similar_decisions", params: ['query: "switching payroll vendor"', 'query: "building a mobile app"'] },
+        { name: "detect_decision_patterns", params: ['scope: "all"', 'scope: "Infrastructure"'] },
+        { name: "predict_decision_risk", params: ['scope: "all"', 'decision_id: "dec-4"'] },
+        { name: "ask_kairos", params: ['question: "What are my open PRs?"', 'question: "Why did we pick AWS?"'] },
+        { name: "trigger_ingestion", params: ["(no arguments)"] },
       ];
-      
+
       const client = clients[Math.floor(Math.random() * clients.length)];
       const tool = tools[Math.floor(Math.random() * tools.length)];
       const param = tool.params[Math.floor(Math.random() * tool.params.length)];
-      
+
       const now = new Date();
       const timeStr = now.toLocaleTimeString("en-US", { hour12: false });
-      
+
       const newLog = {
         id: Math.random().toString(),
         timestamp: timeStr,
@@ -773,12 +778,13 @@ export default function Home() {
         params: param,
         status: "success" as const
       };
-      
+
+      const isWrite = tool.name === "store_context" || tool.name === "trigger_ingestion";
       setMcpLogs(prev => [newLog, ...prev.slice(0, 7)]);
       setMcpStats(prev => ({
         totalRequests: prev.totalRequests + 1,
-        readOps: tool.name === "store_context" ? prev.readOps : prev.readOps + 1,
-        writeOps: tool.name === "store_context" ? prev.writeOps + 1 : prev.writeOps,
+        readOps: isWrite ? prev.readOps : prev.readOps + 1,
+        writeOps: isWrite ? prev.writeOps + 1 : prev.writeOps,
         activeClients: 4
       }));
     }, 4500);
@@ -2837,28 +2843,55 @@ export default function Home() {
               </div>
 
               {/* Exposed Tools Registry (Visible by Default) */}
-              <div className="flex flex-col gap-3 border-t border-[rgb(var(--border))]/40 pt-6">
+              <div className="flex flex-col gap-5 border-t border-[rgb(var(--border))]/40 pt-6">
                 <div className="flex items-center gap-2">
                   <span>🛠️</span>
                   <h4 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider">Exposed MCP Tools Registry</h4>
                 </div>
                 <p className="text-xs text-[rgb(var(--text-muted))] leading-relaxed">
-                  These tools are registered and exposed by the KAIROS MCP server. Once connected, your AI assistant can invoke them dynamically.
+                  These 8 tools are registered and exposed by the KAIROS MCP server. Once connected, your AI assistant can invoke them dynamically — memory tools read/write your decision history, control tools act on the app itself.
                 </p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-                  {[
-                    { name: "get_context", sig: "(query)", desc: "Retrieves top decisions with full context, participants, and outcomes using vector search." },
-                    { name: "store_context", sig: "(decision, ...)", desc: "Directly inserts a decision from chat into KAIROS, auto-linking related nodes." },
-                    { name: "search_decisions", sig: "(topic, ...)", desc: "Structured search across metadata indices by date, project, or person." }
-                  ].map((t) => (
-                    <div key={t.name} className="p-4 rounded-xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 flex flex-col gap-2">
-                      <div className="font-mono text-[11px]">
-                        <span className="text-violet-400 font-bold">{t.name}</span>
-                        <span className="text-[rgb(var(--text-muted))]">{t.sig}</span>
+
+                <div className="flex flex-col gap-2">
+                  <span className="text-[9px] font-bold text-[rgb(var(--text-muted))] uppercase tracking-widest font-mono">Memory Tools</span>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[
+                      { name: "get_context", sig: "(query)", desc: "Retrieves top decisions with full context, participants, and outcomes using vector search." },
+                      { name: "store_context", sig: "(decision, ...)", desc: "Directly inserts a decision from chat into KAIROS, auto-linking related nodes." },
+                      { name: "search_decisions", sig: "(topic, ...)", desc: "Structured search across metadata indices by date, project, or person." },
+                      { name: "find_similar_decisions", sig: "(query, limit)", desc: "Checks whether a new situation has genuine precedent in past decisions." },
+                      { name: "detect_decision_patterns", sig: "(scope, ...)", desc: "Proactively scans for contradictions, unreviewed vendor spend, and bus-factor risk." },
+                      { name: "predict_decision_risk", sig: "(decision_id, scope)", desc: "Scores decisions by risk of being stale, unowned, or overdue for review." },
+                    ].map((t) => (
+                      <div key={t.name} className="p-4 rounded-xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 flex flex-col gap-2">
+                        <div className="font-mono text-[11px]">
+                          <span className="text-violet-400 font-bold">{t.name}</span>
+                          <span className="text-[rgb(var(--text-muted))]">{t.sig}</span>
+                        </div>
+                        <p className="text-[10.5px] text-[rgb(var(--text-muted))] leading-relaxed">{t.desc}</p>
                       </div>
-                      <p className="text-[10.5px] text-[rgb(var(--text-muted))] leading-relaxed">{t.desc}</p>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <span className="text-[9px] font-bold text-amber-400/90 uppercase tracking-widest font-mono flex items-center gap-1.5">
+                    <span>⚡</span> Control Tools — act on the app, not just memory
+                  </span>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[
+                      { name: "ask_kairos", sig: "(question)", desc: "Runs the full chat pipeline (intent → retrieval → live lookups → synthesis) and returns a sourced answer, same as the chat UI." },
+                      { name: "trigger_ingestion", sig: "()", desc: "Syncs connected sources on demand instead of waiting for the 12-minute cycle. Real side effects — rate-limited to once every 3 minutes." },
+                    ].map((t) => (
+                      <div key={t.name} className="p-4 rounded-xl border border-amber-500/25 bg-amber-500/5 flex flex-col gap-2">
+                        <div className="font-mono text-[11px]">
+                          <span className="text-amber-400 font-bold">{t.name}</span>
+                          <span className="text-[rgb(var(--text-muted))]">{t.sig}</span>
+                        </div>
+                        <p className="text-[10.5px] text-[rgb(var(--text-muted))] leading-relaxed">{t.desc}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -2890,7 +2923,7 @@ export default function Home() {
                           <h5 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider">Two-way LLM Brain Integration</h5>
                         </div>
                         <p className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed max-w-2xl">
-                          MCP allows LLMs to query KAIROS memory before answering questions, and store new decisions back into the graph in real-time. This creates a unified knowledge loop.
+                          MCP allows LLMs to query KAIROS memory before answering questions, and store new decisions back into the graph in real-time — plus act on the app itself via control tools (ask_kairos, trigger_ingestion). This creates a unified knowledge loop.
                         </p>
                       </div>
                       <div className="shrink-0 w-full md:w-auto">
