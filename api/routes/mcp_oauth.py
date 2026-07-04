@@ -52,7 +52,8 @@ def _conn() -> sqlite3.Connection:
         """CREATE TABLE IF NOT EXISTS mcp_oauth_clients (
                client_id    TEXT PRIMARY KEY,
                redirect_uris TEXT NOT NULL,
-               created_at   TEXT NOT NULL
+               created_at   TEXT NOT NULL,
+               client_name  TEXT
            )""",
         """CREATE TABLE IF NOT EXISTS mcp_oauth_requests (
                req_id         TEXT PRIMARY KEY,
@@ -74,6 +75,10 @@ def _conn() -> sqlite3.Connection:
            )""",
     ]:
         conn.execute(stmt)
+    try:
+        conn.execute("ALTER TABLE mcp_oauth_clients ADD COLUMN client_name TEXT")
+    except sqlite3.OperationalError:
+        pass  # column already exists on a pre-existing DB
     conn.commit()
     return conn
 
@@ -114,11 +119,22 @@ async def oauth_register(request: Request):
     client_id = uuid.uuid4().hex
     redirect_uris = body.get("redirect_uris", [])
 
+    # RFC 7591 client_name is optional — most real MCP clients (Claude, ChatGPT,
+    # Cursor, Antigravity) send one. Fall back to the redirect URI's host so the
+    # consent screen never has to show a bare, meaningless client_id.
+    client_name = (body.get("client_name") or "").strip()
+    if not client_name and redirect_uris:
+        try:
+            from urllib.parse import urlparse
+            client_name = urlparse(redirect_uris[0]).netloc or ""
+        except Exception:
+            client_name = ""
+
     c = _conn()
     try:
         c.execute(
-            "INSERT INTO mcp_oauth_clients (client_id, redirect_uris, created_at) VALUES (?, ?, ?)",
-            (client_id, json.dumps(redirect_uris), datetime.utcnow().isoformat()),
+            "INSERT INTO mcp_oauth_clients (client_id, redirect_uris, created_at, client_name) VALUES (?, ?, ?, ?)",
+            (client_id, json.dumps(redirect_uris), datetime.utcnow().isoformat(), client_name),
         )
         c.commit()
     finally:
@@ -160,7 +176,7 @@ async def oauth_authorize(request: Request):
         # user's KAIROS memory. Reject before ever storing the request or
         # redirecting to the login page, so a bad redirect_uri never reaches a user.
         client_row = c.execute(
-            "SELECT redirect_uris FROM mcp_oauth_clients WHERE client_id = ?", (client_id,)
+            "SELECT redirect_uris, client_name FROM mcp_oauth_clients WHERE client_id = ?", (client_id,)
         ).fetchone()
         if not client_row:
             return JSONResponse(
@@ -194,7 +210,10 @@ async def oauth_authorize(request: Request):
     # Use base_url from the request (Vercel domain) not config.FRONTEND_URL
     # (which may be localhost in the HF Space env).
     base = _base_url(request)
-    return RedirectResponse(f"{base}/oauth/login?req_id={req_id}", status_code=302)
+    client_name = (client_row["client_name"] or "").strip() if client_row else ""
+    from urllib.parse import quote
+    name_param = f"&client_name={quote(client_name)}" if client_name else ""
+    return RedirectResponse(f"{base}/oauth/login?req_id={req_id}{name_param}", status_code=302)
 
 
 # ── 4. Complete (frontend calls this after Firebase sign-in) ───────────────────

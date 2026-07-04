@@ -115,6 +115,10 @@ function OAuthLoginContent() {
   const req_id = searchParams.get("req_id");
   // Legacy Vercel JWT flow (fallback, rarely used)
   const session = searchParams.get("session");
+  // Which app is asking for access — shown so approval is an informed choice,
+  // not a blind click. Falls back to a generic label if the client never
+  // registered a name (see api/routes/mcp_oauth.py's oauth_register).
+  const clientName = searchParams.get("client_name");
 
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [error, setError] = useState("");
@@ -191,9 +195,25 @@ function OAuthLoginContent() {
       <h1 className="text-2xl font-bold tracking-tight text-white mb-3">
         Connect Your AI to KAIROS
       </h1>
+
+      {clientName && (
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 mb-4 rounded-full border border-white/10 bg-white/5 text-[12px] font-semibold text-zinc-200">
+          <span className="text-violet-400">{clientName}</span> is requesting access
+        </div>
+      )}
+
       <p className="text-sm text-zinc-400 leading-relaxed mb-8 max-w-[320px] mx-auto">
-        Sign in with the Google account you use for KAIROS to grant this assistant secure,
-        scoped access to your organizational memory.
+        {clientName ? (
+          <>
+            Sign in with the Google account you use for KAIROS to grant <span className="text-zinc-300 font-medium">{clientName}</span> secure,
+            scoped access to your organizational memory.
+          </>
+        ) : (
+          <>
+            Sign in with the Google account you use for KAIROS to grant this assistant secure,
+            scoped access to your organizational memory.
+          </>
+        )}
       </p>
 
       {status === "success" && (
