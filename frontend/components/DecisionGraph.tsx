@@ -143,6 +143,20 @@ export default function DecisionGraph({
     settingsRef.current = settings;
   }, [settings]);
 
+  // The rAF draw loop only restarts on [computedEdges, nodeDegrees] — reading
+  // selectedNodeId/hoveredNodeId state directly inside it meant hover/selection
+  // highlighting only ever reflected whatever those were the last time the loop
+  // itself restarted, not live changes. Refs are always current regardless.
+  const selectedNodeIdRef = useRef(selectedNodeId);
+  useEffect(() => {
+    selectedNodeIdRef.current = selectedNodeId;
+  }, [selectedNodeId]);
+
+  const hoveredNodeIdRef = useRef(hoveredNodeId);
+  useEffect(() => {
+    hoveredNodeIdRef.current = hoveredNodeId;
+  }, [hoveredNodeId]);
+
   // Load settings from localStorage when client mounts or user changes
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -512,7 +526,7 @@ export default function DecisionGraph({
       ctx.fill();
     }
 
-    const activeFocusId = selectedNodeId || hoveredNodeId;
+    const activeFocusId = selectedNodeIdRef.current || hoveredNodeIdRef.current;
     const isFocusActive = activeFocusId !== null;
 
     // Precompute the direct neighbours of the focused node once per frame
@@ -587,8 +601,8 @@ export default function DecisionGraph({
 
       const radius = node.radius;
 
-      const isHovered = hoveredNodeId === node.id;
-      const isSelected = selectedNodeId === node.id;
+      const isHovered = hoveredNodeIdRef.current === node.id;
+      const isSelected = selectedNodeIdRef.current === node.id;
       const isFocused = isHovered || isSelected;
 
       let opacity = 1.0;
