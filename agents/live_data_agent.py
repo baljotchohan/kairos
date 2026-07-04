@@ -932,7 +932,19 @@ class LiveDataAgent(BaseAgent):
                     break
 
                 self.think(f"Calling {tool_name}({json.dumps(tool_args)})")
-                observation = await self.use_tool(tool_name, **tool_args)
+                try:
+                    observation = await self.use_tool(tool_name, **tool_args)
+                except Exception as tool_err:
+                    # A genuine connector/network failure, not a malformed Action
+                    # block — tell the LLM plainly so it reports the real failure
+                    # instead of being nudged to "adjust its format" and retrying
+                    # the same broken call.
+                    self.observe(f"{tool_name} failed: {tool_err}")
+                    messages.append({
+                        "role": "user",
+                        "content": f"Observation from {tool_name}: this tool call failed with a real error: {tool_err}. This is not a formatting problem — report this failure to the user plainly, or try a different data source if one is relevant.",
+                    })
+                    continue
                 obs_str = json.dumps(observation, indent=2)[:3000]
                 self.observe(f"{tool_name} → {str(observation)[:200]}")
                 messages.append({"role": "user", "content": f"Observation from {tool_name}:\n{obs_str}"})
