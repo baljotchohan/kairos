@@ -192,9 +192,20 @@ class DecisionGraph:
                         self._write_decision_note(vault, self.graph.nodes[nid]["data"])
                 self._write_index_note(vault, user_id=node.user_id)
 
+    def _same_user(self, from_id: str, to_id: str) -> bool:
+        """Defense-in-depth: even though the only production caller (_auto_link)
+        already filters to same-user pairs before reaching here, an edge-writer
+        this close to the graph's core invariant should never trust a caller's
+        pre-filtering alone."""
+        a = self.graph.nodes[from_id].get("data")
+        b = self.graph.nodes[to_id].get("data")
+        return bool(a and b and a.user_id == b.user_id)
+
     def add_relation(self, from_id: str, to_id: str, relation: RelationType):
         with self._lock:
             if from_id not in self.graph or to_id not in self.graph:
+                return
+            if not self._same_user(from_id, to_id):
                 return
             if self.graph.has_edge(from_id, to_id):
                 existing = self.graph.edges[from_id, to_id].get("relations", [])
@@ -212,6 +223,8 @@ class DecisionGraph:
             valid_relations = []
             for from_id, to_id, relation in relations_list:
                 if from_id not in self.graph or to_id not in self.graph:
+                    continue
+                if not self._same_user(from_id, to_id):
                     continue
                 if self.graph.has_edge(from_id, to_id):
                     existing = self.graph.edges[from_id, to_id].get("relations", [])
