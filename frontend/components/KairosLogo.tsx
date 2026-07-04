@@ -78,8 +78,11 @@ export default function KairosLogo({ className = "", size = "100%", showText = f
         </filter>
       </defs>
 
-      {/* Connecting edges — drawn first so nodes sit on top */}
-      <g stroke={`url(#${uid}-edge)`} strokeWidth="3.5" strokeLinecap="round" opacity="0.85">
+      {/* Connecting edges — drawn first so nodes sit on top. Bold on purpose:
+          thin lines anti-alias into near-invisibility at real favicon sizes
+          (16-32px), which made the "K" read as scattered dots instead of a
+          connected graph. */}
+      <g stroke={`url(#${uid}-edge)`} strokeWidth="7" strokeLinecap="round" opacity="0.9">
         {edges.map(([a, b], i) => (
           <line
             key={i}
@@ -96,9 +99,9 @@ export default function KairosLogo({ className = "", size = "100%", showText = f
         {nodes.map((n, i) => (
           <g key={i}>
             {/* Base sphere */}
-            <circle cx={n.cx} cy={n.cy} r="6.5" fill={`url(#${uid}-node)`} />
+            <circle cx={n.cx} cy={n.cy} r="9" fill={`url(#${uid}-node)`} />
             {/* Specular highlight overlay */}
-            <circle cx={n.cx} cy={n.cy} r="6.5" fill={`url(#${uid}-shine)`} />
+            <circle cx={n.cx} cy={n.cy} r="9" fill={`url(#${uid}-shine)`} />
           </g>
         ))}
       </g>
