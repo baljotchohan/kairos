@@ -798,13 +798,17 @@ export default function Landing() {
   const heroGlowOpacity = Math.max(0, 1 - scrollY / 420);
 
   const enter = useCallback(() => router.push("/dashboard"), [router]);
+  const [signInError, setSignInError] = useState<string | null>(null);
   const signIn = useCallback(async () => {
+    setSignInError(null);
     try {
       await loginWithGoogle();
-    } catch {
-      /* dashboard handles auth fallback */
+      router.push("/dashboard");
+    } catch (err) {
+      // Don't redirect on failure — a silent bounce to /dashboard's login
+      // gate looks like nothing happened. Tell the user here instead.
+      setSignInError(err instanceof Error ? err.message : "Sign-in failed. Please try again.");
     }
-    router.push("/dashboard");
   }, [loginWithGoogle, router]);
 
   return (
@@ -911,6 +915,10 @@ export default function Landing() {
               </button>
             )}
           </div>
+
+          {signInError && (
+            <p className="mt-4 text-xs text-rose-400 max-w-md mx-auto">{signInError}</p>
+          )}
 
           <div className="mt-14 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-[11px] font-mono tracking-wide text-zinc-500">
             <span><span className="text-violet-300 font-semibold">10</span> parallel agents</span>
