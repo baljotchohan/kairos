@@ -166,16 +166,27 @@ class GitHubConnector:
             return []
 
     async def _fetch_pulls(self, client: httpx.AsyncClient, full_name: str, cutoff: datetime) -> list[dict]:
+        prs: list[dict] = []
         try:
-            resp = await client.get(
-                f"{GITHUB_API_BASE}/repos/{full_name}/pulls",
-                params={"state": "closed", "sort": "updated", "direction": "desc", "per_page": 20},
-            )
-            resp.raise_for_status()
-            prs = resp.json()
+            for page in range(1, 6):  # cap at 5 pages (100 PRs) per repo per cycle
+                resp = await client.get(
+                    f"{GITHUB_API_BASE}/repos/{full_name}/pulls",
+                    params={"state": "closed", "sort": "updated", "direction": "desc", "per_page": 20, "page": page},
+                )
+                resp.raise_for_status()
+                page_items = resp.json()
+                if not page_items:
+                    break
+                prs.extend(page_items)
+                # Sorted updated-desc — once a full page's oldest item is already
+                # past the cutoff, every later page is too; stop paging.
+                oldest = self._parse_date(page_items[-1].get("updated_at"))
+                if oldest and oldest < cutoff:
+                    break
         except Exception as e:
             print(f"[GitHubConnector] pulls error ({full_name}): {e}")
-            return []
+            if not prs:
+                return []
 
         out = []
         for pr in prs:
@@ -205,16 +216,25 @@ class GitHubConnector:
         return out
 
     async def _fetch_issues(self, client: httpx.AsyncClient, full_name: str, cutoff: datetime) -> list[dict]:
+        issues: list[dict] = []
         try:
-            resp = await client.get(
-                f"{GITHUB_API_BASE}/repos/{full_name}/issues",
-                params={"state": "all", "sort": "updated", "direction": "desc", "per_page": 20},
-            )
-            resp.raise_for_status()
-            issues = resp.json()
+            for page in range(1, 6):  # cap at 5 pages (100 issues) per repo per cycle
+                resp = await client.get(
+                    f"{GITHUB_API_BASE}/repos/{full_name}/issues",
+                    params={"state": "all", "sort": "updated", "direction": "desc", "per_page": 20, "page": page},
+                )
+                resp.raise_for_status()
+                page_items = resp.json()
+                if not page_items:
+                    break
+                issues.extend(page_items)
+                oldest = self._parse_date(page_items[-1].get("updated_at"))
+                if oldest and oldest < cutoff:
+                    break
         except Exception as e:
             print(f"[GitHubConnector] issues error ({full_name}): {e}")
-            return []
+            if not issues:
+                return []
 
         out = []
         for issue in issues:
