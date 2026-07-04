@@ -188,8 +188,30 @@ export function useKairosChat(token: string | null) {
           setIsReconnectExhausted(false);
           // Request stats on connect
           wsClient.send({ type: "stats" });
-        } else if (d.exhausted) {
-          setIsReconnectExhausted(true);
+        } else {
+          if (d.exhausted) setIsReconnectExhausted(true);
+
+          // A drop mid-query means "done"/"error" for that request will never
+          // arrive — without this, isStreaming stays stuck true forever and
+          // permanently disables the input box.
+          const id = currentAssistantId.current;
+          if (id) {
+            setIsStreaming(false);
+            currentAssistantId.current = null;
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === id
+                  ? {
+                      ...msg,
+                      content: msg.content || "Connection dropped before this finished. Please try asking again.",
+                      isStreaming: false,
+                      hasWarning: true,
+                      thinkingStep: undefined,
+                    }
+                  : msg
+              )
+            );
+          }
         }
       }
     );
