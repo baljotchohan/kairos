@@ -289,6 +289,8 @@ class KairosOrchestrator:
                 (state.get("drive_data", []), "Google Drive", "file"),
                 (state.get("meeting_data", []), "Zoom", "recording"),
                 (state.get("slack_data", []), "Slack", "message"),
+                (state.get("notion_data", []), "Notion", "page"),
+                (state.get("github_data", []), "GitHub", "item"),
             ):
                 inv.extend(self._inv_row(it, src, kind) for it in items)
             if user_id and inv:
