@@ -122,6 +122,33 @@ export default function Home() {
 
   const router = useRouter();
 
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isAuthActionPending, setIsAuthActionPending] = useState(false);
+
+  const handleGoogleLogin = useCallback(async () => {
+    setAuthError(null);
+    setIsAuthActionPending(true);
+    try {
+      await loginWithGoogle();
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : "Google sign-in failed. Please try again.");
+    } finally {
+      setIsAuthActionPending(false);
+    }
+  }, [loginWithGoogle]);
+
+  const handleGuestLogin = useCallback(async () => {
+    setAuthError(null);
+    setIsAuthActionPending(true);
+    try {
+      await loginAnonymously();
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : "Guest sign-in failed. Please try again.");
+    } finally {
+      setIsAuthActionPending(false);
+    }
+  }, [loginAnonymously]);
+
   const [activeTab, setActiveTab] = useState<Tab>("chat");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -257,6 +284,7 @@ export default function Home() {
 
   // Per-user remote MCP connect info (personal URL + ready-to-paste configs)
   const [mcpConnection, setMcpConnection] = useState<any>(null);
+  const [mcpConnectionError, setMcpConnectionError] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [mcpPlatform, setMcpPlatform] = useState<"claude" | "chatgpt" | "cursor" | "antigravity">("claude");
   const [showMcpAdvanced, setShowMcpAdvanced] = useState<boolean>(false);
@@ -670,13 +698,22 @@ export default function Home() {
   }, [token, fetchRealDecisions]);
 
   // Fetch this user's personal remote-MCP connect info when the MCP tab opens
+  const fetchMcpConnection = useCallback(() => {
+    if (!token) return;
+    setMcpConnectionError(false);
+    fetch("/api/mcp/connection", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`status ${r.status}`))))
+      .then((d) => setMcpConnection(d))
+      .catch((e) => {
+        console.error("Error fetching MCP connection", e);
+        setMcpConnectionError(true);
+      });
+  }, [token]);
+
   useEffect(() => {
     if (activeTab !== "mcp" || !token) return;
-    fetch("/api/mcp/connection", { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setMcpConnection(d))
-      .catch((e) => console.error("Error fetching MCP connection", e));
-  }, [activeTab, token]);
+    fetchMcpConnection();
+  }, [activeTab, token, fetchMcpConnection]);
 
   // Fetch this user's agent persona overrides when the Agents tab opens
   useEffect(() => {
@@ -1127,8 +1164,9 @@ export default function Home() {
           {/* Login Buttons */}
           <div className="flex flex-col gap-2 mt-2 mb-4">
             <button
-              onClick={loginWithGoogle}
-              className="w-full py-2.5 px-4 bg-transparent border border-[rgb(var(--border))] hover:bg-[rgb(var(--surface-hover))] rounded-xl text-xs font-semibold text-[rgb(var(--text-primary))] flex items-center justify-center gap-3.5 transition-all theme-transition"
+              onClick={handleGoogleLogin}
+              disabled={isAuthActionPending}
+              className="w-full py-2.5 px-4 bg-transparent border border-[rgb(var(--border))] hover:bg-[rgb(var(--surface-hover))] rounded-xl text-xs font-semibold text-[rgb(var(--text-primary))] flex items-center justify-center gap-3.5 transition-all theme-transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {/* Google Icon */}
               <svg className="w-4 h-4" viewBox="0 0 48 48">
@@ -1140,14 +1178,21 @@ export default function Home() {
               Sign In with Google
             </button>
             <button
-              onClick={loginAnonymously}
-              className="w-full py-2.5 px-4 bg-[rgb(var(--text-primary))] hover:opacity-90 border border-[rgb(var(--border))] rounded-xl text-xs font-semibold text-[rgb(var(--bg))] flex items-center justify-center gap-2 transition-all shadow-sm"
+              onClick={handleGuestLogin}
+              disabled={isAuthActionPending}
+              className="w-full py-2.5 px-4 bg-[rgb(var(--text-primary))] hover:opacity-90 border border-[rgb(var(--border))] rounded-xl text-xs font-semibold text-[rgb(var(--bg))] flex items-center justify-center gap-2 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg className="w-4 h-4 text-[rgb(var(--bg))]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
               Continue as Guest
             </button>
+            {authError && (
+              <div className="flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-left animate-pop-in">
+                <span className="text-rose-400 text-xs mt-px">!</span>
+                <p className="text-[11px] text-rose-300 leading-relaxed">{authError}</p>
+              </div>
+            )}
           </div>
 
           <div className="text-[9px] text-[rgb(var(--text-muted))] font-mono uppercase tracking-wider">
@@ -2525,7 +2570,9 @@ export default function Home() {
                     {/* Personal MCP URL + copy */}
                     <div className="flex items-stretch gap-2 bg-[rgb(var(--bg))]/80 border border-[rgb(var(--border))]/80 rounded-xl p-1 mt-1">
                       <div className="flex-1 px-2.5 py-2 font-mono text-[10px] text-[rgb(var(--text-muted))] overflow-x-auto whitespace-nowrap scrollbar-none flex items-center select-all">
-                        {mcpConnection?.url || "Generating connection URL…"}
+                        {mcpConnectionError
+                          ? "Couldn't load — see below"
+                          : mcpConnection?.url || "Generating connection URL…"}
                       </div>
                       <button
                         disabled={!mcpConnection?.url}
@@ -2535,6 +2582,17 @@ export default function Home() {
                         {copiedKey === "url" ? "✓" : "Copy"}
                       </button>
                     </div>
+                    {mcpConnectionError && (
+                      <div className="flex items-center justify-between gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 mt-1">
+                        <p className="text-[10px] text-rose-300 font-mono">Couldn&apos;t reach the server to load your MCP connection.</p>
+                        <button
+                          onClick={fetchMcpConnection}
+                          className="text-[10px] font-semibold text-rose-300 hover:text-rose-200 underline shrink-0"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Badges */}
