@@ -560,6 +560,7 @@ export default function Home() {
       const res = await fetch("/api/decisions", {
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (!res.ok) return;
       const data = await res.json();
       if (data && data.decisions) {
         setRealDecisions(data.decisions.map((d: any) => ({

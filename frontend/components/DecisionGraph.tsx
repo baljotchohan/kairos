@@ -313,7 +313,12 @@ export default function DecisionGraph({
           width: entry.contentRect.width,
           height: entry.contentRect.height,
         });
-        alphaRef.current = 1.0; // reheat simulation on resize
+        // A gentle nudge (not a full reheat) — just enough for gravity to
+        // recenter nodes on the new dimensions. Resize handles fire this
+        // continuously while dragged, so a hard reset to 1.0 here would
+        // keep the whole graph at full-force jiggle for as long as the
+        // panel is being resized.
+        alphaRef.current = Math.max(alphaRef.current, 0.3);
       }
     });
     observer.observe(container);
@@ -382,7 +387,11 @@ export default function DecisionGraph({
         if (collision > 0) {
           const minDist = (n1.radius + n2.radius) * 1.6 + 4;
           if (dist < minDist) {
-            const overlap = (minDist - dist) * collision;
+            // Cap the per-frame correction so a freshly-loaded or heavily
+            // overlapping pair (e.g. a brand-new node set after clicking
+            // into another decision's graph) untangles smoothly over a
+            // few frames instead of popping fully apart in one frame.
+            const overlap = Math.min((minDist - dist) * collision, 6);
             const ux = dx / dist;
             const uy = dy / dist;
             const draggedId = draggedNodeRef.current?.id;
@@ -698,8 +707,15 @@ export default function DecisionGraph({
       if (alphaRef.current > 0.005) {
         runPhysics(width, height);
         alphaRef.current *= 0.985;
-      } else {
+      } else if (alphaRef.current !== 0) {
+        // Settling to rest — zero any residual velocity so a future reheat
+        // (new data, a settings change) ramps up from stillness instead of
+        // unleashing a frame's worth of stale, undamped velocity as a snap.
         alphaRef.current = 0;
+        for (const n of physicsNodesRef.current) {
+          n.vx = 0;
+          n.vy = 0;
+        }
       }
 
       draw(canvas, width, height);
@@ -738,7 +754,9 @@ export default function DecisionGraph({
         y: mouseY - worldY * newZoom,
       });
       setZoom(newZoom);
-      alphaRef.current = 1.0; // reheat simulation
+      // Zoom is camera-only — it never touches world-space node positions,
+      // so it must not reheat the simulation (that used to make the whole
+      // graph jiggle every time you scrolled).
     };
 
     canvas.addEventListener("wheel", handleWheel, { passive: false });
@@ -785,7 +803,10 @@ export default function DecisionGraph({
           draggedNodeRef.current = node;
           node.vx = 0;
           node.vy = 0;
-          alphaRef.current = 1.0;
+          // Don't reheat on touch-down alone — a tap that never turns into
+          // a drag would otherwise trigger a pointless full reheat. The
+          // touchmove drag branch below reheats only once real dragging
+          // starts.
         } else {
           isPanningRef.current = true;
           panStartRef.current = {
@@ -821,7 +842,7 @@ export default function DecisionGraph({
         const worldY = (midY - panRef.current.y) / prevZoom;
         setPan({ x: midX - worldX * newZoom, y: midY - worldY * newZoom });
         setZoom(newZoom);
-        alphaRef.current = 1.0;
+        // Camera-only — no reheat (see wheel handler above).
         return;
       }
 
@@ -909,10 +930,14 @@ export default function DecisionGraph({
     if (clickedNode) {
       draggedNodeRef.current = clickedNode;
       setSelectedNodeId(clickedNode.id === selectedNodeId ? null : clickedNode.id);
-      
+
       clickedNode.vx = 0;
       clickedNode.vy = 0;
-      alphaRef.current = 1.0;
+      // No reheat here — selecting a node is highlight-only and draw() runs
+      // every frame regardless of physics state, so the highlight shows up
+      // on the very next frame either way. A full reheat used to make the
+      // entire graph visibly jiggle on every single click. If this mousedown
+      // turns into an actual drag, the mousemove handler below reheats then.
 
       if (onNodeClick) {
         onNodeClick(clickedNode.id);
@@ -958,7 +983,11 @@ export default function DecisionGraph({
 
     if (hovered?.id !== hoveredNodeId) {
       setHoveredNodeId(hovered ? hovered.id : null);
-      alphaRef.current = 1.0; // reheat to update highlight frame
+      // No reheat — draw() reads hoveredNodeIdRef every frame regardless of
+      // physics state, so the highlight already updates next frame for
+      // free. Reheating here used to restart full-strength physics on every
+      // single hover change, making the whole graph jiggle just from
+      // moving the mouse across it.
     }
   };
 
@@ -1006,8 +1035,7 @@ export default function DecisionGraph({
       x: width / 2 - centerX * newZoom,
       y: height / 2 - centerY * newZoom,
     });
-    
-    alphaRef.current = 1.0;
+    // Camera-only fit — no reheat (see wheel handler above).
   };
 
   const activeFocusId = selectedNodeId || hoveredNodeId;

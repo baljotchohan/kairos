@@ -76,6 +76,7 @@ export function useKairosChat(token: string | null) {
       const res = await fetch("/api/memory/sessions", {
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (!res.ok) return;
       const data = await res.json();
       setSessions(data);
     } catch (e) {
@@ -89,6 +90,7 @@ export function useKairosChat(token: string | null) {
       const res = await fetch("/api/memory/profile", {
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (!res.ok) return;
       const data = await res.json();
       setUserProfile(data);
     } catch (e) {
@@ -102,8 +104,9 @@ export function useKairosChat(token: string | null) {
       const res = await fetch(`/api/memory/sessions/${sessionId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (!res.ok) return;
       const turns = await res.json();
-      if (!res.ok || !Array.isArray(turns)) return;
+      if (!Array.isArray(turns)) return;
       const loadedMessages: Message[] = turns.map((turn: any) => ({
         id: turn.id,
         role: turn.role,
