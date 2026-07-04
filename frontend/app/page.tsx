@@ -397,6 +397,15 @@ function Constellation({ scrollOpacity }: { scrollOpacity: number }) {
   );
 }
 
+/* ── AMD logo (real, official mark) — hackathon hardware partner ──────────── */
+function AMDLogo({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 800 190.803" className={className} fill="currentColor">
+      <path d="M187.888 178.122H143.52l-13.573-32.738H56.003l-12.366 32.738H0L66.667 12.776h47.761zM91.155 52.286L66.912 116.53h50.913zm257.901-39.51h35.88v165.346h-41.219V74.842l-44.608 51.877h-6.301l-44.605-51.877V178.12h-41.219V12.776h35.88l53.092 61.336zm140.319 0c60.364 0 91.391 37.573 91.391 82.909 0 47.517-30.058 82.437-96 82.437h-68.369V12.776zm-31.762 135.041h26.906c41.457 0 53.823-28.129 53.823-52.377 0-28.368-15.276-52.363-54.308-52.363h-26.422v104.74zm205.156-95.836L610.797 0H800v189.21l-51.972-51.975V51.981zm-.061 10.416L609.2 115.903v74.899h74.889l53.505-53.506h-74.886z" />
+    </svg>
+  );
+}
+
 /* ── Brand logos (real, official marks) ──────────────────────────────────── */
 const Logos = {
   slack: (
@@ -993,9 +1002,10 @@ export default function Landing() {
         }}
       >
         <div className="w-full px-6 md:px-10 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <KairosLogo size={30} />
-            <span className="text-lg font-bold tracking-[0.2em]">KAIROS</span>
+          <div className="flex items-center gap-3">
+            <KairosLogo size={30} showText />
+            <span className="text-zinc-600 text-sm">×</span>
+            <AMDLogo className="h-4 text-white" />
           </div>
           <div className="hidden md:flex items-center gap-6 text-xs font-mono tracking-wide text-zinc-400">
             <a href="#demo" className="hover:text-white transition-colors">Demo</a>
@@ -1405,9 +1415,12 @@ export default function Landing() {
       {/* ── Footer ── */}
       <footer className="border-t border-violet-950/40 py-10 px-6">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-zinc-500 font-mono">
-          <div className="flex items-center gap-2.5">
-            <KairosLogo size={22} />
-            <span className="tracking-[0.2em] font-semibold text-zinc-300">KAIROS</span>
+          <div className="flex items-center">
+            <KairosLogo size={22} showText className="text-zinc-300" />
+          </div>
+          <div className="flex items-center gap-2 text-zinc-500">
+            <span>In collaboration with</span>
+            <AMDLogo className="h-3.5 text-zinc-300" />
           </div>
           <p>Built by Antigravity · MIT License · &quot;Every company forgets why. KAIROS never does.&quot;</p>
         </div>
