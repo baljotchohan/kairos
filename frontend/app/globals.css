@@ -164,6 +164,17 @@ body {
   animation: cursorPulse 1.1s var(--ease-out-quint) infinite;
 }
 
+/* Idle float for the landing page's agent mascots — subtle "alive" bob,
+   independent of the hover scale already on the wrapping card */
+@keyframes mascotFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+.animate-mascot-float {
+  animation: mascotFloat 3.6s ease-in-out infinite;
+}
+
 /* Respect users who prefer reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,
