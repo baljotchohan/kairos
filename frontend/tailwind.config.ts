@@ -39,19 +39,15 @@ const config: Config = {
         },
       },
       fontFamily: {
-        // Apple system-font stack: -apple-system / BlinkMacSystemFont resolve to
-        // the real San Francisco (SF Pro) on Mac/iOS Safari & Chrome automatically —
-        // SF Pro's font files aren't legally distributable on a public website
-        // (Apple licenses them for apps on Apple platforms only), so this system-UI
-        // approach is how sites legitimately get the genuine Apple look. Named
-        // fallbacks cover the rare case where SF Pro Display/Text is locally
-        // installed but the browser doesn't map -apple-system correctly.
-        sans: ["-apple-system", "BlinkMacSystemFont", "SF Pro Display", "SF Pro Text", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
-        serif: ["-apple-system", "BlinkMacSystemFont", "SF Pro Display", "SF Pro Text", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
+        // Site-wide serif — headings and body copy both read in Newsreader now
+        // (a Google Fonts editorial serif with an optical-size axis, so it stays
+        // sharp at large headline sizes and small dense UI text alike). sans and
+        // serif intentionally point at the same stack so existing font-sans
+        // usage picks up the change too; mono is untouched for code/data/labels.
+        sans: ["Newsreader", "Iowan Old Style", "Palatino Linotype", "Georgia", "serif"],
+        serif: ["Newsreader", "Iowan Old Style", "Palatino Linotype", "Georgia", "serif"],
         mono: ["JetBrains Mono", "Fira Code", "monospace"],
-        // Display face for large marketing headlines only — body copy stays on
-        // the system stack above. Bricolage Grotesque is licensed for web use.
-        display: ["Bricolage Grotesque", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+        display: ["Newsreader", "Iowan Old Style", "Palatino Linotype", "Georgia", "serif"],
       },
       animation: {
         "blink": "blink 1s step-end infinite",
