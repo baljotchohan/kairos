@@ -81,7 +81,7 @@ function TiltCard({
   };
 
   return (
-    <div style={{ perspective: 900 }}>
+    <div style={{ perspective: 900, height: "100%" }}>
       <div
         ref={ref}
         onMouseMove={onMove}
@@ -244,41 +244,88 @@ function SiteBackground() {
 }
 
 /* ── Cursor glow ─────────────────────────────────────────────────────────── */
+// Zero React in the hot path: no useState, no re-render — every pointermove
+// writes straight to the DOM node's style, so there is nothing between the
+// event and the pixel moving except the browser's own paint cycle.
 function CursorGlow() {
-  const [pos, setPos] = useState({ x: -999, y: -999 });
-  const [visible, setVisible] = useState(false);
+  const elRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      setPos({ x: e.clientX, y: e.clientY });
-      if (!visible) setVisible(true);
+    const el = elRef.current;
+    if (!el) return;
+
+    const onMove = (e: PointerEvent) => {
+      el.style.transform = `translate3d(${e.clientX - 220}px, ${e.clientY - 220}px, 0)`;
+      el.style.opacity = "1";
     };
-    const onLeave = () => setVisible(false);
-    window.addEventListener("mousemove", onMove);
-    document.documentElement.addEventListener("mouseleave", onLeave);
+    const onLeave = () => {
+      el.style.opacity = "0";
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: true });
+    document.documentElement.addEventListener("pointerleave", onLeave);
     return () => {
-      window.removeEventListener("mousemove", onMove);
-      document.documentElement.removeEventListener("mouseleave", onLeave);
+      window.removeEventListener("pointermove", onMove);
+      document.documentElement.removeEventListener("pointerleave", onLeave);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div
-      className="pointer-events-none fixed z-[9998]"
+      ref={elRef}
+      className="pointer-events-none fixed top-0 left-0 z-[9998]"
       style={{
-        opacity: visible ? 1 : 0,
-        left: pos.x - 220,
-        top: pos.y - 220,
+        opacity: 0,
         width: 440,
         height: 440,
         background:
           "radial-gradient(circle at center, rgba(139,92,246,0.18) 0%, rgba(139,92,246,0.07) 38%, transparent 70%)",
         borderRadius: "50%",
-        transition: "opacity .3s ease",
+        transition: "opacity .15s linear",
         willChange: "transform",
       }}
     />
+  );
+}
+
+/* ── Magnetic button wrapper ─────────────────────────────────────────────── */
+// Nudges its child toward the cursor within a small radius, springs back on
+// leave — the "premium CTA" idiom (Linear, Stripe, Vercel all use this).
+function Magnetic({
+  children,
+  strength = 0.35,
+  className = "",
+}: {
+  children: React.ReactNode;
+  strength?: number;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [t, setT] = useState({ x: 0, y: 0 });
+
+  const onMove = (e: React.MouseEvent) => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const x = (e.clientX - r.left - r.width / 2) * strength;
+    const y = (e.clientY - r.top - r.height / 2) * strength;
+    setT({ x, y });
+  };
+
+  return (
+    <div
+      ref={ref}
+      onMouseMove={onMove}
+      onMouseLeave={() => setT({ x: 0, y: 0 })}
+      className={className}
+      style={{
+        transform: `translate3d(${t.x}px, ${t.y}px, 0)`,
+        transition: t.x === 0 && t.y === 0 ? "transform .45s var(--ease-spring)" : "transform .12s ease-out",
+        display: "inline-block",
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -679,6 +726,8 @@ const MCP_TOOLS = [
   { title: "Checks for precedent", desc: "Checks whether a new plan has real precedent — or if you're about to repeat a mistake." },
   { title: "Finds contradictions", desc: "Proactively scans the whole graph for contradictions, stale spend, and bus-factor risk." },
   { title: "Scores decision risk", desc: "Scores every decision 0–100 for staleness, ownership gaps, and unreviewed impact." },
+  { title: "Answers live, not just from memory", desc: "Runs the same chat pipeline as the KAIROS UI and returns a sourced answer, right from Claude." },
+  { title: "Syncs your sources on demand", desc: "Kicks off a fresh ingestion pass instead of waiting for the automatic 12-minute cycle." },
 ];
 
 const INTELLIGENCE = [
@@ -968,13 +1017,20 @@ export default function Landing() {
   // Hero glow + constellation fade out as user scrolls away from hero
   const heroGlowOpacity = Math.max(0, 1 - scrollY / 420);
 
-  const enter = useCallback(() => router.push("/dashboard"), [router]);
+  // Fade to the shared background color before navigating, instead of a hard
+  // jump cut — /dashboard opens on the same dark bg so it reads as one continuous transition.
+  const [isLeaving, setIsLeaving] = useState(false);
+  const enter = useCallback(() => {
+    setIsLeaving(true);
+    setTimeout(() => router.push("/dashboard"), 220);
+  }, [router]);
   const [signInError, setSignInError] = useState<string | null>(null);
   const signIn = useCallback(async () => {
     setSignInError(null);
     try {
       await loginWithGoogle();
-      router.push("/dashboard");
+      setIsLeaving(true);
+      setTimeout(() => router.push("/dashboard"), 220);
     } catch (err) {
       // Don't redirect on failure — a silent bounce to /dashboard's login
       // gate looks like nothing happened. Tell the user here instead.
@@ -984,6 +1040,11 @@ export default function Landing() {
 
   return (
     <main className="relative min-h-screen w-full bg-[#080808] text-[#ededed] overflow-x-hidden font-serif">
+      {/* Fade-to-black overlay, shown while a nav to /dashboard is in flight */}
+      <div
+        className="fixed inset-0 z-[200] pointer-events-none bg-[#080808]"
+        style={{ opacity: isLeaving ? 1 : 0, transition: "opacity 220ms var(--ease-out-quint)" }}
+      />
       {/* Subtle film-grain texture for a premium, non-flat finish */}
       <div
         className="fixed inset-0 z-[1] pointer-events-none opacity-[0.035] mix-blend-overlay"
@@ -1015,12 +1076,14 @@ export default function Landing() {
             <a href="#why" className="hover:text-white transition-colors">Why KAIROS</a>
             <a href="#mcp" className="hover:text-white transition-colors">MCP</a>
           </div>
-          <button
-            onClick={enter}
-            className="px-4 py-2 rounded-lg text-xs font-semibold bg-violet-600 hover:bg-violet-500 transition-colors text-white shadow-[0_0_20px_rgba(139,92,246,0.35)]"
-          >
-            {user ? "Open Dashboard" : "Enter KAIROS"}
-          </button>
+          <Magnetic strength={0.25}>
+            <button
+              onClick={enter}
+              className="px-4 py-2 rounded-lg text-xs font-semibold bg-violet-600 hover:bg-violet-500 transition-colors text-white shadow-[0_0_20px_rgba(139,92,246,0.35)]"
+            >
+              {user ? "Open Dashboard" : "Enter KAIROS"}
+            </button>
+          </Magnetic>
         </div>
       </nav>
 
@@ -1047,7 +1110,7 @@ export default function Landing() {
             Company Organizational Memory OS
           </div>
 
-          <h1 className="text-5xl md:text-7xl font-bold leading-[1.05] tracking-tight">
+          <h1 className="text-5xl md:text-7xl font-display font-bold leading-[1.05] tracking-tight">
             Every company forgets
             <br />
             <span className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-violet-400 bg-clip-text text-transparent">
@@ -1064,12 +1127,14 @@ export default function Landing() {
           </p>
 
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button
-              onClick={enter}
-              className="px-7 py-3.5 rounded-xl text-sm font-semibold bg-violet-600 hover:bg-violet-500 transition-all text-white shadow-[0_0_30px_rgba(139,92,246,0.45)] hover:shadow-[0_0_44px_rgba(139,92,246,0.65)] hover:-translate-y-0.5"
-            >
-              {user ? "Open Dashboard →" : "Enter KAIROS →"}
-            </button>
+            <Magnetic strength={0.3}>
+              <button
+                onClick={enter}
+                className="px-7 py-3.5 rounded-xl text-sm font-semibold bg-violet-600 hover:bg-violet-500 transition-all text-white shadow-[0_0_30px_rgba(139,92,246,0.45)] hover:shadow-[0_0_44px_rgba(139,92,246,0.65)] hover:-translate-y-0.5"
+              >
+                {user ? "Open Dashboard →" : "Enter KAIROS →"}
+              </button>
+            </Magnetic>
             {!user && (
               <button
                 onClick={signIn}
@@ -1113,7 +1178,7 @@ export default function Landing() {
         <div className="max-w-5xl mx-auto">
           <Reveal className="text-center mb-12">
             <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">See It Answer</p>
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">
+            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight">
               Ask the question everyone forgot.
             </h2>
             <p className="mt-4 text-zinc-400 max-w-2xl mx-auto font-sans">
@@ -1132,7 +1197,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto">
           <Reveal className="text-center mb-16">
             <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">The Problem</p>
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">
+            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight">
               Knowledge doesn&apos;t leave in documents.
               <br />
               <span className="text-zinc-500">It leaves in people.</span>
@@ -1163,7 +1228,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto">
           <Reveal className="text-center mb-16">
             <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">How It Works</p>
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">From raw chatter to cited answers</h2>
+            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight">From raw chatter to cited answers</h2>
           </Reveal>
 
           <div className="grid md:grid-cols-4 gap-5 relative">
@@ -1188,7 +1253,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto">
           <Reveal className="text-center mb-16">
             <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">The Engine</p>
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">Nine agents, running in parallel</h2>
+            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight">Nine agents, running in parallel</h2>
             <p className="mt-4 text-zinc-400 max-w-2xl mx-auto font-sans">
               Orchestrated with LangGraph — five own a source and extract decisions, four reason
               over the graph to route, retrieve, synthesize and answer live queries.
@@ -1201,7 +1266,9 @@ export default function Landing() {
               <Reveal key={a.name} delay={i * 80}>
                 <div className="group h-full p-6 rounded-2xl border border-violet-500/15 bg-white/[0.02] hover:bg-white/[0.04] hover:border-violet-500/40 transition-all">
                   <div className="w-16 h-16 -ml-1 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                    {a.icon}
+                    <div className="animate-mascot-float" style={{ animationDelay: `${i * 0.15}s` }}>
+                      {a.icon}
+                    </div>
                   </div>
                   <h3 className="text-lg font-semibold mb-2">{a.name}</h3>
                   <p className="text-sm text-zinc-400 leading-relaxed font-sans">{a.desc}</p>
@@ -1235,7 +1302,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto relative">
           <Reveal className="text-center mb-16">
             <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">New — Proactive, Not Just Reactive</p>
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">
+            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight">
               KAIROS doesn&apos;t wait to be asked.
             </h2>
             <p className="mt-4 text-zinc-400 max-w-2xl mx-auto font-sans">
@@ -1301,17 +1368,17 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto">
           <Reveal className="text-center mb-16">
             <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">Connectors</p>
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">Connect once. No passwords to hand over.</h2>
+            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight">Connect once. No passwords to hand over.</h2>
             <p className="mt-4 text-zinc-400 max-w-2xl mx-auto font-sans">
               You sign in and connect your own accounts — no admin, no IT ticket. KAIROS keeps
               reading in the background and your decision graph stays up to date.
             </p>
           </Reveal>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 items-stretch">
             {CONNECTORS.map((c, i) => (
-              <Reveal key={c.key} delay={i * 80}>
-                <TiltCard className="h-full p-6 rounded-2xl border border-violet-500/15 bg-white/[0.02] hover:border-violet-500/35 transition-colors flex flex-col items-center text-center gap-3">
+              <Reveal key={c.key} delay={i * 80} className="h-full">
+                <TiltCard className="h-full p-6 rounded-2xl border border-violet-500/15 bg-white/[0.02] hover:border-violet-500/35 transition-colors flex flex-col items-center justify-center text-center gap-3">
                   <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-violet-500/15 flex items-center justify-center">
                     {Logos[c.key]}
                   </div>
@@ -1331,7 +1398,7 @@ export default function Landing() {
         <div className="max-w-5xl mx-auto">
           <Reveal className="text-center mb-16">
             <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">Why Not Just Confluence?</p>
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">
+            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight">
               A wiki stores what you write.
               <br />
               <span className="text-zinc-500">KAIROS remembers what you decided.</span>
@@ -1368,7 +1435,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto">
           <Reveal className="text-center mb-16">
             <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">Works With Your AI</p>
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">KAIROS MCP</h2>
+            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight">KAIROS MCP</h2>
             <p className="mt-4 text-zinc-400 max-w-2xl mx-auto font-sans">
               Connect Claude, ChatGPT, or Cursor straight to your company&apos;s memory. Before it
               answers you, your AI checks what KAIROS already knows. The moment it learns something
@@ -1397,18 +1464,20 @@ export default function Landing() {
         </div>
         <Reveal className="relative max-w-3xl mx-auto text-center">
           <KairosLogo size={56} className="mx-auto mb-8" />
-          <h2 className="text-4xl md:text-6xl font-bold tracking-tight">
+          <h2 className="text-4xl md:text-6xl font-display font-bold tracking-tight">
             Stop losing the <span className="text-violet-300">why</span>.
           </h2>
           <p className="mt-5 text-zinc-400 max-w-xl mx-auto font-sans">
             Connect your workspace and ask KAIROS your first question. The memory builds itself.
           </p>
-          <button
-            onClick={enter}
-            className="mt-10 px-9 py-4 rounded-xl text-sm font-semibold bg-violet-600 hover:bg-violet-500 transition-all text-white shadow-[0_0_36px_rgba(139,92,246,0.5)] hover:-translate-y-0.5"
-          >
-            {user ? "Open Dashboard →" : "Enter KAIROS →"}
-          </button>
+          <Magnetic strength={0.3} className="mt-10">
+            <button
+              onClick={enter}
+              className="px-9 py-4 rounded-xl text-sm font-semibold bg-violet-600 hover:bg-violet-500 transition-all text-white shadow-[0_0_36px_rgba(139,92,246,0.5)] hover:-translate-y-0.5"
+            >
+              {user ? "Open Dashboard →" : "Enter KAIROS →"}
+            </button>
+          </Magnetic>
         </Reveal>
       </section>
 
