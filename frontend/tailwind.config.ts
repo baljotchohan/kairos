@@ -49,6 +49,9 @@ const config: Config = {
         sans: ["-apple-system", "BlinkMacSystemFont", "SF Pro Display", "SF Pro Text", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
         serif: ["-apple-system", "BlinkMacSystemFont", "SF Pro Display", "SF Pro Text", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
         mono: ["JetBrains Mono", "Fira Code", "monospace"],
+        // Display face for large marketing headlines only — body copy stays on
+        // the system stack above. Bricolage Grotesque is licensed for web use.
+        display: ["Bricolage Grotesque", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
       },
       animation: {
         "blink": "blink 1s step-end infinite",
