@@ -109,6 +109,37 @@ const McpLogos = {
   )
 };
 
+// Animates a number counting up to `value` whenever it changes, instead of
+// snapping — used for the metrics tab's stat tiles.
+function CountUp({ value, decimals = 0 }: { value: number; decimals?: number }) {
+  const [display, setDisplay] = useState(value);
+  const fromRef = useRef(value);
+
+  useEffect(() => {
+    const from = fromRef.current;
+    const to = value;
+    if (from === to) return;
+    const duration = 700;
+    let raf = 0;
+    const start = typeof performance !== "undefined" ? performance.now() : 0;
+
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setDisplay(from + (to - from) * eased);
+      if (t < 1) {
+        raf = requestAnimationFrame(tick);
+      } else {
+        fromRef.current = to;
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+
+  return <>{display.toFixed(decimals)}</>;
+}
+
 export default function Home() {
   const {
     user,
@@ -1153,7 +1184,7 @@ export default function Home() {
           </button>
         </div>
 
-        <div className="w-full max-w-sm p-6 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--surface))] text-center shadow-lg flex flex-col gap-6 theme-transition animate-[fadeIn_0.2s_ease-out]">
+        <div className="w-full max-w-sm p-6 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--surface))] text-center shadow-lg flex flex-col gap-6 theme-transition animate-message-in">
           {/* Logo */}
           <div className="flex flex-col items-center gap-2 mt-4">
             <div className="w-64 h-16 flex items-center justify-center">
@@ -1211,7 +1242,7 @@ export default function Home() {
   }
 
   return (
-    <div className="flex h-full w-full bg-[rgb(var(--bg))] text-[rgb(var(--text-primary))] overflow-hidden theme-transition animate-[fadeIn_0.2s_ease-out] relative">
+    <div className="flex h-full w-full bg-[rgb(var(--bg))] text-[rgb(var(--text-primary))] overflow-hidden theme-transition animate-message-in relative">
 
       {/* Mobile sidebar backdrop — tap to close the drawer */}
       {isMobile && isSidebarOpen && (
@@ -1653,8 +1684,8 @@ export default function Home() {
         <div className="flex-1 overflow-y-auto">
           {/* CHAT CONSOLE */}
           {activeTab === "chat" && (
-            <div className="h-[calc(100vh-3.5rem)] flex overflow-hidden">
-              
+            <div className="h-[calc(100vh-3.5rem)] flex overflow-hidden animate-message-in">
+
               {/* Chat History Panel (Past Sessions) */}
 
 
@@ -2040,7 +2071,7 @@ export default function Home() {
 
           {/* DASHBOARD & STATS OVERVIEW */}
           {activeTab === "dashboard" && (
-            <div className="p-8 max-w-4xl mx-auto flex flex-col gap-6 animate-[fadeIn_0.2s_ease-out]">
+            <div className="p-8 max-w-4xl mx-auto flex flex-col gap-6 animate-message-in">
               <div className="border-b border-[rgb(var(--border))]/40 pb-4">
                 <h3 className="text-lg font-bold tracking-tight text-[rgb(var(--text-primary))] mb-0.5">System Ingest Metrics</h3>
                 <p className="text-xs text-[rgb(var(--text-muted))]">Monitor indexing sizes, relations logs, and dynamic app integration statuses.</p>
@@ -2049,15 +2080,21 @@ export default function Home() {
               {/* Metrics cards grid */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {[
-                  { label: "Decisions Index", value: displayStats.total_decisions, tag: "records" },
-                  { label: "Graph Relations", value: displayStats.total_relations, tag: "links" },
-                  { label: "Connected APIs", value: displayStats.connected_components, tag: "active" },
-                  { label: "Memory DB Size", value: "84.2", tag: "MB" },
+                  { label: "Decisions Index", value: displayStats.total_decisions, decimals: 0, tag: "records" },
+                  { label: "Graph Relations", value: displayStats.total_relations, decimals: 0, tag: "links" },
+                  { label: "Connected APIs", value: displayStats.connected_components, decimals: 0, tag: "active" },
+                  { label: "Memory DB Size", value: 84.2, decimals: 1, tag: "MB" },
                 ].map((stat, idx) => (
-                  <div key={idx} className="p-5 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/40 backdrop-blur-sm shadow-sm hover:shadow-md transition-all flex flex-col gap-1.5">
+                  <div
+                    key={idx}
+                    className="p-5 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/40 backdrop-blur-sm shadow-sm hover:shadow-md transition-all flex flex-col gap-1.5 animate-pop-in"
+                    style={{ animationDelay: `${idx * 60}ms` }}
+                  >
                     <span className="text-[9px] font-mono text-[rgb(var(--text-muted))] uppercase block tracking-wider font-bold">{stat.label}</span>
                     <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-black text-[rgb(var(--text-primary))]">{stat.value}</span>
+                      <span className="text-2xl font-black text-[rgb(var(--text-primary))] tabular-nums">
+                        <CountUp value={stat.value} decimals={stat.decimals} />
+                      </span>
                       <span className="text-[10px] font-mono text-[rgb(var(--text-muted))] font-bold">{stat.tag}</span>
                     </div>
                   </div>
@@ -2161,7 +2198,7 @@ export default function Home() {
 
           {/* DECISION INDEX EXPLORER */}
           {activeTab === "decisions" && (
-            <div className="p-8 max-w-4xl mx-auto flex flex-col gap-6 animate-[fadeIn_0.2s_ease-out]">
+            <div className="p-8 max-w-4xl mx-auto flex flex-col gap-6 animate-message-in">
               <div className="border-b border-[rgb(var(--border))]/40 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                   <h3 className="text-lg font-bold tracking-tight text-[rgb(var(--text-primary))] mb-0.5">Decision Records Index</h3>
@@ -2216,8 +2253,12 @@ export default function Home() {
                     No results found matching filters.
                   </div>
                 ) : (
-                  filteredDecisions.map((dec) => (
-                    <div key={dec.id} className="p-5 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/20 hover:bg-[rgb(var(--surface-hover))]/20 transition-all shadow-sm">
+                  filteredDecisions.map((dec, i) => (
+                    <div
+                      key={dec.id}
+                      className="p-5 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/20 hover:bg-[rgb(var(--surface-hover))]/20 transition-all shadow-sm animate-pop-in"
+                      style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+                    >
                       <div className="flex items-center justify-between text-[10.5px] text-[rgb(var(--text-muted))] mb-3.5 font-mono">
                         <span className="uppercase font-bold">{dec.source} | {dec.date}</span>
                         <span className="font-semibold">{dec.owner}</span>
@@ -2257,7 +2298,7 @@ export default function Home() {
 
           {/* INTEGRATIONS OAuth */}
           {activeTab === "integrations" && (
-            <div className="p-8 max-w-2xl mx-auto flex flex-col gap-6 animate-[fadeIn_0.2s_ease-out]">
+            <div className="p-8 max-w-2xl mx-auto flex flex-col gap-6 animate-message-in">
               <div className="border-b border-[rgb(var(--border))]/40 pb-4">
                 <h3 className="text-lg font-bold tracking-tight text-[rgb(var(--text-primary))] mb-0.5">
                   Connect Your Apps
@@ -2306,7 +2347,7 @@ export default function Home() {
 
           {/* AI AGENTS REGISTRY */}
           {activeTab === "agents" && (
-            <div className="p-8 max-w-4xl mx-auto flex flex-col gap-6 animate-[fadeIn_0.2s_ease-out]">
+            <div className="p-8 max-w-4xl mx-auto flex flex-col gap-6 animate-message-in">
               <div className="border-b border-[rgb(var(--border))]/40 pb-4 flex items-center justify-between gap-4">
                 <div>
                   <h3 className="text-lg font-bold tracking-tight text-[rgb(var(--text-primary))] mb-0.5">Agent Registry</h3>
@@ -2448,8 +2489,12 @@ export default function Home() {
                       { label: "Sources Hit", value: "4.1 avg" }
                     ]
                   }
-                ].map((agent) => (
-                  <div key={agent.name} className="p-5 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/30 flex flex-col justify-between gap-5 hover:border-[rgb(var(--border-focus))] transition-all shadow-sm">
+                ].map((agent, i) => (
+                  <div
+                    key={agent.name}
+                    className="p-5 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/30 flex flex-col justify-between gap-5 hover:border-[rgb(var(--border-focus))] transition-all shadow-sm animate-pop-in"
+                    style={{ animationDelay: `${i * 60}ms` }}
+                  >
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
@@ -2538,7 +2583,7 @@ export default function Home() {
 
           {/* MCP SERVER INTERFACE */}
           {activeTab === "mcp" && (
-            <div className="p-8 max-w-4xl mx-auto flex flex-col gap-8 animate-[fadeIn_0.2s_ease-out]">
+            <div className="p-8 max-w-4xl mx-auto flex flex-col gap-8 animate-message-in">
               
               {/* Header */}
               <div className="border-b border-[rgb(var(--border))]/40 pb-4">
@@ -2913,7 +2958,7 @@ export default function Home() {
                 </button>
 
                 {showMcpAdvanced && (
-                  <div className="flex flex-col gap-6 p-6 rounded-2xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 animate-[fadeIn_0.2s_ease-out]">
+                  <div className="flex flex-col gap-6 p-6 rounded-2xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 animate-message-in">
                     
                     {/* Intro & Status Card */}
                     <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-4 border-b border-[rgb(var(--border))]/40">
