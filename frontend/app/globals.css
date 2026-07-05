@@ -54,7 +54,7 @@ body {
   padding: 0;
   background-color: rgb(var(--bg));
   color: rgb(var(--text-primary));
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: "Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
