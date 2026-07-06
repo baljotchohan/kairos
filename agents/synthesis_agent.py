@@ -18,7 +18,7 @@ from openai import OpenAI, AsyncOpenAI
 from config import config
 from agents.base_agent import BaseAgent
 from core.memory import KairosMemory
-from core.graph import DecisionNode
+from core.graph import DecisionNode, exclude_conversation_nodes
 from agents.context_agent import ResolvedContext
 
 
@@ -70,6 +70,7 @@ Rules:
 4. If the question isn't about company decisions at all (general knowledge, small talk, coding help), answer briefly and helpfully, but make clear that's general information — not from the company's memory.
 5. Never tell the user to "contact the administrators" or invent fake guidance/sources.
 6. Tailor tone to the user's role/background if provided.
+7. You are answering a question, not performing a write. If the user is asking you to ADD, STORE, REMEMBER, or RECORD a new decision, you have no ability to do that from here — say so plainly and suggest they phrase it as "add a decision that ..." so it's routed to actually be saved. Never narrate "I've added/recorded/saved this" — you haven't, and claiming otherwise misleads the user into thinking something was persisted when nothing was.
 
 Format: structured, professional markdown with emojis and clear sections. The renderer
 only turns "## Header" into an actual heading when it starts its own line — a header
@@ -173,14 +174,26 @@ Extract all decisions from the above content."""
             if not d.get("title") or not d.get("summary"):
                 continue
 
+            # `.get(key, default)` only falls back when the key is entirely
+            # absent — but the extraction schema explicitly allows the model
+            # to return "source_url": "" / "date": "", which IS present, so
+            # the old code kept the empty string instead of the real
+            # connector-supplied value. That broke citations (dead links)
+            # and make_id()'s dedup hash (empty source_url makes it fall back
+            # to a random uuid, so re-extracting the same content on a later
+            # ingestion cycle created a duplicate node instead of updating
+            # the existing one). `.get(key) or default` falls back on any
+            # falsy value, not just a missing key.
+            resolved_source_url = d.get("source_url") or source_url
+            resolved_date = d.get("date") or content_date or "unknown"
             node = DecisionNode(
-                id=self.memory.make_id(title=d.get("title"), source_url=d.get("source_url", source_url), user_id=user_id),
+                id=self.memory.make_id(title=d.get("title"), source_url=resolved_source_url, user_id=user_id),
                 title=d.get("title", ""),
                 summary=d.get("summary", ""),
-                date=d.get("date", content_date or "unknown"),
+                date=resolved_date,
                 participants=d.get("participants", []),
                 source=d.get("source", source_type),
-                source_url=d.get("source_url", source_url),
+                source_url=resolved_source_url,
                 topics=d.get("topics", []),
                 outcome=d.get("outcome", ""),
                 raw_text=text[:2000],
@@ -225,7 +238,12 @@ Extract all decisions from the above content."""
         # 1. Retrieve decisions using hybrid search (scoped to the asking user)
         self.think("Searching KAIROS memory using hybrid vector + structured + graph retrieval")
         search_query = resolved_context.resolved_query if resolved_context else question
-        relevant = self.memory.hybrid_search(search_query, n_results=6, user_id=user_id)
+        relevant = self.memory.hybrid_search(search_query, n_results=8, user_id=user_id)
+        # Auto-indexed past chat turns exist so MCP's get_context can surface prior
+        # KAIROS conversations to external clients — but citing the user's own
+        # earlier chat messages back to them as "evidence" for a decision is
+        # confusing, not helpful, so keep them out of this interactive answer.
+        relevant = exclude_conversation_nodes(relevant)[:6]
         self.observe(f"Retrieved {len(relevant)} relevant decisions from memory.")
 
         # 2. Inject user profile personalization
@@ -346,8 +364,9 @@ Provide your synthesis answer:"""
     async def answer_query_stream(self, question: str, resolved_context: ResolvedContext, user_id: str | None = None) -> AsyncIterator[str]:
         """Stream answer tokens. Yields trace metadata, followed by text tokens."""
         search_query = resolved_context.resolved_query if resolved_context else question
-        relevant = self.memory.hybrid_search(search_query, n_results=6, user_id=user_id)
-        
+        relevant = self.memory.hybrid_search(search_query, n_results=8, user_id=user_id)
+        relevant = exclude_conversation_nodes(relevant)[:6]
+
         personalization = ""
         if resolved_context and resolved_context.personalization_prompt:
             personalization = resolved_context.personalization_prompt
