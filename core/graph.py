@@ -17,6 +17,21 @@ import networkx as nx
 
 RelationType = Literal["same_topic", "caused_by", "same_person", "same_timeframe", "follow_up"]
 
+# Every chat exchange gets auto-indexed as a DecisionNode (see
+# orchestrator.py) so MCP's get_context can surface past KAIROS
+# conversations to external clients like Claude Desktop. That's the right
+# behavior for MCP — but feeding a user's own earlier chat messages back to
+# them as "evidence" for an organizational decision (in the KAIROS web chat
+# itself) reads as broken, not helpful. Interactive answer paths should
+# exclude these via exclude_conversation_nodes(); MCP's get_context path
+# intentionally does not.
+CONVERSATION_TOPIC = "KAIROS Conversation"
+
+
+def exclude_conversation_nodes(nodes: list["DecisionNode"]) -> list["DecisionNode"]:
+    """Drop auto-indexed chat-history nodes from a retrieval result."""
+    return [n for n in nodes if CONVERSATION_TOPIC not in (n.topics or [])]
+
 
 @dataclass
 class DecisionNode:
