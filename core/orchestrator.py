@@ -454,8 +454,62 @@ class KairosOrchestrator:
                 "session_id": session_id, "user_context": resolved_context.to_dict(),
             }
 
-        # 3b. Live data → query the user's connected sources on-demand (Drive/Gmail/Slack/Jira/Zoom)
-        if intent.intent == "live_data":
+        # 3b. Store decision → the user is TELLING KAIROS to record something new,
+        # not asking about something that already happened. Reuses the same
+        # extract_decisions() the background ingestion pipeline uses for
+        # Slack/email/etc., so a manually-added decision is stored identically
+        # to an auto-extracted one — and, critically, this actually calls
+        # memory.store() instead of the model just narrating a plausible-sounding
+        # "I've added this" with no real write behind it (the previous bug: this
+        # intent didn't exist, so these requests fell through to search/live_data,
+        # found nothing, and the LLM sometimes hallucinated a fake confirmation).
+        if intent.intent == "store_decision":
+            if stream_callback:
+                await stream_callback({"type": "thinking", "agent": "synthesis_agent", "step": "think", "content": "Recording this decision to memory..."})
+
+            from datetime import datetime as _dt
+            stored = await synthesis_agent.extract_decisions(
+                {
+                    "text": resolved_context.resolved_query,
+                    "source": "KAIROS Chat (manually added)",
+                    "source_url": f"kairos://session/{session_id}",
+                    "date": _dt.utcnow().strftime("%Y-%m-%d"),
+                },
+                user_id=user_id,
+            )
+            merged_traces.extend(synthesis_agent.get_trace())
+
+            if stored:
+                lines = [f"✅ **Recorded {len(stored)} decision{'s' if len(stored) != 1 else ''} to memory.**", ""]
+                for node in stored:
+                    lines.append(f"- **{node.title}** — {node.summary} (dated {node.date})")
+                answer = "\n".join(lines)
+                sources = [
+                    {"id": n.id, "title": n.title, "date": n.date, "source": n.source, "source_url": n.source_url}
+                    for n in stored
+                ]
+                confidence = 0.95
+            else:
+                answer = (
+                    "I couldn't pull a clear decision out of that — try stating who decided "
+                    "what, e.g. \"add a decision: we're hiring two backend interns starting "
+                    "next week, approved by [name].\""
+                )
+                sources = []
+                confidence = 0.3
+
+            # This answer is built directly in Python, not generated token-by-token
+            # by an LLM call, so stream it out manually to match the rest of the
+            # app's "always stream" behavior instead of arriving as one silent lump.
+            if stream_callback:
+                import re as _re
+                for _tok in _re.split(r"(\s+)", answer):
+                    if _tok:
+                        await stream_callback({"type": "token", "content": _tok})
+                        await asyncio.sleep(0.005)
+
+        # 3c. Live data → query the user's connected sources on-demand (Drive/Gmail/Slack/Jira/Zoom)
+        elif intent.intent == "live_data":
             if stream_callback:
                 await stream_callback({"type": "thinking", "agent": "live_data_agent", "step": "think", "content": "Checking your connected sources live..."})
 
@@ -559,7 +613,7 @@ class KairosOrchestrator:
         # This ensures Claude/ChatGPT can find past KAIROS conversations.
         if answer and intent.intent not in ("greeting",):
             try:
-                from core.graph import DecisionNode
+                from core.graph import DecisionNode, CONVERSATION_TOPIC
                 from datetime import datetime as _dt
                 qa_node = DecisionNode(
                     id=self.memory.make_id(
@@ -573,7 +627,7 @@ class KairosOrchestrator:
                     source="KAIROS Chat",
                     source_url=f"kairos://session/{session_id}",
                     participants=[],
-                    topics=["KAIROS Conversation", intent.intent],
+                    topics=[CONVERSATION_TOPIC, intent.intent],
                     outcome=answer[:500],
                     raw_text=f"Question: {question}\n\nAnswer: {answer}",
                     metadata={"session_id": session_id, "intent": intent.intent, "confidence": confidence},
