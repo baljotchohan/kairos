@@ -229,6 +229,10 @@ export default function DecisionGraph({
   const draggedNodeRef = useRef<PhysicsNode | null>(null);
   const isPanningRef = useRef(false);
   const panStartRef = useRef({ x: 0, y: 0 });
+  // Mirrors touchMoved below, but for mouse: lets mouseup tell a genuine
+  // empty-space click (deselect) apart from a pan drag that happened to end.
+  const mouseDownScreenRef = useRef({ x: 0, y: 0 });
+  const mousePannedRef = useRef(false);
 
   // Build edges: fallback to star topology if not provided
   const computedEdges: GraphEdge[] = React.useMemo(() => {
@@ -795,7 +799,9 @@ export default function DecisionGraph({
         const worldY = (screenY - panRef.current.y) / zoomRef.current;
 
         const node = physicsNodesRef.current.find((n) => {
-          const d = Math.sqrt((n.x - worldX) ** 2 + (n.y - worldY) ** 2);
+          const nodeScreenX = n.x * zoomRef.current + panRef.current.x;
+          const nodeScreenY = n.y * zoomRef.current + panRef.current.y;
+          const d = Math.sqrt((nodeScreenX - screenX) ** 2 + (nodeScreenY - screenY) ** 2);
           return d <= n.radius + 14;
         });
 
@@ -921,9 +927,15 @@ export default function DecisionGraph({
     const worldX = (screenX - panRef.current.x) / zoomRef.current;
     const worldY = (screenY - panRef.current.y) / zoomRef.current;
 
-    // Check if clicked a node
+    // Check if clicked a node. draw() renders nodes at a constant on-screen
+    // radius (node.radius is never multiplied by zoom there), so hit-testing
+    // must compare in the same screen space — comparing in world space made
+    // the effective click target shrink/grow with zoom instead of matching
+    // the dot actually on screen (nearly unclickable when zoomed out).
     const clickedNode = physicsNodesRef.current.find((node) => {
-      const dist = Math.sqrt((node.x - worldX) ** 2 + (node.y - worldY) ** 2);
+      const nodeScreenX = node.x * zoomRef.current + panRef.current.x;
+      const nodeScreenY = node.y * zoomRef.current + panRef.current.y;
+      const dist = Math.sqrt((nodeScreenX - screenX) ** 2 + (nodeScreenY - screenY) ** 2);
       return dist <= node.radius + 10;
     });
 
@@ -944,6 +956,8 @@ export default function DecisionGraph({
       }
     } else {
       isPanningRef.current = true;
+      mousePannedRef.current = false;
+      mouseDownScreenRef.current = { x: e.clientX, y: e.clientY };
       panStartRef.current = { x: e.clientX - panRef.current.x, y: e.clientY - panRef.current.y };
     }
   };
@@ -959,6 +973,12 @@ export default function DecisionGraph({
     const worldY = (screenY - panRef.current.y) / zoomRef.current;
 
     if (isPanningRef.current) {
+      if (
+        Math.abs(e.clientX - mouseDownScreenRef.current.x) > 4 ||
+        Math.abs(e.clientY - mouseDownScreenRef.current.y) > 4
+      ) {
+        mousePannedRef.current = true;
+      }
       setPan({
         x: e.clientX - panStartRef.current.x,
         y: e.clientY - panStartRef.current.y,
@@ -975,9 +995,11 @@ export default function DecisionGraph({
       return;
     }
 
-    // Hover detection
+    // Hover detection — screen-space comparison, see handleMouseDown above.
     const hovered = physicsNodesRef.current.find((node) => {
-      const dist = Math.sqrt((node.x - worldX) ** 2 + (node.y - worldY) ** 2);
+      const nodeScreenX = node.x * zoomRef.current + panRef.current.x;
+      const nodeScreenY = node.y * zoomRef.current + panRef.current.y;
+      const dist = Math.sqrt((nodeScreenX - screenX) ** 2 + (nodeScreenY - screenY) ** 2);
       return dist <= node.radius + 10;
     });
 
@@ -992,6 +1014,14 @@ export default function DecisionGraph({
   };
 
   const handleMouseUp = () => {
+    // A mousedown that landed on empty space (started a pan) but never
+    // actually dragged is a click-to-deselect — the one case the click
+    // handler in handleMouseDown can't resolve on its own, since it only
+    // knows "not a node," not "and the user didn't just pan away."
+    if (isPanningRef.current && !mousePannedRef.current) {
+      setSelectedNodeId(null);
+      setHoveredNodeId(null);
+    }
     draggedNodeRef.current = null;
     isPanningRef.current = false;
   };
