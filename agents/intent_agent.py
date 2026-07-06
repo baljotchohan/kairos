@@ -13,6 +13,7 @@ Intent Categories:
   - person_lookup: People-focused ("Who approved this?")
   - what_if: Hypothetical ("What if we switched to Vue?")
   - summary: Aggregation ("How many decisions in Q3?")
+  - store_decision: User is telling KAIROS to record a NEW decision ("add a decision that...", "remember that we decided...")
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ from agents.base_agent import BaseAgent, AgentTool
 
 @dataclass
 class QueryIntent:
-    intent: str               # search | follow_up | comparison | timeline | person_lookup | what_if | summary
+    intent: str               # search | follow_up | comparison | timeline | person_lookup | what_if | summary | store_decision
     confidence: float         # 0.0 - 1.0
     entities: dict = field(default_factory=dict)  # extracted entities
     search_strategy: str = "semantic"  # semantic | structured | hybrid | graph
@@ -65,6 +66,7 @@ Intent categories:
 - "person_lookup": Questions focused on who did something or who was involved
 - "what_if": Hypothetical or counterfactual questions
 - "summary": Aggregation or overview questions ("how many", "list all", "overview of")
+- "store_decision": The user is TELLING KAIROS to record a new decision, not asking a question about an existing one. Examples: "add a decision that we're hiring interns next week", "remember that we decided to use Postgres", "note in memory that the vendor contract was renewed", "add to the graph: we're launching in March". The giveaway is an imperative verb (add/remember/note/record/log) aimed at KAIROS itself plus a statement of fact, not a question.
 
 Extract entities:
 - people: Names of people mentioned
