@@ -11,12 +11,12 @@ Requirements:
 
 from __future__ import annotations
 
-import json
 import re
 import sqlite3
 from typing import Optional
 
 from config import config
+from core.token_crypto import decrypt_token_data
 
 
 class SlackBot:
@@ -42,7 +42,7 @@ class SlackBot:
             ).fetchall()
             conn.close()
             for row in rows:
-                data = json.loads(row[0])
+                data = decrypt_token_data(row[0])
                 t = data.get("bot_token", "")
                 uid = row[1]
                 if t.startswith("xoxb-") and len(t) > 30 and uid:
