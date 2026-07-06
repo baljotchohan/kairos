@@ -64,6 +64,7 @@ CRITICAL RULES:
    - End with ONE "## 💡 Summary" only if there are 3+ distinct results AND it adds something beyond the opening line — otherwise skip it. Never have both an opening summary line and a closing "## Summary" that just repeat each other.
    - Keep it concise but complete — this is a chat answer, not a report.
 8. NEVER FABRICATE AN ERROR. Only claim "API error" or "could not retrieve X" if a tool call THIS TURN actually returned {{"error": "..."}} — quote that real error per rule 4. If no tool exists for what the user is asking (e.g. they want raw file contents and you only have search/list tools), say so honestly — "I don't have a way to read X directly, but here's what I found via search: ..." — instead of inventing a plausible-sounding technical excuse.
+9. COMPLETENESS ON "ALL"/"EVERY" REQUESTS: If the user asks to list ALL/EVERY item of something, and an Observation reports `total_available`, `truncated`, or `possibly_truncated` indicating more exist than were returned, call the tool AGAIN with a higher `limit` before writing your Final Answer — do not tell the user "there are N more" without actually fetching them, and do not silently answer with a partial list as if it were complete. Only stop increasing `limit` once an Observation shows nothing was left out, or a repeated call stops returning more — then say plainly how many you're showing versus the true total. Your Final Answer must itself enumerate every item returned (title/name plus a link), not defer to "listed above" — the panel shown alongside your answer is a citation aid, not a substitute for actually answering in the text.
 
 Do not output anything after the Final Answer block."""
 
@@ -547,7 +548,10 @@ class LiveDataAgent(BaseAgent):
                 "modified": (f.get("modifiedTime", "") or "")[:10],
                 "url": f.get("webViewLink", ""),
             })
-        return {"count": len(out), "files": out}
+        # len(files) == limit is ambiguous (could be exactly that many, or more
+        # truncated at the boundary) — but it's still the only local signal we
+        # have without a separate count call, so surface it rather than nothing.
+        return {"count": len(out), "possibly_truncated": len(files) >= limit, "files": out}
 
     async def _tool_drive_search(self, query: str, limit: int = 10) -> Any:
         c = self._connectors.get("drive")
@@ -766,7 +770,15 @@ class LiveDataAgent(BaseAgent):
                 "url": item.get("url", ""),
                 "preview": (item.get("text", "") or "")[:200],
             })
-        return {"count": len(out), "pages": out}
+        # total_available lets the model tell "here's everything" apart from
+        # "here's a partial list" — without it, a request for "all my pages"
+        # silently truncates with no signal that anything was left out.
+        return {
+            "count": len(out),
+            "total_available": len(items),
+            "truncated": len(items) > limit,
+            "pages": out,
+        }
 
     async def _tool_notion_search(self, query: str, limit: int = 10) -> Any:
         c = self._connectors.get("notion")
