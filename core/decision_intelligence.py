@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from core.fireworks import fireworks
-from core.graph import DecisionNode
+from core.graph import DecisionNode, exclude_conversation_nodes
 
 IMPACT_KEYWORDS = (
     "budget", "cost", "$", "vendor", "contract", "security", "compliance",
@@ -60,6 +60,7 @@ async def find_similar_decisions(memory, user_id: Optional[str], query: str, lim
         return {"matches": [], "verdict": "No user context or query provided."}
 
     candidates = memory.semantic_search(query, n_results=max(limit * 2, 8), user_id=user_id)
+    candidates = exclude_conversation_nodes(candidates)
     if not candidates:
         return {"matches": [], "verdict": "No precedent found — this looks like new territory."}
 
