@@ -136,12 +136,40 @@ class BaseAgent(ABC):
             lines.append(f"- **{tool.name}**: {tool.description}")
         return "\n".join(lines)
 
+    def _coerce_tool_args(self, tool: AgentTool, kwargs: dict) -> dict:
+        """Coerce args to the types declared in a tool's JSON-schema parameters.
+
+        Tool calls here are parsed out of free-text LLM output (a hand-rolled
+        ReAct Action block run through json.loads), not native structured
+        tool-calling with schema-enforced types — so a model that emits
+        `"limit": "15"` instead of `"limit": 15` passes a str straight into
+        handlers that do `min(limit, 50)`, raising a raw TypeError the model
+        then quotes back to the user verbatim ("'<' not supported between
+        instances of 'int' and 'str'"). Every tool call from every agent
+        funnels through use_tool, so fixing it here covers all of them.
+        """
+        props = tool.parameters.get("properties", {})
+        coerced = dict(kwargs)
+        for key, value in kwargs.items():
+            expected = props.get(key, {}).get("type")
+            if not isinstance(value, str):
+                continue
+            try:
+                if expected == "integer":
+                    coerced[key] = int(value.strip())
+                elif expected == "number":
+                    coerced[key] = float(value.strip())
+            except ValueError:
+                pass  # leave as-is — the handler's own error will be clearer than a silent guess
+        return coerced
+
     async def use_tool(self, tool_name: str, **kwargs) -> Any:
         """Execute a registered tool by name."""
         if tool_name not in self._tools:
             raise ValueError(f"Unknown tool: {tool_name}")
 
         tool = self._tools[tool_name]
+        kwargs = self._coerce_tool_args(tool, kwargs)
         start = time.time()
 
         try:
