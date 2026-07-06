@@ -61,15 +61,23 @@ def _epoch_connect(sqlite_path: str) -> sqlite3.Connection:
 def _get_epoch(user_id: str) -> int:
     """Current token epoch for user_id (0 = never revoked)."""
     from config import config
+    # sqlite3.Connection's own context-manager protocol only commits/rolls
+    # back the transaction on exit — it never closes the connection, so
+    # `with _epoch_connect(...) as conn:` used to leak a file descriptor on
+    # every call (this runs on every single remote MCP tool invocation).
+    conn = None
     try:
-        with _epoch_connect(config.SQLITE_PATH) as conn:
-            row = conn.execute("SELECT epoch FROM mcp_token_epochs WHERE user_id = ?", (user_id,)).fetchone()
-            return row[0] if row else 0
+        conn = _epoch_connect(config.SQLITE_PATH)
+        row = conn.execute("SELECT epoch FROM mcp_token_epochs WHERE user_id = ?", (user_id,)).fetchone()
+        return row[0] if row else 0
     except Exception:
         # Fail open to epoch 0 rather than locking every user out if the
         # epochs table is momentarily unreachable — matches this token
         # scheme's existing "persistent credential" trust model.
         return 0
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def revoke_mcp_tokens(user_id: str) -> int:
@@ -78,13 +86,16 @@ def revoke_mcp_tokens(user_id: str) -> int:
     new epoch. A user calling this again before minting a new token is a
     harmless no-op re-bump (still invalidates everything issued so far)."""
     from config import config
-    with _epoch_connect(config.SQLITE_PATH) as conn:
+    conn = _epoch_connect(config.SQLITE_PATH)
+    try:
         conn.execute("""
             INSERT INTO mcp_token_epochs (user_id, epoch, updated_at) VALUES (?, 1, ?)
             ON CONFLICT(user_id) DO UPDATE SET epoch = epoch + 1, updated_at = excluded.updated_at
         """, (user_id, time.time()))
         conn.commit()
         return conn.execute("SELECT epoch FROM mcp_token_epochs WHERE user_id = ?", (user_id,)).fetchone()[0]
+    finally:
+        conn.close()
 
 
 def _secret() -> bytes:
