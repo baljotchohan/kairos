@@ -22,7 +22,7 @@ from openai import AsyncOpenAI
 from config import config
 from agents.base_agent import BaseAgent, AgentTool, AgentResult
 from core.memory import KairosMemory
-from core.graph import DecisionNode
+from core.graph import DecisionNode, exclude_conversation_nodes
 
 
 class ResearchAgent(BaseAgent):
@@ -107,7 +107,7 @@ class ResearchAgent(BaseAgent):
 
     async def _tool_semantic_search(self, query: str, limit: int = 5) -> list[dict]:
         nodes = self.memory.semantic_search(query, n_results=limit, user_id=self._current_user_id)
-        return [self._node_to_dict(n) for n in nodes]
+        return [self._node_to_dict(n) for n in exclude_conversation_nodes(nodes)]
 
     async def _tool_structured_search(
         self,
@@ -122,7 +122,7 @@ class ResearchAgent(BaseAgent):
             topic=topic, person=person, date_from=date_from, date_to=date_to,
             user_id=self._current_user_id,
         )
-        return [self._node_to_dict(n) for n in nodes]
+        return [self._node_to_dict(n) for n in exclude_conversation_nodes(nodes)]
 
     async def _tool_get_connected_decisions(self, decision_id: str, depth: int = 1) -> list[dict]:
         nodes = self.memory.graph.get_connected(decision_id, depth=depth, user_id=self._current_user_id)
@@ -274,7 +274,8 @@ Format the Final Answer as structured markdown: start with one **bold** summary 
                     await asyncio.sleep(0.01)
 
         # Let's perform a semantic search to attach source nodes to the returned output
-        relevant = self.memory.semantic_search(question, n_results=5, user_id=self._current_user_id)
+        relevant = self.memory.semantic_search(question, n_results=8, user_id=self._current_user_id)
+        relevant = exclude_conversation_nodes(relevant)[:5]
 
         return {
             "answer": final_answer,
