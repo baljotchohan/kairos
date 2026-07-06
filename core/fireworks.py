@@ -60,12 +60,19 @@ class FireworksClient:
                         continue
                     response.raise_for_status()
                     return response.json()["choices"][0]["message"]["content"]
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 429:
-                    print(f"[AI] Rate limited on {base_url} ({model}) — trying next provider")
-                    last_err = str(e)
-                    continue
-                raise
+            except Exception as e:
+                # Any failure here — a dead/invalid key (401/403), a provider
+                # outage (5xx), or a network-level error (timeout/connection
+                # refused, which isn't even an httpx.HTTPStatusError) — should
+                # roll to the next provider, matching this function's own
+                # docstring ("falls back to the next provider on 429 or a
+                # dead key"). Only catching HTTPStatusError and re-raising
+                # anything non-429 used to abort the whole call on the very
+                # first provider tried, and silently dropped network errors
+                # through uncaught entirely.
+                print(f"[AI] {base_url} ({model}) failed ({str(e)[:140]}) — trying next provider")
+                last_err = str(e)
+                continue
         raise RuntimeError(f"All AI providers rate-limited or unavailable. Last error: {last_err}")
 
     async def stream(
