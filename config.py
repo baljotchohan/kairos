@@ -24,6 +24,15 @@ class Config:
         "accounts/fireworks/models/llama-v3p3-70b-instruct"
     )
     FIREWORKS_EMBED_MODEL: str = "nomic-ai/nomic-embed-text-v1.5"
+    # Gemma 4 (Google DeepMind — hackathon co-sponsor model family), served on
+    # Fireworks' AMD Instinct GPUs. 26B-A4B is a mixture-of-experts with only
+    # 3.8B active params, so it runs at small-model cost/latency while staying
+    # instruction-tuned — used for cheap, latency-sensitive classification
+    # (see agents/intent_agent.py) instead of the flagship reasoning model.
+    FIREWORKS_MODEL_GEMMA: str = os.getenv(
+        "FIREWORKS_MODEL_GEMMA",
+        "accounts/fireworks/models/gemma-4-26b-a4b-it"
+    )
 
     # ── Groq API (Text Completions) ─────────────────────────────────────────────
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")

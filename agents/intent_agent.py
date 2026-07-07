@@ -110,6 +110,16 @@ class IntentAgent(BaseAgent):
         api_key, base_url, self.model = config.primary_text()
         self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
+        # Intent classification is cheap and latency-sensitive — a good fit for
+        # Gemma 4's 26B-A4B mixture-of-experts (3.8B active params, so it runs
+        # at small-model cost/latency) instead of the flagship reasoning model,
+        # on the same AMD Instinct hardware Fireworks serves everything from.
+        # Falls back to the primary provider chain above if this is unavailable.
+        self._gemma_client = (
+            AsyncOpenAI(api_key=config.FIREWORKS_API_KEY, base_url=config.FIREWORKS_BASE_URL)
+            if config.FIREWORKS_API_KEY else None
+        )
+
     async def execute(self, input_data: Any, **kwargs) -> QueryIntent:
         """Classify intent of a user query."""
         question = input_data if isinstance(input_data, str) else str(input_data)
@@ -128,16 +138,35 @@ class IntentAgent(BaseAgent):
             self.think("Including conversation history for follow-up detection")
 
         try:
-            response = await self._chat_completion_with_fallback(
-                client=self._client,
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": INTENT_SYSTEM},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.1,
-                max_tokens=500,
-            )
+            messages = [
+                {"role": "system", "content": INTENT_SYSTEM},
+                {"role": "user", "content": prompt},
+            ]
+
+            response = None
+            if self._gemma_client:
+                try:
+                    response = await self._gemma_client.chat.completions.create(
+                        model=config.FIREWORKS_MODEL_GEMMA,
+                        messages=messages,
+                        temperature=0.1,
+                        max_tokens=500,
+                    )
+                    self.think("Classified via Gemma 4 26B-A4B (AMD Instinct, Fireworks)")
+                except Exception as gemma_err:
+                    self.observe(
+                        f"Gemma 4 classification failed ({str(gemma_err)[:120]}); "
+                        f"falling back to primary provider chain"
+                    )
+
+            if response is None:
+                response = await self._chat_completion_with_fallback(
+                    client=self._client,
+                    model=self.model,
+                    messages=messages,
+                    temperature=0.1,
+                    max_tokens=500,
+                )
 
             raw = response.choices[0].message.content.strip()
 
