@@ -9,7 +9,7 @@
  * "Enter KAIROS" routes into /dashboard, which owns sign-in.
  */
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useId } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import KairosLogo from "@/components/KairosLogo";
@@ -453,6 +453,40 @@ function AMDLogo({ className = "" }: { className?: string }) {
   );
 }
 
+/* ── Gemma logo (real, official mark) — Google DeepMind co-sponsor model line ── */
+function GemmaLogo({ className = "" }: { className?: string }) {
+  const uid = useId().replace(/:/g, "");
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${className}`}>
+      <svg viewBox="0 0 24 24" className="h-[1.5em] w-[1.5em]" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id={`gemma-grad-${uid}`} x1="24.419%" x2="75.194%" y1="75.581%" y2="25.194%">
+            <stop offset="0%" stopColor="#446EFF" />
+            <stop offset="36.661%" stopColor="#2E96FF" />
+            <stop offset="83.221%" stopColor="#B1C5FF" />
+          </linearGradient>
+        </defs>
+        <path
+          fillRule="evenodd"
+          fill={`url(#gemma-grad-${uid})`}
+          d="M12.34 5.953a8.233 8.233 0 01-.247-1.125V3.72a8.25 8.25 0 015.562 2.232H12.34zm-.69 0c.113-.373.199-.755.257-1.145V3.72a8.25 8.25 0 00-5.562 2.232h5.304zm-5.433.187h5.373a7.98 7.98 0 01-.267.696 8.41 8.41 0 01-1.76 2.65L6.216 6.14zm-.264-.187H2.977v.187h2.915a8.436 8.436 0 00-2.357 5.767H0v.186h3.535a8.436 8.436 0 002.357 5.767H2.977v.186h2.976v2.977h.187v-2.915a8.436 8.436 0 005.767 2.357V24h.186v-3.535a8.436 8.436 0 005.767-2.357v2.915h.186v-2.977h2.977v-.186h-2.915a8.436 8.436 0 002.357-5.767H24v-.186h-3.535a8.436 8.436 0 00-2.357-5.767h2.915v-.187h-2.977V2.977h-.186v2.915a8.436 8.436 0 00-5.767-2.357V0h-.186v3.535A8.436 8.436 0 006.14 5.892V2.977h-.187v2.976zm6.14 14.326a8.25 8.25 0 005.562-2.233H12.34c-.108.367-.19.743-.247 1.126v1.107zm-.186-1.087a8.015 8.015 0 00-.258-1.146H6.345a8.25 8.25 0 005.562 2.233v-1.087zm-8.186-7.285h1.107a8.23 8.23 0 001.125-.247V6.345a8.25 8.25 0 00-2.232 5.562zm1.087.186H3.72a8.25 8.25 0 002.232 5.562v-5.304a8.012 8.012 0 00-1.145-.258zm15.47-.186a8.25 8.25 0 00-2.232-5.562v5.315c.367.108.743.19 1.126.247h1.107zm-1.086.186c-.39.058-.772.144-1.146.258v5.304a8.25 8.25 0 002.233-5.562h-1.087zm-1.332 5.69V12.41a7.97 7.97 0 00-.696.267 8.409 8.409 0 00-2.65 1.76l3.346 3.346zm0-6.18v-5.45l-.012-.013h-5.451c.076.235.162.468.26.696a8.698 8.698 0 001.819 2.688 8.698 8.698 0 002.688 1.82c.228.097.46.183.696.259zM6.14 17.848V12.41c.235.078.468.167.696.267a8.403 8.403 0 012.688 1.799 8.404 8.404 0 011.799 2.688c.1.228.19.46.267.696H6.152l-.012-.012zm0-6.245V6.326l3.29 3.29a8.716 8.716 0 01-2.594 1.728 8.14 8.14 0 01-.696.259zm6.257 6.257h5.277l-3.29-3.29a8.716 8.716 0 00-1.728 2.594 8.135 8.135 0 00-.259.696zm-2.347-7.81a9.435 9.435 0 01-2.88 1.96 9.14 9.14 0 012.88 1.94 9.14 9.14 0 011.94 2.88 9.435 9.435 0 011.96-2.88 9.14 9.14 0 012.88-1.94 9.435 9.435 0 01-2.88-1.96 9.434 9.434 0 01-1.96-2.88 9.14 9.14 0 01-1.94 2.88z"
+        />
+      </svg>
+      <span
+        className="font-sans font-bold tracking-tight"
+        style={{
+          backgroundImage: "linear-gradient(135deg, #446EFF 0%, #2E96FF 40%, #B1C5FF 100%)",
+          WebkitBackgroundClip: "text",
+          backgroundClip: "text",
+          color: "transparent",
+        }}
+      >
+        Gemma
+      </span>
+    </span>
+  );
+}
+
 /* ── Brand logos (real, official marks) ──────────────────────────────────── */
 const Logos = {
   slack: (
@@ -842,6 +876,285 @@ const COMPARE = [
   },
 ];
 
+/* ── AMD hardware — real, sourced silicon specs (AMD datasheets + product briefs) ── */
+const AMD_GPU_SPECS = [
+  { label: "Architecture", mi300x: "CDNA 3", mi350x: "CDNA 4", mi355x: "CDNA 4" },
+  { label: "Process node", mi300x: "5nm compute + 6nm I/O (chiplet)", mi350x: "3nm (N3P) + 6nm I/O", mi355x: "3nm (N3P) + 6nm I/O" },
+  { label: "Transistors", mi300x: "153B", mi350x: "185B", mi355x: "185B" },
+  { label: "Compute units", mi300x: "304", mi350x: "256 (8 XCDs × 32)", mi355x: "256 (8 XCDs × 32)" },
+  { label: "Matrix cores", mi300x: "1,216", mi350x: "1,024", mi355x: "1,024" },
+  { label: "Peak clock", mi300x: "2,100 MHz", mi350x: "2,200 MHz", mi355x: "2,400 MHz" },
+  { label: "Memory", mi300x: "192GB HBM3", mi350x: "288GB HBM3E", mi355x: "288GB HBM3E" },
+  { label: "Memory bandwidth", mi300x: "5.3 TB/s", mi350x: "8 TB/s", mi355x: "8 TB/s" },
+  { label: "Peak FP16/BF16 (matrix)", mi300x: "1,307 TFLOPS", mi350x: "≈2.3 PFLOPS dense", mi355x: "2.5 PFLOPS dense · 5.0 PFLOPS (2:4 sparse)" },
+  { label: "Peak FP8/INT8 (matrix)", mi300x: "2,615 TFLOPS", mi350x: "≈4.6 PFLOPS dense", mi355x: "5.0 PFLOPS dense · 10.1 PFLOPS (2:4 sparse)" },
+  { label: "Native FP6 / FP4", mi300x: "Not supported", mi350x: "MXFP6 · MXFP4", mi355x: "MXFP6 · MXFP4, 10.1 PFLOPS" },
+  { label: "Interconnect", mi300x: "Infinity Fabric 3.0, ~896 GB/s", mi350x: "7× Infinity Fabric links", mi355x: "7× Infinity Fabric links @ 153 GB/s each" },
+  { label: "TDP", mi300x: "750W", mi350x: "1,000W (air-cooled)", mi355x: "1,400W (liquid-cooled)" },
+] as const;
+
+/* ── Gemma 4 model family (Google DeepMind — hackathon co-sponsor) ─────────── */
+const GEMMA_MODELS = [
+  { name: "E2B", params: "2.3B effective", ctx: "128K", modalities: "Text · Image · Audio", note: "On-device — phones, laptops" },
+  { name: "E4B", params: "4.5B effective (8B total)", ctx: "128K", modalities: "Text · Image · Audio", note: "Balanced on-device tier" },
+  { name: "12B", params: "12B, encoder-free", ctx: "256K", modalities: "Text · Image · Audio · Video", note: "Direct linear projections replace vision/audio encoders" },
+  { name: "26B-A4B", params: "26B total / 3.8B active (MoE)", ctx: "256K", modalities: "Text · Image", note: "Powers KAIROS's Intent Agent — dense-4B cost, MoE reasoning" },
+  { name: "31B", params: "31B dense (32.2B)", ctx: "256K", modalities: "Text · Image · Video", note: "Server-grade — the top of the family" },
+] as const;
+
+const GEMMA_MODEL_SIZES = ["E2B", "E4B", "12B", "26B-A4B", "31B"] as const;
+
+// Official Gemma 4 model-card benchmarks (ai.google.dev/gemma/docs/core/model_card_4),
+// one axis (0-100 score) across all five model sizes — Codeforces ELO is a different
+// scale and is deliberately left off this chart rather than mixed onto a second axis.
+const GEMMA_BENCHMARK_SERIES = [
+  { key: "aime", label: "AIME 2026 (math)", color: "#3987e5", values: [37.5, 42.5, 77.5, 88.3, 89.2] },
+  { key: "gpqa", label: "GPQA Diamond (science)", color: "#199e70", values: [43.4, 58.6, 78.8, 82.3, 84.3] },
+  { key: "mmlu", label: "MMLU-Pro (knowledge)", color: "#c98500", values: [60.0, 69.4, 77.2, 82.6, 85.2] },
+  { key: "bbeh", label: "BigBench Extra Hard (reasoning)", color: "#008300", values: [21.9, 33.1, 53.0, 64.8, 74.4] },
+  { key: "lcb", label: "LiveCodeBench v6 (code)", color: "#9085e9", values: [44.0, 52.0, 72.0, 77.1, 80.0] },
+] as const;
+
+/* ── Gemma 4 benchmark chart (hand-written SVG, no charting library) ───────
+   Multi-series line chart: one axis (0-100 score), 5 official model-card
+   benchmarks across the 5 Gemma 4 sizes. Legend + direct endpoint value
+   labels carry series identity (categorical hues alone sit in the CVD
+   floor band per the palette's own validator); a crosshair + one shared
+   tooltip read every series at the hovered model size; the legend itself
+   is interactive (hover to isolate, click to toggle a series); and a
+   table view is always one click away so nothing here is color-only. */
+function GemmaBenchmarkChart() {
+  const W = 760;
+  const H = 380;
+  const padL = 34;
+  const padR = 54;
+  const padT = 16;
+  const padB = 34;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const n = GEMMA_MODEL_SIZES.length;
+
+  const xAt = (i: number) => padL + (i / (n - 1)) * plotW;
+  const yAt = (v: number) => padT + plotH - (v / 100) * plotH;
+
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [hover, setHover] = useState<number | null>(null);
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
+  const [showTable, setShowTable] = useState(false);
+
+  const visibleSeries = GEMMA_BENCHMARK_SERIES.filter((s) => !hiddenKeys.has(s.key));
+
+  const toggleKey = (key: string) => {
+    setHiddenKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const r = svg.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width) * W;
+    let closest = 0;
+    let closestDist = Infinity;
+    for (let i = 0; i < n; i++) {
+      const d = Math.abs(xAt(i) - px);
+      if (d < closestDist) {
+        closestDist = d;
+        closest = i;
+      }
+    }
+    setHover(closest);
+  };
+
+  // Stack the endpoint value labels (final category) with a minimum gap so
+  // near-identical scores (e.g. GPQA 84.3 vs MMLU-Pro 85.2) don't overlap —
+  // nudged labels get a short leader line back to their true data point.
+  // Only visible (non-hidden) series participate, so toggling a line off
+  // lets its neighbors re-settle into the freed vertical space.
+  const LABEL_GAP = 14;
+  const endpoints = visibleSeries
+    .map((s) => ({ key: s.key, color: s.color, trueY: yAt(s.values[n - 1]), labelY: yAt(s.values[n - 1]) }))
+    .sort((a, b) => a.trueY - b.trueY);
+  for (let i = 1; i < endpoints.length; i++) {
+    if (endpoints[i].labelY - endpoints[i - 1].labelY < LABEL_GAP) {
+      endpoints[i].labelY = endpoints[i - 1].labelY + LABEL_GAP;
+    }
+  }
+  if (endpoints.length) {
+    const overflow = endpoints[endpoints.length - 1].labelY - (padT + plotH);
+    if (overflow > 0) endpoints.forEach((e) => (e.labelY -= overflow));
+  }
+  const labelYByKey = Object.fromEntries(endpoints.map((e) => [e.key, e.labelY]));
+
+  const yTicks = [0, 20, 40, 60, 80, 100];
+
+  return (
+    <div className="w-full">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-6">
+        {GEMMA_BENCHMARK_SERIES.map((s) => {
+          const isHidden = hiddenKeys.has(s.key);
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => toggleKey(s.key)}
+              onMouseEnter={() => setFocusKey(s.key)}
+              onMouseLeave={() => setFocusKey(null)}
+              className="flex items-center gap-2 text-[11.5px] font-mono transition-opacity"
+              style={{ opacity: isHidden ? 0.4 : 1 }}
+            >
+              <span
+                className="inline-block w-3 h-[3px] rounded-full transition-opacity"
+                style={{ background: s.color, opacity: isHidden ? 0.35 : 1 }}
+              />
+              <span className={`text-zinc-400 ${isHidden ? "line-through decoration-zinc-600" : ""}`}>{s.label}</span>
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => setShowTable((v) => !v)}
+          className="ml-auto text-[11px] font-mono text-violet-400 hover:text-violet-300 transition-colors underline decoration-violet-500/40 underline-offset-2"
+        >
+          {showTable ? "View as chart" : "View as table"}
+        </button>
+      </div>
+
+      {showTable ? (
+        <div className="overflow-x-auto rounded-xl border border-violet-500/15">
+          <table className="w-full text-sm border-collapse min-w-[560px]">
+            <thead>
+              <tr className="bg-white/[0.03] text-left text-[11px] font-mono uppercase tracking-wider text-zinc-500">
+                <th className="px-4 py-3 font-medium">Benchmark</th>
+                {GEMMA_MODEL_SIZES.map((c) => (
+                  <th key={c} className="px-4 py-3 font-medium text-right">{c}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-violet-500/10">
+              {GEMMA_BENCHMARK_SERIES.map((s) => (
+                <tr key={s.key}>
+                  <td className="px-4 py-3 font-mono text-zinc-300 whitespace-nowrap">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle" style={{ background: s.color }} />
+                    {s.label}
+                  </td>
+                  {s.values.map((v, i) => (
+                    <td key={i} className="px-4 py-3 text-right font-mono text-zinc-300">{v.toFixed(1)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${W} ${H}`}
+          className="w-full h-auto select-none"
+          onMouseMove={onMove}
+          onMouseLeave={() => setHover(null)}
+        >
+          {yTicks.map((t) => (
+            <g key={t}>
+              <line x1={padL} x2={padL + plotW} y1={yAt(t)} y2={yAt(t)} stroke="#2c2c2a" strokeWidth={1} />
+              <text x={padL - 8} y={yAt(t)} textAnchor="end" dominantBaseline="middle" fill="#898781" fontSize={10.5} fontFamily="monospace">
+                {t}
+              </text>
+            </g>
+          ))}
+
+          {GEMMA_MODEL_SIZES.map((c, i) => (
+            <text key={c} x={xAt(i)} y={H - padB + 20} textAnchor="middle" fill="#898781" fontSize={11} fontFamily="monospace">
+              {c}
+            </text>
+          ))}
+
+          {hover !== null && (
+            <line x1={xAt(hover)} x2={xAt(hover)} y1={padT} y2={padT + plotH} stroke="#52514e" strokeWidth={1} />
+          )}
+
+          {visibleSeries.map((s) => {
+            const d = s.values.map((v, i) => `${i === 0 ? "M" : "L"}${xAt(i).toFixed(2)},${yAt(v).toFixed(2)}`).join(" ");
+            const trueEndY = yAt(s.values[n - 1]);
+            const labelY = labelYByKey[s.key];
+            const dimmed = focusKey !== null && focusKey !== s.key;
+            const emphasized = focusKey === s.key;
+            return (
+              <g key={s.key} style={{ transition: "opacity 150ms" }} opacity={dimmed ? 0.2 : 1}>
+                <path
+                  d={d}
+                  fill="none"
+                  stroke={s.color}
+                  strokeWidth={emphasized ? 3 : 2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ transition: "stroke-width 150ms" }}
+                />
+                {s.values.map((v, i) => (
+                  <circle
+                    key={i}
+                    cx={xAt(i)}
+                    cy={yAt(v)}
+                    r={hover === i ? 5.5 : 4}
+                    fill={s.color}
+                    stroke="#0b0b0d"
+                    strokeWidth={2}
+                    style={{ transition: "r 120ms" }}
+                  />
+                ))}
+                {Math.abs(labelY - trueEndY) > 1 && (
+                  <line x1={xAt(n - 1) + 3} y1={trueEndY} x2={xAt(n - 1) + 9} y2={labelY} stroke={s.color} strokeWidth={1} opacity={0.55} />
+                )}
+                <text x={xAt(n - 1) + 11} y={labelY} dominantBaseline="middle" fill="#d4d4d8" fontSize={10.5} fontFamily="monospace">
+                  {s.values[n - 1].toFixed(1)}
+                </text>
+              </g>
+            );
+          })}
+
+          {hover !== null && visibleSeries.length > 0 && (() => {
+            const tipW = 208;
+            const tipH = 26 + visibleSeries.length * 16 + 6;
+            const tx = xAt(hover);
+            const tipX = tx + 16 + tipW > W - 4 ? tx - 16 - tipW : tx + 16;
+            const tipY = padT + 4;
+            return (
+              <g pointerEvents="none">
+                <rect x={tipX} y={tipY} width={tipW} height={tipH} rx={9} fill="#101012" stroke="#2c2c2a" strokeWidth={1} />
+                <text x={tipX + 12} y={tipY + 19} fill="#ffffff" fontSize={11.5} fontWeight={700} fontFamily="monospace">
+                  Gemma 4 {GEMMA_MODEL_SIZES[hover]}
+                </text>
+                {visibleSeries.map((s, i) => {
+                  const rowY = tipY + 38 + i * 16;
+                  return (
+                    <g key={s.key}>
+                      <line x1={tipX + 12} x2={tipX + 25} y1={rowY - 4} y2={rowY - 4} stroke={s.color} strokeWidth={2.5} />
+                      <text x={tipX + 31} y={rowY} fill="#a1a1aa" fontSize={10} fontFamily="monospace">
+                        {s.label.split(" (")[0]}
+                      </text>
+                      <text x={tipX + tipW - 12} y={rowY} textAnchor="end" fill="#ffffff" fontSize={10.5} fontWeight={700} fontFamily="monospace">
+                        {s.values[hover].toFixed(1)}%
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
+            );
+          })()}
+        </svg>
+      )}
+      <p className="mt-3 text-[11px] text-zinc-600 font-mono">
+        Source: Gemma 4 model card — ai.google.dev/gemma/docs/core/model_card_4
+      </p>
+    </div>
+  );
+}
+
 /* ── Live-answer demo showcase ───────────────────────────────────────────── */
 const SOURCE_TINT: Record<DemoSource["kind"], string> = {
   slack: "#E01E5A",
@@ -1067,6 +1380,8 @@ export default function Landing() {
             <KairosLogo size={30} showText />
             <span className="text-zinc-600 text-sm">×</span>
             <AMDLogo className="h-4 text-white" />
+            <span className="text-zinc-600 text-sm">×</span>
+            <GemmaLogo className="text-xl" />
           </div>
           <div className="hidden md:flex items-center gap-6 text-xs font-mono tracking-wide text-zinc-400">
             <a href="#demo" className="hover:text-white transition-colors">Demo</a>
@@ -1457,6 +1772,198 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── AMD ── */}
+      <section id="amd" className="relative py-28 px-6">
+        <div className="max-w-6xl mx-auto">
+          <Reveal className="text-center mb-16">
+            <AMDLogo className="h-7 md:h-9 text-white mx-auto mb-6" />
+            <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">Hardware Partner</p>
+            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight">
+              Every model call runs on <span className="text-white">AMD Instinct</span>.
+            </h2>
+            <p className="mt-4 text-zinc-400 max-w-2xl mx-auto font-sans">
+              Fireworks AI — KAIROS&apos;s primary LLM provider — is AMD&apos;s official inference
+              partner. Every Fireworks call KAIROS makes (synthesis, extraction, embeddings,
+              intent classification) runs on AMD Instinct accelerators, not NVIDIA.
+            </p>
+          </Reveal>
+
+          <Reveal delay={80}>
+            <div className="mb-10 overflow-x-auto rounded-2xl border border-violet-500/15">
+              <table className="w-full text-sm border-collapse min-w-[720px]">
+                <thead>
+                  <tr className="bg-white/[0.03] text-left text-[11px] font-mono uppercase tracking-wider text-zinc-500">
+                    <th className="px-5 py-3.5 font-medium">Spec</th>
+                    <th className="px-5 py-3.5 font-medium">MI300X</th>
+                    <th className="px-5 py-3.5 font-medium">MI350X</th>
+                    <th className="px-5 py-3.5 font-medium">
+                      MI355X
+                      <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[9.5px] font-sans font-semibold bg-violet-500/20 text-violet-300 align-middle normal-case tracking-normal">
+                        FLAGSHIP
+                      </span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-violet-500/10">
+                  {AMD_GPU_SPECS.map((row) => (
+                    <tr key={row.label} className="transition-colors hover:bg-violet-500/[0.04]">
+                      <td className="px-5 py-3.5 font-mono text-[12.5px] text-zinc-500 whitespace-nowrap">{row.label}</td>
+                      <td className="px-5 py-3.5 text-zinc-300 font-sans whitespace-nowrap">{row.mi300x}</td>
+                      <td className="px-5 py-3.5 text-zinc-300 font-sans whitespace-nowrap">{row.mi350x}</td>
+                      <td className="px-5 py-3.5 text-white font-sans font-medium whitespace-nowrap">{row.mi355x}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Reveal>
+
+          <Reveal delay={200}>
+            <div className="p-6 md:p-8 rounded-2xl border border-violet-500/20 bg-[#0b0b0d] grid md:grid-cols-3 gap-6">
+              <div>
+                <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-violet-400 mb-2">Compute stack</p>
+                <p className="text-lg text-white font-semibold mb-1.5">ROCm, hipBLASLt, Composable Kernel</p>
+                <p className="text-sm text-zinc-400 leading-relaxed font-sans">
+                  Fireworks&apos; serving stack targets AMD&apos;s open ROCm runtime directly — vLLM
+                  and SGLang kernels compiled against Instinct, no CUDA translation layer in the path.
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-violet-400 mb-2">Native low-precision</p>
+                <p className="text-lg text-white font-semibold mb-1.5">MXFP6 / MXFP4, 2:4 sparsity</p>
+                <p className="text-sm text-zinc-400 leading-relaxed font-sans">
+                  New in CDNA 4 (MI350X/MI355X) — structured 2:4 sparsity alone doubles matrix
+                  throughput, from 5.0 to 10.1 PFLOPS FP8 on the MI355X.
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-violet-400 mb-2">Chiplet packaging</p>
+                <p className="text-lg text-white font-semibold mb-1.5">8 XCDs, 3D-stacked</p>
+                <p className="text-sm text-zinc-400 leading-relaxed font-sans">
+                  Every Instinct GPU KAIROS runs on is a multi-die package — compute dies on the
+                  leading node, I/O dies on a cheaper one, stitched together over Infinity Fabric.
+                </p>
+              </div>
+            </div>
+          </Reveal>
+
+          <Reveal delay={280}>
+            <div className="mt-6 p-6 md:p-8 rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-600/[0.08] to-transparent">
+              <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-violet-300 mb-3">Impact on KAIROS</p>
+              <p className="text-base text-white leading-relaxed font-sans max-w-3xl">
+                KAIROS fans ten agents out in parallel every ingestion cycle — Slack, Gmail, Drive,
+                Notion, Zoom, Jira, GitHub, plus Intent, Context, and Synthesis reasoning over
+                whatever they pull in. That only stays cheap and fast because Fireworks&apos; paid
+                AMD Instinct capacity clears far more tokens/minute than a free-tier fallback would
+                — the ingestion throttle in <span className="text-violet-300 font-mono text-[13px]">config.py</span> (24
+                items/cycle) exists for the Groq safety-net path, not the AMD-backed primary one.
+                Bigger HBM capacity (192–288GB) also means Fireworks can batch many users&apos;
+                concurrent requests on one accelerator without KAIROS ever seeing it queue.
+              </p>
+            </div>
+          </Reveal>
+
+          <p className="mt-6 text-xs text-zinc-600 font-mono">
+            Specs: AMD Instinct MI300X/MI350X/MI355X datasheets, amd.com. KAIROS also draws on the
+            $50 Fireworks AI credit issued through the AMD AI Developer Program.
+          </p>
+        </div>
+      </section>
+
+      {/* ── Gemma ── */}
+      <section id="gemma" className="relative py-28 px-6 bg-gradient-to-b from-transparent via-violet-950/10 to-transparent overflow-hidden">
+        <div className="max-w-6xl mx-auto">
+          <Reveal className="text-center mb-16">
+            <GemmaLogo className="text-3xl md:text-4xl justify-center mb-6" />
+            <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">Model Partner — Google DeepMind</p>
+            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight">
+              Five sizes. One family.
+              <br />
+              <span className="text-zinc-500">One of them, live in KAIROS.</span>
+            </h2>
+            <p className="mt-4 text-zinc-400 max-w-2xl mx-auto font-sans">
+              Gemma 4 shipped April 2026 under a clean Apache 2.0 license — the first time
+              Google DeepMind&apos;s open-weight family has dropped the old research-only terms.
+              Every size takes text and image input natively; KAIROS&apos;s{" "}
+              <span className="text-violet-300 font-mono text-[13px]">IntentAgent</span> calls the
+              26B-A4B mixture-of-experts directly, on the AMD Instinct hardware above, for cheap,
+              latency-sensitive query classification — falling back to the primary Fireworks chain
+              if it&apos;s ever unavailable.
+            </p>
+          </Reveal>
+
+          <Reveal delay={80}>
+            <div className="mb-14 overflow-x-auto rounded-2xl border border-violet-500/15">
+              <table className="w-full text-sm border-collapse min-w-[640px]">
+                <thead>
+                  <tr className="bg-white/[0.03] text-left text-[11px] font-mono uppercase tracking-wider text-zinc-500">
+                    <th className="px-5 py-3.5 font-medium">Model</th>
+                    <th className="px-5 py-3.5 font-medium">Parameters</th>
+                    <th className="px-5 py-3.5 font-medium">Context</th>
+                    <th className="px-5 py-3.5 font-medium">Modalities</th>
+                    <th className="px-5 py-3.5 font-medium">Role</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-violet-500/10">
+                  {GEMMA_MODELS.map((m) => (
+                    <tr
+                      key={m.name}
+                      className={`transition-colors hover:bg-violet-500/[0.04] ${
+                        m.name === "26B-A4B" ? "bg-violet-500/[0.06]" : ""
+                      }`}
+                    >
+                      <td className="px-5 py-4 font-mono font-semibold text-white whitespace-nowrap">
+                        Gemma 4 {m.name}
+                        {m.name === "26B-A4B" && (
+                          <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[9.5px] font-sans font-semibold bg-violet-500/20 text-violet-300 align-middle">
+                            USED IN KAIROS
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 text-zinc-400 font-sans whitespace-nowrap">{m.params}</td>
+                      <td className="px-5 py-4 text-zinc-400 font-mono whitespace-nowrap">{m.ctx}</td>
+                      <td className="px-5 py-4 text-zinc-400 font-sans whitespace-nowrap">{m.modalities}</td>
+                      <td className="px-5 py-4 text-zinc-400 font-sans">{m.note}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Reveal>
+
+          <Reveal delay={160}>
+            <div className="p-6 md:p-9 rounded-2xl border border-violet-500/15 bg-[#0b0b0d]">
+              <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-8">
+                <div>
+                  <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-violet-400 mb-2">Official Gemma 4 Model-Card Benchmarks</p>
+                  <h3 className="text-xl font-semibold text-white">Score climbs with every size, across every discipline</h3>
+                </div>
+                <p className="text-xs text-zinc-500 font-sans max-w-xs">Hover any point on the chart for the full breakdown at that size.</p>
+              </div>
+              <GemmaBenchmarkChart />
+            </div>
+          </Reveal>
+
+          <Reveal delay={240}>
+            <div className="mt-6 p-6 md:p-8 rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-600/[0.08] to-transparent">
+              <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-violet-300 mb-3">Impact on KAIROS</p>
+              <p className="text-base text-white leading-relaxed font-sans max-w-3xl">
+                <span className="text-violet-300 font-mono text-[13px]">IntentAgent</span> runs
+                first on every single query — before Context or Synthesis ever sees it — deciding
+                whether you asked to search memory, pull live Gmail/Drive/Jira data, or just record
+                a new decision. Before this, that classification hop rode the same flagship
+                reasoning model (qwen3p7-plus) as the answer itself, paying its full latency and
+                cost twice per question. Routing it to Gemma 4&apos;s 26B-A4B instead — 3.8B active
+                parameters, so it runs at dense-4B speed — cuts that first hop&apos;s cost and
+                latency without giving up the instruction-following reliability a raw 4B dense model
+                would sacrifice, since the fallback in <span className="text-violet-300 font-mono text-[13px]">agents/intent_agent.py</span> only
+                drops back to the primary chain if Gemma itself is unavailable.
+              </p>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
       {/* ── CTA ── */}
       <section className="relative py-32 px-6">
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -1490,6 +1997,8 @@ export default function Landing() {
           <div className="flex items-center gap-2 text-zinc-500">
             <span>In collaboration with</span>
             <AMDLogo className="h-3.5 text-zinc-300" />
+            <span className="text-zinc-700">×</span>
+            <GemmaLogo className="text-base" />
           </div>
           <p>Built by Antigravity · MIT License · &quot;Every company forgets why. KAIROS never does.&quot;</p>
         </div>
