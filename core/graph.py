@@ -195,7 +195,14 @@ class DecisionGraph:
             affected = self._auto_link(node)  # IDs of nodes that gained new edges
 
             if vault_path:
-                uid_folder = f"KAIROS_{node.user_id}" if node.user_id else "KAIROS_default"
+                # user_id is assumed to always be a Firebase UID, never raw user
+                # input — but that assumption has exactly one exception in this
+                # codebase (api/auth.py's `sim-`/`simulated-` DEBUG-only bypass,
+                # which derives it from token content). Route it through the same
+                # sanitizer used for decision titles so a user_id can never inject
+                # path segments (e.g. "../../etc") into the vault path, regardless
+                # of where it originated or whether that assumption ever breaks.
+                uid_folder = f"KAIROS_{self._safe_filename(node.user_id)}" if node.user_id else "KAIROS_default"
                 vault = Path(vault_path) / uid_folder
                 vault.mkdir(parents=True, exist_ok=True)
                 (vault / "KAIROS").mkdir(exist_ok=True)
@@ -438,7 +445,9 @@ class DecisionGraph:
         Obsidian's Graph View will render the [[wikilinks]] as a visual decision web.
         """
         with self._lock:
-            uid_folder = f"KAIROS_{user_id}" if user_id else "KAIROS_default"
+            # See add_decision()'s identical guard — sanitize before using
+            # user_id as a filesystem path segment.
+            uid_folder = f"KAIROS_{self._safe_filename(user_id)}" if user_id else "KAIROS_default"
             vault = Path(vault_path) / uid_folder
             vault.mkdir(parents=True, exist_ok=True)
             (vault / "KAIROS").mkdir(exist_ok=True)
