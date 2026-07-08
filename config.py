@@ -118,6 +118,14 @@ class Config:
     # the next ingestion cycle (extraction is idempotent).
     MAX_EXTRACT_PER_CYCLE: int = int(os.getenv("MAX_EXTRACT_PER_CYCLE", "24"))
     EXTRACT_DELAY_SECONDS: float = float(os.getenv("EXTRACT_DELAY_SECONDS", "4"))
+    # Hard ceiling on a single run_ingestion() call. Without this, a hung
+    # connector/LLM call inside the LangGraph pipeline (network call that never
+    # returns, rather than raising) holds that user's ingestion lock forever —
+    # trigger_ingestion() then perpetually reports "a sync is already running"
+    # on both MCP transports with no self-healing path short of a process
+    # restart. MAX_EXTRACT_PER_CYCLE * (EXTRACT_DELAY_SECONDS + a few seconds
+    # per LLM call) plus connector fetch time comfortably fits inside this.
+    INGESTION_TIMEOUT_SECONDS: float = float(os.getenv("INGESTION_TIMEOUT_SECONDS", "600"))
 
     # ── Text-generation provider chain ──────────────────────────────────────────
     # Single source of truth for which LLM providers serve text completions, in
