@@ -57,7 +57,36 @@ async def status(
         "connectors": connectors,
         "total_decisions": stats.get("total_decisions", 0),
         "total_relations": stats.get("total_relations", 0),
+        # Real on-disk footprint of KAIROS's storage (SQLite file + the Chroma
+        # vector store dir), in MB. Previously the dashboard hardcoded "84.2 MB",
+        # a fabricated constant that never moved regardless of real data volume.
+        "db_size_mb": _storage_size_mb(),
     }
+
+
+def _storage_size_mb() -> float:
+    """Real total size of KAIROS's on-disk storage (SQLite + Chroma), in MB."""
+    import os
+    from config import config
+
+    total_bytes = 0
+    # SQLite file (+ its WAL/SHM sidecars, which can be non-trivial under load)
+    for suffix in ("", "-wal", "-shm"):
+        path = config.SQLITE_PATH + suffix
+        try:
+            total_bytes += os.path.getsize(path)
+        except OSError:
+            pass
+    # Chroma persistent vector store directory (recursively)
+    chroma_dir = config.CHROMA_PERSIST_DIR
+    if os.path.isdir(chroma_dir):
+        for root, _dirs, files in os.walk(chroma_dir):
+            for f in files:
+                try:
+                    total_bytes += os.path.getsize(os.path.join(root, f))
+                except OSError:
+                    pass
+    return round(total_bytes / (1024 * 1024), 1)
 
 
 @router.get("/admin/mcp-activity")
