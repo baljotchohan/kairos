@@ -3081,6 +3081,70 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Activity Monitor — real tool-call telemetry from core/mcp_telemetry.py,
+                  polled via fetchMcpActivity() above. Every call on both transports
+                  (mcp_server.py stdio tools, api/routes/mcp_remote.py's tools/call)
+                  writes here; nothing on this panel is fabricated. */}
+              <div className="flex flex-col gap-4 border-t border-[rgb(var(--border))]/40 pt-6">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span>📡</span>
+                    <h4 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider">Activity Monitor</h4>
+                  </div>
+                  <span className="flex items-center gap-1.5 text-[9px] font-mono text-[rgb(var(--text-muted))]">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                    </span>
+                    Live — refreshes every 8s
+                  </span>
+                </div>
+                <p className="text-xs text-[rgb(var(--text-muted))] leading-relaxed">
+                  Real tool calls made by your connected AI assistants, across both the local (stdio) and remote (OAuth) MCP transports.
+                </p>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { label: "Total Requests", value: mcpStats.totalRequests },
+                    { label: "Read Ops", value: mcpStats.readOps },
+                    { label: "Write Ops", value: mcpStats.writeOps },
+                    { label: "Active Clients", value: mcpStats.activeClients },
+                  ].map((s) => (
+                    <div key={s.label} className="p-3.5 rounded-xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 flex flex-col gap-1">
+                      <span className="text-lg font-bold text-[rgb(var(--text-primary))] font-mono"><CountUp value={s.value} /></span>
+                      <span className="text-[9px] text-[rgb(var(--text-muted))] uppercase tracking-widest font-mono">{s.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-xl border border-[rgb(var(--border))]/60 bg-[rgb(var(--surface))]/10 overflow-hidden">
+                  {mcpLogs.length === 0 ? (
+                    <div className="p-6 text-center text-[11px] text-[rgb(var(--text-muted))] font-mono">
+                      No MCP tool calls yet — connect an assistant above and ask it something.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-[rgb(var(--border))]/40 max-h-80 overflow-y-auto">
+                      {mcpLogs.map((log) => (
+                        <div key={log.id} className="flex items-center gap-3 px-4 py-2.5 text-[11px]">
+                          <span className="shrink-0 w-5 h-5 flex items-center justify-center text-[rgb(var(--text-muted))]">
+                            {(McpLogos as Record<string, React.ReactNode>)[log.logo] || <span className="text-sm">🔌</span>}
+                          </span>
+                          <span className="font-mono text-[rgb(var(--text-primary))]/85 font-semibold shrink-0">{log.client}</span>
+                          <span className="font-mono text-violet-400 truncate">{log.tool}</span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-[rgb(var(--surface-hover))]/60 text-[rgb(var(--text-muted))] font-mono uppercase shrink-0">{log.transport}</span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-mono uppercase shrink-0 ${log.status === "success" ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"}`}>
+                            {log.status}
+                          </span>
+                          <span className="ml-auto text-[10px] text-[rgb(var(--text-muted))] font-mono shrink-0">
+                            {new Date(log.timestamp).toLocaleTimeString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Collapsible Advanced / Developer Section */}
               <div className="flex flex-col gap-3">
                 <button
