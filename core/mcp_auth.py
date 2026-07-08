@@ -58,8 +58,17 @@ def _epoch_connect(sqlite_path: str) -> sqlite3.Connection:
     return conn
 
 
-def _get_epoch(user_id: str) -> int:
-    """Current token epoch for user_id (0 = never revoked)."""
+class _EpochLookupFailed(Exception):
+    """Raised when the epoch row can't be read at all (DB unreachable/locked),
+    as opposed to a genuine, successfully-read epoch of 0."""
+
+
+def _get_epoch_strict(user_id: str) -> int:
+    """Current token epoch for user_id (0 = never revoked). Raises
+    _EpochLookupFailed on any DB error instead of silently defaulting to 0 —
+    used by verify_mcp_token, where defaulting to 0 on a transient failure
+    could let an already-revoked token (which also embeds epoch 0) pass
+    verification during that failure window."""
     from config import config
     # sqlite3.Connection's own context-manager protocol only commits/rolls
     # back the transaction on exit — it never closes the connection, so
@@ -70,14 +79,22 @@ def _get_epoch(user_id: str) -> int:
         conn = _epoch_connect(config.SQLITE_PATH)
         row = conn.execute("SELECT epoch FROM mcp_token_epochs WHERE user_id = ?", (user_id,)).fetchone()
         return row[0] if row else 0
-    except Exception:
-        # Fail open to epoch 0 rather than locking every user out if the
-        # epochs table is momentarily unreachable — matches this token
-        # scheme's existing "persistent credential" trust model.
-        return 0
+    except Exception as e:
+        raise _EpochLookupFailed(str(e)) from e
     finally:
         if conn is not None:
             conn.close()
+
+
+def _get_epoch(user_id: str) -> int:
+    """Current token epoch for user_id (0 = never revoked). Fails OPEN to 0 on
+    a DB error — safe here because this is only used by mint_mcp_token, where
+    the worst case is minting a token with a stale epoch that immediately
+    fails its own verification (self-correcting, not a security bypass)."""
+    try:
+        return _get_epoch_strict(user_id)
+    except _EpochLookupFailed:
+        return 0
 
 
 def revoke_mcp_tokens(user_id: str) -> int:
@@ -162,6 +179,14 @@ def verify_mcp_token(token: str) -> str | None:
     except Exception:
         return None
 
-    if epoch != _get_epoch(user_id):
+    try:
+        current_epoch = _get_epoch_strict(user_id)
+    except _EpochLookupFailed:
+        # Fail CLOSED here: unlike minting, a verification-time DB failure that
+        # defaulted to epoch 0 would validate any token minted before the
+        # user's first revoke (or any legacy 2-part token) as if it were never
+        # revoked — the exact case revoke_mcp_tokens() exists to prevent.
+        return None
+    if epoch != current_epoch:
         return None
     return user_id
