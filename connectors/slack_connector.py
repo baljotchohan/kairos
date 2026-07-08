@@ -21,13 +21,24 @@ class SlackConnector:
     def _get_client(self):
         if self._client is None:
             from slack_sdk.web.async_client import AsyncWebClient
+            from slack_sdk.http_retry.builtin_async_handlers import AsyncRateLimitErrorRetryHandler
             token = self._token
             if not token:
                 raise ValueError(
                     "SlackConnector: no per-user token provided. "
                     "Pass the user's OAuth bot_token when constructing SlackConnector."
                 )
-            self._client = AsyncWebClient(token=token)
+            # Without this, every pagination loop below catches a Slack 429
+            # with the same bare `except Exception: break` used for genuine
+            # end-of-data, silently returning partial results as if they were
+            # complete. slack_sdk ships a built-in handler that retries on 429
+            # respecting Slack's own Retry-After header — no custom retry loop
+            # needed, unlike connectors without SDK-level support (see
+            # github_connector.py's hand-written _get_with_retry).
+            self._client = AsyncWebClient(
+                token=token,
+                retry_handlers=[AsyncRateLimitErrorRetryHandler(max_retry_count=3)],
+            )
         return self._client
 
     # ── Public async API ───────────────────────────────────────────────────────
