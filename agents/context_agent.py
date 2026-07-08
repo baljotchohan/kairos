@@ -12,6 +12,7 @@ Runs AFTER IntentAgent, BEFORE SynthesisAgent.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -99,8 +100,9 @@ class ContextAgent(BaseAgent):
 
         self.think(f"Resolving context for user '{user_id}' with intent '{intent.intent}'")
 
-        # 1. Get user profile
-        profile = self.user_memory.get_profile(user_id)
+        # 1. Get user profile — sync SQLite call, offloaded so it can't stall the
+        # single-worker event loop (and every other user's live chat with it).
+        profile = await asyncio.to_thread(self.user_memory.get_profile, user_id)
         profile_dict = {
             "display_name": profile.display_name,
             "department": profile.department,
@@ -110,8 +112,8 @@ class ContextAgent(BaseAgent):
         }
 
         # 2. Get conversation history (scoped to THIS session, not just the most recent)
-        conversation_history = self.user_memory.get_current_session_context(
-            user_id, max_turns=6, session_id=session_id
+        conversation_history = await asyncio.to_thread(
+            self.user_memory.get_current_session_context, user_id, max_turns=6, session_id=session_id
         )
         memory_count = len(conversation_history)
 
