@@ -1,5 +1,3 @@
-version: "3.9"
-
 # KAIROS — Company Organizational Memory OS
 # docker-compose up --build
 #
@@ -26,6 +24,11 @@ services:
       - CHROMA_PERSIST_DIR=/app/data/chroma_db
       - SQLITE_PATH=/app/data/kairos.db
       - OBSIDIAN_VAULT=/app/data/obsidian_vault
+      # Pin the port compose itself maps and health-checks (8000), regardless
+      # of whatever PORT value a developer's local .env happens to have set
+      # (e.g. an HF-deployment-specific value) — .env is loaded via env_file
+      # above and would otherwise silently win.
+      - PORT=8000
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -51,7 +54,11 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      # 127.0.0.1, not localhost — Alpine's BusyBox wget resolves "localhost"
+      # to the IPv6 loopback (::1) first in this image, which the Next.js
+      # server doesn't bind (only IPv4 0.0.0.0), so the health check failed
+      # every time despite the app serving real traffic correctly.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000"]
       interval: 30s
       timeout: 10s
       retries: 3

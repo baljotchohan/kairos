@@ -1,0 +1,15 @@
+# Installed fresh inside the container via `npm ci` — never send the host's copy
+node_modules/
+
+# Built fresh inside the container via `npm run build` — host copy is stale/irrelevant
+.next/
+
+# Secrets — never bake into image layers
+.env
+.env.*
+
+# Git / IDE
+.git/
+.gitignore
+.DS_Store
+*.swp
