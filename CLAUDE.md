@@ -193,7 +193,6 @@ Frontend (`frontend/.env.local`, all `NEXT_PUBLIC_*`): `NEXT_PUBLIC_API_URL`, `N
 All 8 connectors/agents (Slack, Gmail, Drive, Jira, Zoom, Notion, GitHub, plus meeting/Zoom transcription), dual-transport MCP, WebSocket streaming, the physics-based decision graph, and fail-closed multi-tenant isolation are implemented and live (see `docs/REMOTE_MCP.md` for the remote MCP model). Known open gaps:
 - Per-user Jira OAuth is fully coded (`api/routes/oauth.py`'s `jira_start`/`jira_callback`, `connectors/jira_connector.py`'s cloud_id resolution + refresh tokens) but not live in this deployment — `JIRA_CLIENT_ID`/`JIRA_CLIENT_SECRET` were never registered at developer.atlassian.com, so Jira currently falls back to the single global `JIRA_OWNER_UID` credential for every user. Registering those and setting them in `.env` is the only remaining step, not a code change.
 - Meeting transcription needs `openai-whisper` installed locally; it's intentionally excluded from the HF Docker image, so Zoom recordings list but don't transcribe in the hosted deployment.
-- The MCP "Activity Monitor" panel's backend is real (core/mcp_telemetry.py logs every tool call on both transports, `GET /api/admin/mcp-activity` serves it, the dashboard fetches it), but the actual visual panel in the MCP tab's JSX needs to be (re)built — it was removed in a prior edit, leaving the fetch wired to state nothing currently renders.
 
 ## Non-Negotiables
 
