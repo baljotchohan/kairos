@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import uuid
 from typing import Callable, TypedDict, Awaitable
 
@@ -44,6 +45,88 @@ class KairosState(TypedDict):
     decisions_extracted: int
     errors: list[str]
     status: str
+
+
+# ── Connection-status fast path ───────────────────────────────────────────────
+# "Which apps am I connected to?" is a factual question about system state — it
+# must be answered from the real token store, NEVER by an LLM that could route it
+# to the greeting path and cheerfully invent a connected-apps list. This is the
+# single biggest hallucination risk on the chat surface, so it's handled here
+# deterministically before intent classification ever runs.
+
+# display name → oauth_tokens storage key (Gmail + Drive share the one Google grant)
+_CONNECTABLE_SOURCES: list[tuple[str, str]] = [
+    ("Slack", "slack"),
+    ("Gmail", "google"),
+    ("Google Drive", "google"),
+    ("Notion", "notion"),
+    ("Jira", "jira"),
+    ("Zoom", "zoom"),
+    ("GitHub", "github"),
+]
+
+_CONN_STATUS_NOUNS = ("app", "tool", "source", "integration", "connector", "account", "service")
+
+
+def _is_connection_status_question(question: str) -> bool:
+    """True only for genuine 'what am I connected to' status questions.
+
+    Deliberately tight: requires the word 'connect' AND either an
+    apps/tools/sources-type noun, an 'anything/everything' quantifier, or the
+    bare 'what's connected' form — so it never hijacks a real decision question
+    that merely happens to contain the word 'connect' (e.g. 'why did we decide
+    to connect our CRM to Salesforce in 2019')."""
+    ql = question.lower().strip()
+    if "connect" not in ql:
+        return False
+    if any(n in ql for n in _CONN_STATUS_NOUNS):
+        return True
+    if "anything" in ql or "everything" in ql:
+        return True
+    if re.match(r"^(what'?s|whats)\s+connected", ql):
+        return True
+    return False
+
+
+def _connected_source_names(user_id: str) -> list[str]:
+    """Read the real per-user token store and return connected source display names."""
+    from api.routes.oauth import _get_token
+
+    storage_state: dict[str, bool] = {}
+    connected: list[str] = []
+    for display, storage in _CONNECTABLE_SOURCES:
+        if storage not in storage_state:
+            tok = _get_token(user_id, storage)
+            storage_state[storage] = bool(tok and not tok.get("disconnected"))
+        if storage_state[storage]:
+            connected.append(display)
+    return connected
+
+
+def _build_connection_status_answer(user_id: str) -> str:
+    """Factual, LLM-free answer listing connected vs. not-connected sources."""
+    all_sources = [display for display, _ in _CONNECTABLE_SOURCES]
+    connected = _connected_source_names(user_id)
+    not_connected = [s for s in all_sources if s not in connected]
+
+    if not connected:
+        lines = [
+            "**You're not connected to any apps yet.**",
+            "",
+            "Go to **KAIROS → Connectors** and connect any of these to start:",
+            "",
+        ]
+        lines += [f"- {s}" for s in all_sources]
+        return "\n".join(lines)
+
+    n = len(connected)
+    lines = [f"**You're connected to {n} source{'' if n == 1 else 's'}.**", "", "## ✅ Connected", ""]
+    lines += [f"- {s}" for s in connected]
+    if not_connected:
+        lines += ["", "## ⚪ Not connected yet", ""]
+        lines += [f"- {s}" for s in not_connected]
+        lines += ["", "Connect more from **KAIROS → Connectors**."]
+    return "\n".join(lines)
 
 
 # ── Orchestrator ──────────────────────────────────────────────────────────────
@@ -397,6 +480,39 @@ class KairosOrchestrator:
         
         # Verify/ensure the session exists in SQLite
         session_id = await asyncio.to_thread(self.user_memory.get_or_create_session, user_id, session_id)
+
+        # 0. Connection-status fast path — "which apps am I connected to?" is a
+        # factual system-state question. Answer it directly from the real token
+        # store instead of letting an LLM (which could misroute it to the
+        # greeting path) invent a connected-apps list. No LLM, no hallucination.
+        if _is_connection_status_question(question):
+            answer = await asyncio.to_thread(_build_connection_status_answer, user_id)
+            if stream_callback:
+                for _tok in re.split(r"(\s+)", answer):
+                    if _tok:
+                        await stream_callback({"type": "token", "content": _tok})
+                        await asyncio.sleep(0.004)
+            await asyncio.to_thread(
+                self.user_memory.store_message,
+                user_id=user_id, session_id=session_id,
+                role="user", content=question, query_intent="connection_status",
+            )
+            await asyncio.to_thread(
+                self.user_memory.store_message,
+                user_id=user_id, session_id=session_id,
+                role="assistant", content=answer, query_intent="connection_status",
+                metadata={"sources": [], "confidence": 1.0},
+            )
+            return {
+                "answer": answer,
+                "sources": [],
+                "intent": {"intent": "connection_status", "confidence": 1.0, "entities": {},
+                           "search_strategy": "none", "requires_history": False, "rewritten_query": question},
+                "confidence": 1.0,
+                "traces": [],
+                "session_id": session_id,
+                "user_context": {},
+            }
 
         # Per-request agent instances. The query agents hold per-user mutable state
         # (_current_user_id, _connectors, _collected_sources, _trace), so a single
