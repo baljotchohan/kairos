@@ -20,8 +20,11 @@ from config import config
 from core.token_crypto import decrypt_token_data
 
 
-def _read_token_rows(user_id: str, service: str) -> list[dict]:
-    """Return non-disconnected token_data dicts for (user_id, service)."""
+def _read_token_rows(user_id: str, service: str, include_disconnected: bool = False) -> list[dict]:
+    """Return token_data dicts for (user_id, service). Filters out rows marked
+    disconnected unless include_disconnected=True — save_refreshed_token needs
+    the raw (possibly-disconnected) row so it can tell a genuine disconnect
+    apart from "no row yet" (see its docstring)."""
     out: list[dict] = []
     if not user_id:
         return out
@@ -40,7 +43,7 @@ def _read_token_rows(user_id: str, service: str) -> list[dict]:
                 data = decrypt_token_data(r["token_data"])
             except Exception:
                 continue
-            if not data.get("disconnected"):
+            if include_disconnected or not data.get("disconnected"):
                 out.append(data)
     except Exception as e:
         print(f"[LiveConnectors] token read error ({service}/{user_id}): {e}")
@@ -74,9 +77,19 @@ def save_refreshed_token(user_id: str, service: str, token_data: dict):
     naive overwrite here would drop every OTHER field in that blob (e.g.
     `email`, set once at the original OAuth callback) the first time a token
     refreshes — merge onto the existing stored row instead.
+
+    Reads the RAW row (including disconnected ones): a connector instance built
+    before the user hit "Disconnect" can still be mid-flight and fire this
+    callback afterward. If we merged onto the filtered (non-disconnected) view,
+    `existing` would come back empty post-disconnect and this call would write
+    a fresh, non-disconnected row — silently reviving a connection the user
+    just severed. Detect that case and no-op instead.
     """
     from api.routes.oauth import _store_token
-    existing = _read_token_rows(user_id, service)
+    existing = _read_token_rows(user_id, service, include_disconnected=True)
+    if existing and existing[0].get("disconnected"):
+        print(f"[LiveConnectors] Ignoring stale token refresh for disconnected {service}/{user_id}")
+        return
     merged = {**existing[0], **token_data} if existing else token_data
     _store_token(user_id, service, merged)
 
@@ -105,6 +118,16 @@ def get_github_token(user_id: str) -> Optional[str]:
         token = data.get("access_token")
         if token:
             return token
+    return None
+
+
+def get_github_oauth(user_id: str) -> Optional[dict]:
+    """Full GitHub token_data (access_token + optional refresh_token/expires_at),
+    for callers that need to refresh — see get_github_token for a plain-token
+    convenience wrapper used where refresh doesn't apply (e.g. Jira-style checks)."""
+    for data in _read_token_rows(user_id, "github"):
+        if data.get("access_token"):
+            return data
     return None
 
 
@@ -195,9 +218,14 @@ def build_connectors_for_user(user_id: str) -> dict:
         out["notion"] = NotionConnector(api_key=notion_token)
         out["connected"].append("notion")
 
-    github_token = get_github_token(user_id)
-    if github_token:
-        out["github"] = GitHubConnector(access_token=github_token)
+    github_oauth = get_github_oauth(user_id)
+    if github_oauth:
+        out["github"] = GitHubConnector(
+            access_token=github_oauth.get("access_token"),
+            refresh_token=github_oauth.get("refresh_token"),
+            expires_at=github_oauth.get("expires_at"),
+            on_token_refresh=lambda data: save_refreshed_token(user_id, "github", data),
+        )
         out["connected"].append("github")
 
     return out
