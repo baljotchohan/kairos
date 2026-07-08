@@ -8,16 +8,34 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import time
 from datetime import datetime, timedelta
+from typing import Callable
 
 import httpx
 
+from config import config
+
 GITHUB_API_BASE = "https://api.github.com"
+GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
 
 
 class GitHubConnector:
-    def __init__(self, access_token: str):
+    def __init__(
+        self,
+        access_token: str,
+        refresh_token: str | None = None,
+        expires_at: int | None = None,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        on_token_refresh: Callable[[dict], None] | None = None,
+    ):
         self._token = access_token
+        self.refresh_token = refresh_token
+        self.expires_at = expires_at
+        self.client_id = client_id or config.GITHUB_CLIENT_ID
+        self.client_secret = client_secret or config.GITHUB_CLIENT_SECRET
+        self.on_token_refresh = on_token_refresh
         self._headers = {
             "Authorization": f"Bearer {access_token}",
             "Accept": "application/vnd.github+json",
@@ -26,6 +44,95 @@ class GitHubConnector:
 
     def _ok(self) -> bool:
         return bool(self._token)
+
+    async def _ensure_fresh_token(self) -> None:
+        """Refresh the access token if it's expiring and we have a refresh_token.
+
+        Most GitHub OAuth Apps never expire tokens (no "expires_at" stored at
+        all, in which case this is a no-op) — only apps with "token expiration"
+        enabled issue a refresh_token, per api/routes/oauth.py's github_callback.
+        """
+        if not self.refresh_token or not self.expires_at:
+            return
+        if time.time() < self.expires_at - 60:
+            return
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                resp = await client.post(
+                    GITHUB_TOKEN_URL,
+                    headers={"Accept": "application/json"},
+                    data={
+                        "client_id": self.client_id,
+                        "client_secret": self.client_secret,
+                        "grant_type": "refresh_token",
+                        "refresh_token": self.refresh_token,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                if "error" in data or not data.get("access_token"):
+                    print(f"[GitHubConnector] token refresh failed: {data}")
+                    return
+                self._token = data["access_token"]
+                self._headers["Authorization"] = f"Bearer {self._token}"
+                if data.get("refresh_token"):
+                    self.refresh_token = data["refresh_token"]
+                expires_in = data.get("expires_in", 28800)
+                self.expires_at = int(time.time()) + int(expires_in)
+                if self.on_token_refresh:
+                    self.on_token_refresh({
+                        "access_token": self._token,
+                        "refresh_token": self.refresh_token,
+                        "expires_at": self.expires_at,
+                    })
+        except Exception as e:
+            print(f"[GitHubConnector] token refresh error: {e}")
+
+    # ── Rate-limit-aware GET ───────────────────────────────────────────────────
+
+    async def _get_with_retry(self, client: httpx.AsyncClient, url: str,
+                               params: dict | None = None, max_retries: int = 3) -> httpx.Response:
+        """GET that distinguishes a rate limit from every other failure.
+
+        A bare `resp.raise_for_status()` makes a 429/secondary-rate-limit 403
+        indistinguishable from any other HTTPStatusError to callers here, which
+        catch broadly and just stop paginating — so a rate-limited request used
+        to silently return whatever partial data had already been fetched as if
+        it were the complete result, with zero backoff or retry. This respects
+        Retry-After / X-RateLimit-Reset and retries a bounded number of times
+        before finally raising.
+        """
+        resp = None
+        for attempt in range(max_retries + 1):
+            resp = await client.get(url, params=params)
+            is_rate_limited = resp.status_code == 429 or (
+                resp.status_code == 403 and resp.headers.get("x-ratelimit-remaining") == "0"
+            )
+            if is_rate_limited and attempt < max_retries:
+                wait = self._retry_wait_seconds(resp)
+                print(f"[GitHubConnector] Rate limited on {url} — retrying in {wait:.0f}s (attempt {attempt + 1}/{max_retries})")
+                await asyncio.sleep(wait)
+                continue
+            resp.raise_for_status()
+            return resp
+        resp.raise_for_status()
+        return resp
+
+    @staticmethod
+    def _retry_wait_seconds(resp: httpx.Response) -> float:
+        retry_after = resp.headers.get("retry-after")
+        if retry_after:
+            try:
+                return min(float(retry_after), 60.0)
+            except ValueError:
+                pass
+        reset = resp.headers.get("x-ratelimit-reset")
+        if reset:
+            try:
+                return max(1.0, min(float(reset) - time.time(), 60.0))
+            except ValueError:
+                pass
+        return 5.0
 
     # ── Public async API ───────────────────────────────────────────────────────
 
@@ -37,7 +144,16 @@ class GitHubConnector:
         if not self._ok():
             return []
 
+        await self._ensure_fresh_token()
         cutoff = datetime.utcnow() - timedelta(days=days_back)
+
+        # Bounds total concurrent comment-fetch requests across ALL repos in
+        # this run. Without it, gathering up to `max_repos` repos concurrently
+        # — each issuing one comment request per PR/issue (up to 100 each) —
+        # can fire ~1000 requests within seconds and trip GitHub's secondary
+        # (abuse-detection) rate limiter well before the per-request retry
+        # logic in _get_with_retry ever gets a chance to back off cleanly.
+        comment_semaphore = asyncio.Semaphore(6)
 
         async with httpx.AsyncClient(timeout=30, headers=self._headers) as client:
             repos = await self._list_repos(client, max_repos=max_repos)
@@ -47,8 +163,8 @@ class GitHubConnector:
 
             async def _process_repo(repo: dict):
                 full_name = repo["full_name"]
-                prs = await self._fetch_pulls(client, full_name, cutoff)
-                issues = await self._fetch_issues(client, full_name, cutoff)
+                prs = await self._fetch_pulls(client, full_name, cutoff, comment_semaphore)
+                issues = await self._fetch_issues(client, full_name, cutoff, comment_semaphore)
                 results.extend(prs)
                 results.extend(issues)
 
@@ -62,6 +178,7 @@ class GitHubConnector:
     async def get_user_login(self) -> str | None:
         if not self._ok():
             return None
+        await self._ensure_fresh_token()
         try:
             async with httpx.AsyncClient(timeout=15, headers=self._headers) as client:
                 resp = await client.get(f"{GITHUB_API_BASE}/user")
@@ -80,6 +197,7 @@ class GitHubConnector:
         otherwise a broken token silently reports as an empty GitHub account."""
         if not self._ok():
             return []
+        await self._ensure_fresh_token()
         try:
             async with httpx.AsyncClient(timeout=20, headers=self._headers) as client:
                 resp = await client.get(
@@ -130,6 +248,7 @@ class GitHubConnector:
         if not self._ok():
             return {}
 
+        await self._ensure_fresh_token()
         full_name = repo
         if "/" not in full_name:
             login = await self.get_user_login()
@@ -178,13 +297,13 @@ class GitHubConnector:
     async def _search_issues(self, q: str, limit: int) -> list[dict]:
         if not self._ok():
             return []
+        await self._ensure_fresh_token()
         try:
             async with httpx.AsyncClient(timeout=20, headers=self._headers) as client:
-                resp = await client.get(
-                    f"{GITHUB_API_BASE}/search/issues",
+                resp = await self._get_with_retry(
+                    client, f"{GITHUB_API_BASE}/search/issues",
                     params={"q": q, "sort": "updated", "order": "desc", "per_page": min(limit, 30)},
                 )
-                resp.raise_for_status()
                 data = resp.json()
         except httpx.HTTPStatusError as e:
             print(f"[GitHubConnector] search_issues error ({q}): {e.response.status_code} {e.response.text[:200]}")
@@ -212,25 +331,24 @@ class GitHubConnector:
 
     async def _list_repos(self, client: httpx.AsyncClient, max_repos: int) -> list[dict]:
         try:
-            resp = await client.get(
-                f"{GITHUB_API_BASE}/user/repos",
+            resp = await self._get_with_retry(
+                client, f"{GITHUB_API_BASE}/user/repos",
                 params={"sort": "updated", "direction": "desc", "per_page": max_repos},
             )
-            resp.raise_for_status()
             return resp.json()
         except Exception as e:
             print(f"[GitHubConnector] list_repos error: {e}")
             return []
 
-    async def _fetch_pulls(self, client: httpx.AsyncClient, full_name: str, cutoff: datetime) -> list[dict]:
+    async def _fetch_pulls(self, client: httpx.AsyncClient, full_name: str, cutoff: datetime,
+                           comment_semaphore: asyncio.Semaphore) -> list[dict]:
         prs: list[dict] = []
         try:
             for page in range(1, 6):  # cap at 5 pages (100 PRs) per repo per cycle
-                resp = await client.get(
-                    f"{GITHUB_API_BASE}/repos/{full_name}/pulls",
+                resp = await self._get_with_retry(
+                    client, f"{GITHUB_API_BASE}/repos/{full_name}/pulls",
                     params={"state": "closed", "sort": "updated", "direction": "desc", "per_page": 20, "page": page},
                 )
-                resp.raise_for_status()
                 page_items = resp.json()
                 if not page_items:
                     break
@@ -250,7 +368,7 @@ class GitHubConnector:
             updated = self._parse_date(pr.get("updated_at"))
             if updated and updated < cutoff:
                 continue
-            comments = await self._fetch_comments(client, full_name, pr["number"])
+            comments = await self._fetch_comments(client, full_name, pr["number"], comment_semaphore)
             body = (pr.get("body") or "").strip()
             merged = "Merged" if pr.get("merged_at") else "Closed (not merged)"
             text_parts = [
@@ -272,15 +390,15 @@ class GitHubConnector:
             })
         return out
 
-    async def _fetch_issues(self, client: httpx.AsyncClient, full_name: str, cutoff: datetime) -> list[dict]:
+    async def _fetch_issues(self, client: httpx.AsyncClient, full_name: str, cutoff: datetime,
+                            comment_semaphore: asyncio.Semaphore) -> list[dict]:
         issues: list[dict] = []
         try:
             for page in range(1, 6):  # cap at 5 pages (100 issues) per repo per cycle
-                resp = await client.get(
-                    f"{GITHUB_API_BASE}/repos/{full_name}/issues",
+                resp = await self._get_with_retry(
+                    client, f"{GITHUB_API_BASE}/repos/{full_name}/issues",
                     params={"state": "all", "sort": "updated", "direction": "desc", "per_page": 20, "page": page},
                 )
-                resp.raise_for_status()
                 page_items = resp.json()
                 if not page_items:
                     break
@@ -303,7 +421,7 @@ class GitHubConnector:
             updated = self._parse_date(issue.get("updated_at"))
             if updated and updated < cutoff:
                 continue
-            comments = await self._fetch_comments(client, full_name, issue["number"])
+            comments = await self._fetch_comments(client, full_name, issue["number"], comment_semaphore)
             body = (issue.get("body") or "").strip()
             text_parts = [
                 f"Issue #{issue['number']}: {issue['title']}",
@@ -324,14 +442,19 @@ class GitHubConnector:
             })
         return out
 
-    async def _fetch_comments(self, client: httpx.AsyncClient, full_name: str, number: int) -> list[str]:
-        # Same endpoint serves both issue and PR conversation comments.
+    async def _fetch_comments(self, client: httpx.AsyncClient, full_name: str, number: int,
+                              comment_semaphore: asyncio.Semaphore) -> list[str]:
+        # Same endpoint serves both issue and PR conversation comments. Gated by
+        # a shared semaphore (see fetch_all) — this is the highest-volume call
+        # in the whole connector (one request per PR/issue, up to ~100 per repo
+        # across up to 10 repos), so it's the one most likely to trip GitHub's
+        # secondary rate limiter if left unbounded.
         try:
-            resp = await client.get(
-                f"{GITHUB_API_BASE}/repos/{full_name}/issues/{number}/comments",
-                params={"per_page": 10},
-            )
-            resp.raise_for_status()
+            async with comment_semaphore:
+                resp = await self._get_with_retry(
+                    client, f"{GITHUB_API_BASE}/repos/{full_name}/issues/{number}/comments",
+                    params={"per_page": 10},
+                )
             return [
                 f"{(c.get('user') or {}).get('login', 'unknown')}: {(c.get('body') or '')[:300]}"
                 for c in resp.json()
