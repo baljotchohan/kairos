@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
+from pydantic import BaseModel
 
 from api.auth import get_current_user, UserProfile as AuthUserProfile
 from core.user_memory import UserMemory, UserProfile
@@ -96,3 +97,31 @@ def reset_profile(
     um = UserMemory()
     um.reset_profile(current_user.uid)
     return {"success": True}
+
+
+class SettingsUpdateRequest(BaseModel):
+    auto_extraction: bool
+
+
+@router.get("/profile/settings")
+def get_settings(
+    current_user: AuthUserProfile = Depends(get_current_user)
+):
+    """Retrieve user's settings (such as auto background ingestion status)."""
+    um = UserMemory()
+    profile = um.get_profile(current_user.uid)
+    auto_ext = profile.metadata.get("auto_extraction", True)
+    return {"auto_extraction": auto_ext}
+
+
+@router.post("/profile/settings")
+def update_settings(
+    body: SettingsUpdateRequest,
+    current_user: AuthUserProfile = Depends(get_current_user)
+):
+    """Update user's settings."""
+    um = UserMemory()
+    profile = um.get_profile(current_user.uid)
+    profile.metadata["auto_extraction"] = body.auto_extraction
+    um.save_profile(profile)
+    return {"success": True, "auto_extraction": body.auto_extraction}

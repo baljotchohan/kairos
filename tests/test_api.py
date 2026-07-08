@@ -182,3 +182,42 @@ def test_remote_mcp_find_similar_decisions_call(client):
 # and /.well-known/oauth-authorization-server is served at 200 OK by the backend.
 
 
+def test_profile_settings_endpoint(client):
+    # Initialize: Set auto_extraction to True to guarantee test hermeticity
+    resp = client.post(
+        "/api/v1/memory/profile/settings",
+        json={"auto_extraction": True},
+        headers={"Authorization": "Bearer simulated-google-token"},
+    )
+    assert resp.status_code == 200
+
+    # GET: Verify value of auto_extraction is True
+    resp = client.get(
+        "/api/v1/memory/profile/settings",
+        headers={"Authorization": "Bearer simulated-google-token"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["auto_extraction"] is True
+
+    # POST: Update settings auto_extraction to False
+    resp = client.post(
+        "/api/v1/memory/profile/settings",
+        json={"auto_extraction": False},
+        headers={"Authorization": "Bearer simulated-google-token"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["auto_extraction"] is False
+
+    # GET: Verify auto_extraction is now False
+    resp = client.get(
+        "/api/v1/memory/profile/settings",
+        headers={"Authorization": "Bearer simulated-google-token"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["auto_extraction"] is False
+
+
