@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import re
 import sqlite3
-from typing import Optional
 
 from config import config
 from core.token_crypto import decrypt_token_data
@@ -24,8 +23,14 @@ class SlackBot:
         self.orchestrator = orchestrator
         self._bolt_app = None
         self._handler = None
-        self._bot_user_id: Optional[str] = None
-        self._workspace_owner_uid: str = "slack-system"
+        # team_id -> (bot_token, user_uid). A single Socket Mode connection (one
+        # SLACK_APP_TOKEN) receives app_mention events for EVERY workspace this
+        # Slack app is installed to, so each event must be routed using ITS OWN
+        # team's bot token and user_uid — never a single hardcoded "owner". This
+        # map is what makes that possible; see _handle_mention/_team_creds.
+        self._team_creds: dict[str, tuple[str, str]] = {}
+        # team_id -> bot user id, so self-mention filtering works per-workspace too
+        self._bot_user_ids: dict[str, str] = {}
 
     # ── Token helpers ──────────────────────────────────────────────────────────
 
@@ -33,64 +38,74 @@ class SlackBot:
         t = config.SLACK_APP_TOKEN or ""
         return t if (t.startswith("xapp-") and len(t) > 20) else ""
 
-    def _get_bot_token(self) -> tuple[str, str]:
-        """Return (bot_token, user_uid) for the first valid Slack workspace connection."""
+    def _load_team_creds(self) -> dict[str, tuple[str, str]]:
+        """Build team_id -> (bot_token, user_uid) for every connected Slack workspace."""
+        team_creds: dict[str, tuple[str, str]] = {}
         try:
             conn = sqlite3.connect(config.SQLITE_PATH)
             rows = conn.execute(
-                "SELECT token_data, user_uid FROM oauth_tokens WHERE service = 'slack' AND user_uid IS NOT NULL AND user_uid != ''"
+                "SELECT token_data, user_uid FROM oauth_tokens "
+                "WHERE service = 'slack' AND user_uid IS NOT NULL AND user_uid != ''"
             ).fetchall()
             conn.close()
             for row in rows:
                 data = decrypt_token_data(row[0])
+                # "disconnected" is a flag inside the encrypted token_data JSON, not
+                # a DB column (see api/routes/oauth.py's disconnect_service) — must
+                # be checked post-decrypt.
+                if data.get("disconnected"):
+                    continue
                 t = data.get("bot_token", "")
+                team_id = data.get("team_id", "")
                 uid = row[1]
-                if t.startswith("xoxb-") and len(t) > 30 and uid:
-                    return t, uid
+                if t.startswith("xoxb-") and len(t) > 30 and uid and team_id:
+                    team_creds[team_id] = (t, uid)
         except Exception:
             pass
-        # Fall back to env token with a system user scope
-        t = config.SLACK_BOT_TOKEN or ""
-        if t.startswith("xoxb-") and len(t) > 30:
-            return t, "slack-system"
-        return "", ""
+        return team_creds
 
     def is_configured(self) -> bool:
-        token, _ = self._get_bot_token()
-        return bool(self._get_app_token() and token)
+        return bool(self._get_app_token() and (self._team_creds or config.SLACK_BOT_TOKEN))
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
     async def start(self):
         app_token = self._get_app_token()
-        bot_token, self._workspace_owner_uid = self._get_bot_token()
+        self._team_creds = self._load_team_creds()
 
         if not app_token:
             print("[SlackBot] SLACK_APP_TOKEN not set — mention responses disabled.")
             return
-        if not bot_token:
-            print("[SlackBot] No bot token found — mention responses disabled.")
+        if not self._team_creds:
+            print("[SlackBot] No connected Slack workspace found — mention responses disabled.")
             return
 
         from slack_bolt.async_app import AsyncApp
         from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
+        from slack_sdk.web.async_client import AsyncWebClient
 
-        self._bolt_app = AsyncApp(token=bot_token, ignoring_self_events_enabled=True)
+        # Bolt needs ONE token to construct the app and drive the Socket Mode
+        # handshake, but it is never used to post replies — _handle_mention always
+        # builds a fresh AsyncWebClient scoped to the mentioning event's own team.
+        bootstrap_token = next(iter(self._team_creds.values()))[0]
+        self._bolt_app = AsyncApp(token=bootstrap_token, ignoring_self_events_enabled=True)
 
-        # Fetch bot user ID to avoid reply loops
-        client = self._bolt_app.client
-        auth = await client.auth_test()
-        self._bot_user_id = auth["user_id"]
-        print(f"[SlackBot] Authenticated as @{auth['user']} (ID: {self._bot_user_id})")
+        for team_id, (bot_token, _uid) in self._team_creds.items():
+            try:
+                auth = await AsyncWebClient(token=bot_token).auth_test()
+                self._bot_user_ids[team_id] = auth["user_id"]
+                print(f"[SlackBot] Authenticated as @{auth['user']} in team {team_id}")
+            except Exception as e:
+                print(f"[SlackBot] auth_test failed for team {team_id}: {e}")
 
         # Register the app_mention handler
         @self._bolt_app.event("app_mention")
-        async def handle_mention(event, client, **_):
-            await self._handle_mention(event, client)
+        async def handle_mention(event, context, **_):
+            await self._handle_mention(event, context)
 
         self._handler = AsyncSocketModeHandler(self._bolt_app, app_token)
         await self._handler.connect_async()
-        print("[SlackBot] ✅ Socket Mode (Bolt) connected — listening for @KAIROS mentions")
+        print(f"[SlackBot] ✅ Socket Mode (Bolt) connected — listening for @KAIROS mentions across {len(self._team_creds)} workspace(s)")
 
     async def stop(self):
         if self._handler:
@@ -102,9 +117,35 @@ class SlackBot:
 
     # ── Mention handler ────────────────────────────────────────────────────────
 
-    async def _handle_mention(self, event: dict, client):
+    async def _handle_mention(self, event: dict, context: dict):
+        # Resolve which connected KAIROS user owns THIS event's workspace — never
+        # a single shared/default user. A mention from a workspace we don't have
+        # a KAIROS connection for is dropped rather than answered from someone
+        # else's memory.
+        team_id = (context or {}).get("team_id") or event.get("team", "")
+        bot_token, user_uid = self._team_creds.get(team_id, (None, None))
+        if not bot_token:
+            # The workspace may have connected after the bot started — refresh once.
+            self._team_creds = self._load_team_creds()
+            bot_token, user_uid = self._team_creds.get(team_id, (None, None))
+        if not bot_token:
+            print(f"[SlackBot] Ignoring mention from unrecognized team_id={team_id!r}")
+            return
+
+        from slack_sdk.web.async_client import AsyncWebClient
+        client = AsyncWebClient(token=bot_token)
+
+        bot_user_id = self._bot_user_ids.get(team_id)
+        if bot_user_id is None:
+            try:
+                auth = await client.auth_test()
+                bot_user_id = auth["user_id"]
+                self._bot_user_ids[team_id] = bot_user_id
+            except Exception:
+                bot_user_id = None
+
         # Ignore self-mentions
-        if event.get("bot_id") or event.get("user") == self._bot_user_id:
+        if event.get("bot_id") or (bot_user_id and event.get("user") == bot_user_id):
             return
 
         channel = event.get("channel", "")
@@ -116,7 +157,7 @@ class SlackBot:
         if not question:
             question = "What are the latest company decisions?"
 
-        print(f"[SlackBot] Mention from <@{user}>: {question[:100]}")
+        print(f"[SlackBot] Mention from <@{user}> in team {team_id}: {question[:100]}")
 
         # Post thinking indicator and capture its ts for update
         thinking_ts = None
@@ -130,9 +171,9 @@ class SlackBot:
         except Exception as e:
             print(f"[SlackBot] Could not post thinking message: {e}")
 
-        # Query KAIROS
+        # Query KAIROS — scoped to the mentioning workspace's own connected user
         try:
-            answer, sources, confidence = await self._query_kairos(question)
+            answer, sources, confidence = await self._query_kairos(question, user_uid)
         except Exception as e:
             answer = f"KAIROS error: {e}"
             sources, confidence = [], 0.0
@@ -162,10 +203,10 @@ class SlackBot:
 
     # ── KAIROS query ───────────────────────────────────────────────────────────
 
-    async def _query_kairos(self, question: str) -> tuple[str, list, float]:
+    async def _query_kairos(self, question: str, user_id: str) -> tuple[str, list, float]:
         if not self.orchestrator:
             return "KAIROS memory not initialized.", [], 0.0
-        result = await self.orchestrator.query(question, user_id=self._workspace_owner_uid)
+        result = await self.orchestrator.query(question, user_id=user_id)
         return (
             result.get("answer", "KAIROS has no recorded decision on this topic."),
             result.get("sources", []),
