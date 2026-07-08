@@ -1,6 +1,12 @@
 """
 Gmail connector — full read access via Gmail API.
 Requires Google OAuth with gmail.readonly scope.
+
+Every API call below passes num_retries=3 to execute() — googleapiclient's
+built-in exponential-backoff retry for 429/5xx responses. Without it, a
+rate-limited call raises HttpError immediately, caught by the bare
+`except Exception` around each call site and treated identically to genuine
+end-of-pagination, silently truncating results instead of retrying.
 """
 
 from __future__ import annotations
@@ -124,7 +130,7 @@ class GmailConnector:
             result = {"by_label": {}, "total_unread": 0}
             for lid in label_ids:
                 try:
-                    info = svc.users().labels().get(userId="me", id=lid).execute()
+                    info = svc.users().labels().get(userId="me", id=lid).execute(num_retries=3)
                     unread = info.get("messagesUnread", 0)
                     threads_unread = info.get("threadsUnread", 0)
                     friendly = lid.replace("CATEGORY_", "").title()
@@ -137,7 +143,7 @@ class GmailConnector:
                     pass
             # Also get profile for total message count
             try:
-                profile = svc.users().getProfile(userId="me").execute()
+                profile = svc.users().getProfile(userId="me").execute(num_retries=3)
                 result["total_messages"] = profile.get("messagesTotal", 0)
                 result["total_threads"] = profile.get("threadsTotal", 0)
                 result["email_address"] = profile.get("emailAddress", "")
@@ -151,7 +157,7 @@ class GmailConnector:
     def _thread_stats_sync(self) -> dict:
         svc = self._build_service()
         try:
-            profile = svc.users().getProfile(userId="me").execute()
+            profile = svc.users().getProfile(userId="me").execute(num_retries=3)
             result = {
                 "email_address": profile.get("emailAddress", ""),
                 "total_messages": profile.get("messagesTotal", 0),
@@ -170,7 +176,7 @@ class GmailConnector:
         try:
             resp = svc.users().messages().list(
                 userId="me", q=f"after:{cutoff}", maxResults=500,
-            ).execute()
+            ).execute(num_retries=3)
             msgs = resp.get("messages", [])
             counter: Counter = Counter()
             for raw in msgs[:200]:
@@ -193,7 +199,7 @@ class GmailConnector:
         try:
             resp = svc.users().messages().list(
                 userId="me", labelIds=[label], maxResults=limit,
-            ).execute()
+            ).execute(num_retries=3)
             out = []
             for raw in resp.get("messages", []):
                 meta = self._fetch_metadata(svc, raw["id"])
@@ -225,7 +231,7 @@ class GmailConnector:
                         userId="me", q=query,
                         maxResults=min(100, max_results - len(results)),
                         pageToken=page_token,
-                    ).execute()
+                    ).execute(num_retries=3)
                     for raw in resp.get("messages", []):
                         msg_id = raw["id"]
                         if msg_id in seen:
@@ -247,7 +253,7 @@ class GmailConnector:
     def _get_thread_sync(self, thread_id: str) -> list[dict]:
         svc = self._build_service()
         try:
-            thread = svc.users().threads().get(userId="me", id=thread_id, format="full").execute()
+            thread = svc.users().threads().get(userId="me", id=thread_id, format="full").execute(num_retries=3)
             return [self._parse_message(msg) for msg in thread.get("messages", []) if msg]
         except Exception as e:
             print(f"[GmailConnector] get_thread error: {e}")
@@ -259,7 +265,7 @@ class GmailConnector:
         try:
             resp = svc.users().messages().list(
                 userId="me", q=query or "in:inbox", maxResults=limit,
-            ).execute()
+            ).execute(num_retries=3)
         except Exception as e:
             print(f"[GmailConnector] get_recent list error: {e}")
             return []
@@ -277,14 +283,14 @@ class GmailConnector:
             return svc.users().messages().get(
                 userId="me", id=msg_id, format="metadata",
                 metadataHeaders=["Subject", "From", "To", "Date"],
-            ).execute()
+            ).execute(num_retries=3)
         except Exception as e:
             print(f"[GmailConnector] fetch metadata {msg_id} error: {e}")
             return None
 
     def _fetch_full_message(self, svc, msg_id: str):
         try:
-            return svc.users().messages().get(userId="me", id=msg_id, format="full").execute()
+            return svc.users().messages().get(userId="me", id=msg_id, format="full").execute(num_retries=3)
         except Exception as e:
             print(f"[GmailConnector] fetch message {msg_id} error: {e}")
             return None

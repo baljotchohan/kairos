@@ -2,6 +2,12 @@
 Google Drive connector — reads documents, meeting notes, proposals, specs.
 Requires Google OAuth with drive.readonly + documents.readonly scopes.
 Returns gracefully empty list when credentials are missing.
+
+Every API call below passes num_retries=3 to execute() — googleapiclient's
+built-in exponential-backoff retry for 429/5xx responses. Without it, a
+rate-limited call raises HttpError immediately, caught by the bare
+`except Exception` around each call site and treated identically to genuine
+end-of-pagination, silently truncating results instead of retrying.
 """
 
 from __future__ import annotations
@@ -138,7 +144,7 @@ class DriveConnector:
                     fields="nextPageToken, files(id, name, mimeType, modifiedTime, webViewLink, owners)",
                     pageSize=min(100, 100 - len(files)),
                     pageToken=page_token,
-                ).execute()
+                ).execute(num_retries=3)
                 files.extend(resp.get("files", []))
                 page_token = resp.get("nextPageToken")
                 if not page_token:
@@ -162,7 +168,7 @@ class DriveConnector:
                     fields="nextPageToken, files(mimeType)",
                     pageSize=1000,
                     pageToken=page_token,
-                ).execute()
+                ).execute(num_retries=3)
                 batch = resp.get("files", [])
                 total += len(batch)
                 for f in batch:
@@ -195,7 +201,7 @@ class DriveConnector:
                     fields="nextPageToken, files(id, name, mimeType, modifiedTime, webViewLink, owners)",
                     pageSize=min(100, limit - len(files)),
                     pageToken=page_token,
-                ).execute()
+                ).execute(num_retries=3)
                 files.extend(resp.get("files", []))
                 page_token = resp.get("nextPageToken")
                 if not page_token:
@@ -241,7 +247,7 @@ class DriveConnector:
         if mime_type == "application/vnd.google-apps.document":
             # Use Docs API for richer text extraction
             try:
-                doc = docs.documents().get(documentId=file_id).execute()
+                doc = docs.documents().get(documentId=file_id).execute(num_retries=3)
                 return self._extract_doc_text(doc.get("body", {}).get("content", []))
             except Exception as e:
                 print(f"[DriveConnector] docs.get error ({file_id}): {e}")
@@ -251,7 +257,7 @@ class DriveConnector:
             content = drive.files().export(
                 fileId=file_id,
                 mimeType="text/plain",
-            ).execute()
+            ).execute(num_retries=3)
             if isinstance(content, bytes):
                 return content.decode("utf-8", errors="replace")
             return str(content)
