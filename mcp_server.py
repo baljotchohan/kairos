@@ -30,6 +30,7 @@ Add to Claude Desktop / Cursor MCP config:
 from __future__ import annotations
 
 import asyncio
+import functools
 import os
 import time
 import uuid
@@ -41,6 +42,7 @@ from core.memory import KairosMemory
 from core.graph import DecisionNode
 from core import decision_intelligence as di
 from core.orchestrator import KairosOrchestrator
+from core.mcp_telemetry import log_tool_call
 
 # ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -73,9 +75,46 @@ INGESTION_COOLDOWN_SECONDS = 180
 _last_ingestion_trigger = 0.0
 
 
+def _tracked(tool_name: str):
+    """Records every invocation of the wrapped tool in mcp_call_log — this is
+    the only source of real MCP call telemetry on the stdio transport (the
+    dashboard's "Activity Monitor" panel previously had no real data to show,
+    on either transport). Applied below @mcp.tool() so FastMCP's signature
+    introspection still sees the original function (functools.wraps sets
+    __wrapped__, which inspect.signature follows by default) while this
+    wrapper is what actually executes."""
+    def decorator(fn):
+        if asyncio.iscoroutinefunction(fn):
+            @functools.wraps(fn)
+            async def async_wrapper(*args, **kwargs):
+                status = "success"
+                try:
+                    return await fn(*args, **kwargs)
+                except Exception:
+                    status = "error"
+                    raise
+                finally:
+                    log_tool_call(MCP_TENANT_ID, tool_name, transport="stdio", client_name="Local (stdio)", status=status)
+            return async_wrapper
+        else:
+            @functools.wraps(fn)
+            def sync_wrapper(*args, **kwargs):
+                status = "success"
+                try:
+                    return fn(*args, **kwargs)
+                except Exception:
+                    status = "error"
+                    raise
+                finally:
+                    log_tool_call(MCP_TENANT_ID, tool_name, transport="stdio", client_name="Local (stdio)", status=status)
+            return sync_wrapper
+    return decorator
+
+
 # ── Tool 1: get_context ───────────────────────────────────────────────────────
 
 @mcp.tool()
+@_tracked("get_context")
 def get_context(query: str, limit: int = 5) -> str:
     """Get organizational context and decisions relevant to a query.
 
@@ -129,6 +168,7 @@ DECISION {i}: {d['title']}
 # ── Tool 2: store_context ─────────────────────────────────────────────────────
 
 @mcp.tool()
+@_tracked("store_context")
 def store_context(
     decision: str,
     context: str,
@@ -211,6 +251,7 @@ def store_context(
 # ── Tool 3: search_decisions ──────────────────────────────────────────────────
 
 @mcp.tool()
+@_tracked("search_decisions")
 def search_decisions(
     topic: Optional[str] = None,
     date_from: Optional[str] = None,
@@ -306,6 +347,7 @@ def search_decisions(
 # ── Tool 4: find_similar_decisions ────────────────────────────────────────────
 
 @mcp.tool()
+@_tracked("find_similar_decisions")
 async def find_similar_decisions(query: str, limit: int = 5) -> str:
     """Check whether a new situation has genuine precedent in past decisions.
 
@@ -337,6 +379,7 @@ async def find_similar_decisions(query: str, limit: int = 5) -> str:
 # ── Tool 5: detect_decision_patterns ──────────────────────────────────────────
 
 @mcp.tool()
+@_tracked("detect_decision_patterns")
 async def detect_decision_patterns(scope: str = "all", lookback_days: int = 365) -> str:
     """Proactively scan organizational memory for risky decision patterns.
 
@@ -369,6 +412,7 @@ async def detect_decision_patterns(scope: str = "all", lookback_days: int = 365)
 # ── Tool 6: predict_decision_risk ─────────────────────────────────────────────
 
 @mcp.tool()
+@_tracked("predict_decision_risk")
 async def predict_decision_risk(decision_id: str = "", scope: str = "all") -> str:
     """Score decisions by risk of being stale, unowned, or overdue for review.
 
@@ -397,6 +441,7 @@ async def predict_decision_risk(decision_id: str = "", scope: str = "all") -> st
 # ── Tool 7: ask_kairos ─────────────────────────────────────────────────────────
 
 @mcp.tool()
+@_tracked("ask_kairos")
 async def ask_kairos(question: str) -> str:
     """Ask KAIROS a full question and get a synthesized, sourced answer.
 
@@ -432,6 +477,7 @@ async def ask_kairos(question: str) -> str:
 # ── Tool 8: trigger_ingestion ──────────────────────────────────────────────────
 
 @mcp.tool()
+@_tracked("trigger_ingestion")
 async def trigger_ingestion() -> str:
     """Trigger a background sync of connected sources to extract new decisions now.
 
