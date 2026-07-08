@@ -211,9 +211,20 @@ async def oauth_authorize(request: Request):
     # (which may be localhost in the HF Space env).
     base = _base_url(request)
     client_name = (client_row["client_name"] or "").strip() if client_row else ""
-    from urllib.parse import quote
+    from urllib.parse import quote, urlparse
+    # client_name is attacker-controllable at /oauth/register (RFC 7591 registration
+    # is unauthenticated by design), so a malicious client can register itself as
+    # "Claude Desktop" while pointing redirect_uri at an attacker-controlled origin.
+    # Always pass the ACTUAL redirect destination's host as its own param so the
+    # consent screen can show it regardless of what client_name claims to be —
+    # the one thing a phishing client can't spoof without breaking its own OAuth flow.
+    try:
+        redirect_host = urlparse(redirect_uri).netloc or redirect_uri
+    except Exception:
+        redirect_host = redirect_uri
     name_param = f"&client_name={quote(client_name)}" if client_name else ""
-    return RedirectResponse(f"{base}/oauth/login?req_id={req_id}{name_param}", status_code=302)
+    host_param = f"&redirect_host={quote(redirect_host)}"
+    return RedirectResponse(f"{base}/oauth/login?req_id={req_id}{name_param}{host_param}", status_code=302)
 
 
 # ── 4. Complete (frontend calls this after Firebase sign-in) ───────────────────

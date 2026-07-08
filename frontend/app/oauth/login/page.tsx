@@ -119,6 +119,11 @@ function OAuthLoginContent() {
   // not a blind click. Falls back to a generic label if the client never
   // registered a name (see api/routes/mcp_oauth.py's oauth_register).
   const clientName = searchParams.get("client_name");
+  // The ACTUAL host this grant will redirect to with an access code. client_name
+  // is attacker-controllable (dynamic client registration is unauthenticated), so
+  // a phishing client can call itself "Claude Desktop" while redirecting the code
+  // to its own domain. redirect_host can't be spoofed the same way — always show it.
+  const redirectHost = searchParams.get("redirect_host");
 
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [error, setError] = useState("");
@@ -215,6 +220,18 @@ function OAuthLoginContent() {
           </>
         )}
       </p>
+
+      {redirectHost && (
+        <div className="mb-6 px-3 py-2.5 rounded-lg border border-amber-500/25 bg-amber-500/[0.06] text-left">
+          <p className="text-[10px] font-mono uppercase tracking-wide text-amber-400/90 mb-1">
+            Access will be sent to
+          </p>
+          <p className="text-[13px] font-semibold text-amber-100 break-all">{redirectHost}</p>
+          <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
+            Only continue if you recognize this as the app you're connecting.
+          </p>
+        </div>
+      )}
 
       {status === "success" && (
         <p className="text-sm text-emerald-400 font-medium mb-4">
