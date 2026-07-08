@@ -119,6 +119,14 @@ async def _ingestion_loop():
         else:
             async def run_for_user(uid: str):
                 try:
+                    from core.user_memory import UserMemory
+                    um = UserMemory()
+                    profile = um.get_profile(uid)
+                    auto_ext = profile.metadata.get("auto_extraction", True)
+                    if not auto_ext:
+                        print(f"[Ingestion] Background ingestion is disabled for user {uid} (auto_extraction=False). Skipping.")
+                        return
+
                     print(f"[Ingestion] Starting run for user {uid}...")
                     await orchestrator.run_ingestion(user_id=uid)
                 except Exception as e:
@@ -148,15 +156,26 @@ _ALLOWED_ORIGINS = [
     "https://kairos-memory-os.vercel.app",
 ]
 
-# Allow this project's Vercel previews + HF Space origins (must contain "kairos")
-# — NOT any attacker-controlled *.vercel.app / *.hf.space subdomain.
-_ALLOWED_ORIGIN_REGEX = r"https://[a-z0-9-]*kairos[a-z0-9-]*\.(vercel\.app|hf\.space)"
+# Allow this project's Vercel previews + HF Space origins. Anchored to the
+# actual project slug ("kairos-memory-os-...") rather than a bare "kairos"
+# substring anywhere in the hostname — Vercel/HF Spaces are shared hosting
+# where anyone can self-register a project containing that substring (e.g.
+# "kairos-phish.vercel.app" or "x-kairos-y.hf.space" both matched the old
+# regex). This narrows the bar to registering a project with our EXACT slug,
+# not merely containing our name.
+_ALLOWED_ORIGIN_REGEX = r"https://kairos-memory-os(-[a-z0-9-]+)?\.(vercel\.app|hf\.space)"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_ALLOWED_ORIGINS,
     allow_origin_regex=_ALLOWED_ORIGIN_REGEX,
-    allow_credentials=True,
+    # No cookie-based auth anywhere in this app (Firebase bearer tokens only;
+    # MCP auth is a bearer/URL token — confirmed no `credentials: 'include'`
+    # fetch anywhere in frontend/, no Set-Cookie anywhere in api/). Credentialed
+    # CORS is what lets a malicious origin ride a victim's session — since
+    # there's no session to ride, there's no reason to opt into that risk
+    # category at all, regardless of how precise the origin regex is.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
