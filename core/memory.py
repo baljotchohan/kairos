@@ -413,6 +413,24 @@ class KairosMemory:
             print(f"[Memory] inventory_counts error: {e}", file=sys.stderr)
             return {}
 
+    def inventory_last_synced(self, user_id: str) -> dict:
+        """Per-source most-recent fetched_at for a user's cached inventory —
+        the real "last synced" signal, derived from actual ingestion activity
+        rather than a hardcoded placeholder date."""
+        if not user_id:
+            return {}
+        try:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    "SELECT source, MAX(fetched_at) FROM inventory WHERE user_id = ? GROUP BY source",
+                    (user_id,),
+                ).fetchall()
+                return {r[0]: r[1] for r in rows if r[1]}
+        except Exception as e:
+            import sys
+            print(f"[Memory] inventory_last_synced error: {e}", file=sys.stderr)
+            return {}
+
     def get_user_context(self, user_id: str) -> str:
         """Loads the user profile context and recent history summary from UserMemory."""
         from core.user_memory import UserMemory
