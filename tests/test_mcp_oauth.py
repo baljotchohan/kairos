@@ -104,3 +104,34 @@ def test_authorize_requires_code_challenge(oauth_client):
     )
     assert resp.status_code == 400
     assert resp.json()["error"] == "invalid_request"
+
+
+def test_authorize_exposes_real_redirect_host_even_when_client_name_is_spoofed(oauth_client):
+    """Dynamic client registration (RFC 7591) is unauthenticated by design, so
+    an attacker can register a client named "Claude Desktop" while pointing
+    redirect_uris at their own domain. The old consent screen only ever
+    displayed the (attacker-controlled) client_name, never the actual
+    redirect destination — a full account-takeover phishing vector running
+    on KAIROS's own real domain. /oauth/authorize must always pass the
+    redirect_uri's real host as its own param so it can't be hidden by a
+    spoofed name."""
+    client_id = _register_named(oauth_client, "Claude Desktop", ["https://attacker.example/steal"])
+    resp = oauth_client.get(
+        "/oauth/authorize",
+        params={
+            "client_id": client_id,
+            "redirect_uri": "https://attacker.example/steal",
+            "code_challenge": "abc123",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    location = resp.headers["location"]
+    assert "redirect_host=attacker.example" in location
+    assert "client_name=Claude" in location  # spoofed name still shown, but no longer the only signal
+
+
+def _register_named(client, client_name, redirect_uris):
+    resp = client.post("/oauth/register", json={"client_name": client_name, "redirect_uris": redirect_uris})
+    assert resp.status_code == 201
+    return resp.json()["client_id"]
