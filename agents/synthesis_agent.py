@@ -10,6 +10,7 @@ Now inherits from BaseAgent to participate in the advanced multi-agent system.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import AsyncIterator, Any
 
@@ -20,6 +21,15 @@ from agents.base_agent import BaseAgent
 from core.memory import KairosMemory
 from core.graph import DecisionNode, exclude_conversation_nodes
 from agents.context_agent import ResolvedContext
+
+
+class ExtractionFailedError(Exception):
+    """Raised when extract_decisions() fails because the LLM call or JSON parse
+    itself failed — distinct from the model legitimately reporting "no decisions
+    here" (which returns an empty list). Callers (core/orchestrator.py's
+    _synthesize) must NOT mark the source item as processed when this is raised,
+    so the item is retried on a future ingestion cycle instead of a transient
+    failure silently and permanently deleting that decision from the pipeline."""
 
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
@@ -136,6 +146,10 @@ Date: {content_date}
 
 Extract all decisions from the above content."""
 
+        # LLM-call failure (full provider-chain exhaustion) and JSON-parse failure
+        # are both genuine extraction FAILURES, not "the model looked and found
+        # nothing" — they must raise so the caller can distinguish them and avoid
+        # marking the source item processed (see ExtractionFailedError docstring).
         try:
             response = await self._chat_completion_with_fallback(
                 messages=[
@@ -146,18 +160,22 @@ Extract all decisions from the above content."""
                 max_tokens=1200,
                 fast=True,  # high-volume ingestion → cheap/fast model tier
             )
+        except Exception as e:
+            raise ExtractionFailedError(f"LLM call failed: {e}") from e
 
+        try:
             raw = response.choices[0].message.content.strip()
             import re
             match = re.search(r"(\[.*\]|\{.*\})", raw, re.DOTALL)
             raw_json = match.group(1) if match else raw
-
             decisions_data = json.loads(raw_json)
-            if not isinstance(decisions_data, list):
-                return []
-
         except Exception as e:
-            print(f"[Synthesis] extraction error: {e}")
+            raise ExtractionFailedError(f"Failed to parse model output as JSON: {e}") from e
+
+        if not isinstance(decisions_data, list):
+            # Well-formed response, just not the expected shape (e.g. the model
+            # returned {} meaning "nothing here") — a real "no decisions found",
+            # not a failure, so [] is correct here.
             return []
 
         # Store each extracted decision
@@ -204,7 +222,13 @@ Extract all decisions from the above content."""
                 },
                 user_id=user_id or "",
             )
-            self.memory.store(node, user_id=user_id)
+            # memory.store() does a synchronous embedding-provider HTTP call (with
+            # blocking time.sleep retries on failure) plus sync SQLite writes. This
+            # deployment runs a single worker/single event loop (see Dockerfiles),
+            # so calling it inline here would stall EVERY user's live chat/WebSocket
+            # for the duration of any embedding-provider hiccup during background
+            # ingestion. Must run off the event loop.
+            await asyncio.to_thread(self.memory.store, node, user_id=user_id)
             stored.append(node)
 
         if stored:
@@ -301,13 +325,31 @@ Provide your synthesis answer:"""
                 stream=True,
             )
             answer_parts = []
-            async for chunk in response_stream:
-                if not chunk.choices:
-                    continue
-                token = chunk.choices[0].delta.content
-                if token:
-                    answer_parts.append(token)
-                    await stream_callback({"type": "token", "content": token})
+            try:
+                async for chunk in response_stream:
+                    if not chunk.choices:
+                        continue
+                    token = chunk.choices[0].delta.content
+                    if token:
+                        answer_parts.append(token)
+                        await stream_callback({"type": "token", "content": token})
+            except Exception as e:
+                # _chat_completion_with_fallback already committed to a provider
+                # for this call — the connection then died mid-generation
+                # (timeout, provider restart, in-stream error). Tokens have
+                # ALREADY reached the client, so there's no clean "try the next
+                # provider" here without duplicating what the user already saw.
+                # Close out with whatever was generated instead of letting this
+                # propagate as a generic top-level failure that discards a
+                # half-delivered answer.
+                print(f"[Synthesis] stream interrupted mid-answer: {e}")
+                note = "\n\n_(response cut short — connection to the model was interrupted)_"
+                if answer_parts:
+                    answer_parts.append(note)
+                else:
+                    answer_parts = ["I started generating a response but the connection was interrupted before any content came through. Please try again."]
+                if stream_callback:
+                    await stream_callback({"type": "token", "content": answer_parts[-1]})
             answer = "".join(answer_parts)
         else:
             # Call LLM non-streaming
