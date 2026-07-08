@@ -306,17 +306,36 @@ def _tool_store_context(memory, user_id: str, decision: str, context: str,
 
 def _tool_search_decisions(memory, user_id: str, topic: str = None, date_from: str = None,
                            date_to: str = None, person: str = None, project: str = None) -> str:
-    # Use the real KairosMemory API — structured_search supports topic, person, date range.
+    if not topic and not project and not person and not date_from and not date_to:
+        return "KAIROS: Please provide at least one search filter (topic, person, project, date range)."
+
+    # DecisionNode has no `project` column — store_context() saves it as a topic
+    # (topics=[project]), so project must be searched the same way, not filtered
+    # via getattr() on a nonexistent attribute (which silently matched nothing).
+    # Mirrors mcp_server.py's stdio-transport implementation of this same tool.
+    search_topic = topic
+    if project and not topic:
+        search_topic = project
+    elif project and topic:
+        search_topic = topic  # topic takes priority; project is secondary
+
     nodes = memory.structured_search(
-        topic=topic,
+        topic=search_topic,
         date_from=date_from,
         date_to=date_to,
         person=person,
         user_id=user_id,
     )
-    # Client-side project filter (structured_search doesn't have a project column filter)
-    if project:
-        nodes = [n for n in nodes if getattr(n, "project", None) == project]
+
+    if project and topic:
+        project_nodes = memory.structured_search(
+            topic=project, person=person, date_from=date_from, date_to=date_to, user_id=user_id,
+        )
+        seen = {n.id for n in nodes}
+        for n in project_nodes:
+            if n.id not in seen:
+                nodes.append(n)
+                seen.add(n.id)
 
     if not nodes:
         return "KAIROS: No decisions found matching the specified search filters."
@@ -496,12 +515,21 @@ async def _handle_message(msg: dict, memory, orchestrator, user_id: str, request
     if method == "tools/call":
         name = params.get("name")
         args = params.get("arguments") or {}
+        client_name = (request.headers.get("user-agent", "") if request else "") or "Remote MCP client"
         try:
             text = await _call_tool(memory, orchestrator, user_id, name, args)
+            from core.mcp_telemetry import log_tool_call
+            log_tool_call(user_id, name, transport="remote", client_name=client_name, status="success")
             return _result(req_id, {"content": [{"type": "text", "text": text}], "isError": False})
         except Exception as e:
-            log.warning("MCP tool '%s' failed for %s", name, user_id, exc_info=True)
-            return _result(req_id, {"content": [{"type": "text", "text": f"Tool error: {e}"}], "isError": True})
+            # Log the real exception server-side only — interpolating str(e)
+            # into the client-facing text can leak SQL error text, connector
+            # API error bodies, or internal paths to whoever holds a valid
+            # per-user bearer token.
+            log.warning("MCP tool '%s' failed for %s: %s", name, user_id, e, exc_info=True)
+            from core.mcp_telemetry import log_tool_call
+            log_tool_call(user_id, name, transport="remote", client_name=client_name, detail=str(e), status="error")
+            return _result(req_id, {"content": [{"type": "text", "text": "Tool execution failed. Please try again."}], "isError": True})
 
     return _error(req_id, -32601, f"Method not found: {method}")
 
