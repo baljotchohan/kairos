@@ -47,35 +47,44 @@ class KairosState(TypedDict):
     status: str
 
 
-# ── Connection-status fast path ───────────────────────────────────────────────
-# "Which apps am I connected to?" is a factual question about system state — it
-# must be answered from the real token store, NEVER by an LLM that could route it
-# to the greeting path and cheerfully invent a connected-apps list. This is the
-# single biggest hallucination risk on the chat surface, so it's handled here
-# deterministically before intent classification ever runs.
+# ── Live-tool request detection (routes to the LiveDataAgent) ──────────────────
+# Anything about the user's connected tools/apps — their status OR their live
+# data — is answered by the LiveDataAgent, which makes a REAL LLM call over REAL
+# connector output (list_connected_sources / dashboard_snapshot / per-tool
+# tools) and returns a structured answer. We do NOT hand-write template replies.
+#
+# These detectors exist only to CORRECT the LLM intent classifier when it
+# mislabels such a request as search/summary/greeting — where it would otherwise
+# die in the memory-search path with "I wasn't able to generate a response".
+# A why/decided/decision question about a tool is deliberately NOT rerouted:
+# that is genuine decision history and belongs in memory search.
 
-# display name → oauth_tokens storage key (Gmail + Drive share the one Google grant)
-_CONNECTABLE_SOURCES: list[tuple[str, str]] = [
-    ("Slack", "slack"),
-    ("Gmail", "google"),
-    ("Google Drive", "google"),
-    ("Notion", "notion"),
-    ("Jira", "jira"),
-    ("Zoom", "zoom"),
-    ("GitHub", "github"),
-]
+_LIVE_SOURCE_TERMS = (
+    "notion", "slack", "gmail", "email", "emails", "drive", "google drive",
+    "jira", "ticket", "tickets", "zoom", "recording", "recordings",
+    "github", "repo", "repos", "repository", "repositories",
+    "pull request", "pull requests", " pr ", " prs", "message", "messages",
+)
+# Phrases that mean "across all my connected tools at once" → dashboard snapshot.
+_ALL_TOOLS_TERMS = (
+    "all tools", "all my tools", "every tool", "all apps", "all my apps",
+    "all the apps", "all sources", "all my sources", "connected apps",
+    "connected tools", "connected sources", "all connected", "everything connected",
+    "all my data", "all data",
+)
+# A history/reasoning question about a tool ("why did we pick Slack") belongs in
+# search, NOT live_data — these terms veto the reroute.
+_DECISION_TERMS = ("why ", "decide", "decided", "decision", "chose", "choose", "rationale", "reason ")
 
 _CONN_STATUS_NOUNS = ("app", "tool", "source", "integration", "connector", "account", "service")
 
 
 def _is_connection_status_question(question: str) -> bool:
-    """True only for genuine 'what am I connected to' status questions.
-
-    Deliberately tight: requires the word 'connect' AND either an
-    apps/tools/sources-type noun, an 'anything/everything' quantifier, or the
-    bare 'what's connected' form — so it never hijacks a real decision question
-    that merely happens to contain the word 'connect' (e.g. 'why did we decide
-    to connect our CRM to Salesforce in 2019')."""
+    """True for 'what am I connected to' style questions. Requires the word
+    'connect' plus an apps/tools noun / quantifier — so it never fires on a real
+    decision question that merely contains 'connect' (e.g. 'why did we decide to
+    connect our CRM in 2019', which is vetoed by the decision-terms check at the
+    call site)."""
     ql = question.lower().strip()
     if "connect" not in ql:
         return False
@@ -88,79 +97,19 @@ def _is_connection_status_question(question: str) -> bool:
     return False
 
 
-def _connected_source_names(user_id: str) -> list[str]:
-    """Read the real per-user token store and return connected source display names."""
-    from api.routes.oauth import _get_token
-
-    storage_state: dict[str, bool] = {}
-    connected: list[str] = []
-    for display, storage in _CONNECTABLE_SOURCES:
-        if storage not in storage_state:
-            tok = _get_token(user_id, storage)
-            storage_state[storage] = bool(tok and not tok.get("disconnected"))
-        if storage_state[storage]:
-            connected.append(display)
-    return connected
-
-
-def _build_connection_status_answer(user_id: str) -> str:
-    """Factual, LLM-free answer listing connected vs. not-connected sources."""
-    all_sources = [display for display, _ in _CONNECTABLE_SOURCES]
-    connected = _connected_source_names(user_id)
-    not_connected = [s for s in all_sources if s not in connected]
-
-    if not connected:
-        lines = [
-            "**You're not connected to any apps yet.**",
-            "",
-            "Go to **KAIROS → Connectors** and connect any of these to start:",
-            "",
-        ]
-        lines += [f"- {s}" for s in all_sources]
-        return "\n".join(lines)
-
-    n = len(connected)
-    lines = [f"**You're connected to {n} source{'' if n == 1 else 's'}.**", "", "## ✅ Connected", ""]
-    lines += [f"- {s}" for s in connected]
-    if not_connected:
-        lines += ["", "## ⚪ Not connected yet", ""]
-        lines += [f"- {s}" for s in not_connected]
-        lines += ["", "Connect more from **KAIROS → Connectors**."]
-    return "\n".join(lines)
-
-
-# ── Live-source request safety net ────────────────────────────────────────────
-# Naming a connected tool (Notion/Slack/Gmail/Drive/Jira/Zoom/GitHub) with a
-# list/show/get verb ALWAYS means "fetch from that tool" — never "search stored
-# decision memory". The LLM intent classifier sometimes routes these to
-# search/summary anyway (esp. "list all …", which reads like an aggregation),
-# and they then die in the synthesis agent with "I wasn't able to generate a
-# response". This deterministic override guarantees such requests reach the
-# LiveDataAgent regardless of classifier drift.
-
-_LIVE_SOURCE_TERMS = (
-    "notion", "slack", "gmail", "email", "emails", "drive", "google drive",
-    "jira", "ticket", "tickets", "zoom", "recording", "recordings",
-    "github", "repo", "repos", "repository", "repositories",
-    "pull request", "pull requests", " pr ", " prs",
-)
-_LIVE_RETRIEVAL_VERBS = (
-    "list", "show", "get ", "fetch", "count", "how many", "what's in",
-    "whats in", "what is in", "all my", "all data", "all the", "everything",
-    "recent", "give me", "pull up", "display", "what are my", "what do i have",
-)
-# A history/reasoning question about a tool ("why did we pick Slack") belongs in
-# search, NOT live_data — these terms veto the reroute.
-_DECISION_TERMS = ("why ", "decide", "decided", "decision", "chose", "choose", "rationale", "reason ")
-
-
 def _looks_like_live_source_request(question: str) -> bool:
+    """True when the question is about the user's live tools/apps and should be
+    answered by fetching from them — not by searching stored decision memory.
+
+    Fires when the query names a concrete tool (Slack/Notion/Gmail/…) OR uses an
+    'all my tools/apps' phrase, and is NOT a why/decided/decision question. The
+    verb is intentionally NOT required: real users phrase these loosely ('use
+    slack see any messages', 'notion data'), and a rigid verb list left holes
+    that dropped such requests into the failing memory-search path."""
     ql = f" {question.lower()} "
-    if not any(t in ql for t in _LIVE_SOURCE_TERMS):
-        return False
     if any(t in ql for t in _DECISION_TERMS):
         return False
-    return any(v in ql for v in _LIVE_RETRIEVAL_VERBS)
+    return any(t in ql for t in _LIVE_SOURCE_TERMS) or any(t in ql for t in _ALL_TOOLS_TERMS)
 
 
 # ── Orchestrator ──────────────────────────────────────────────────────────────
@@ -515,39 +464,6 @@ class KairosOrchestrator:
         # Verify/ensure the session exists in SQLite
         session_id = await asyncio.to_thread(self.user_memory.get_or_create_session, user_id, session_id)
 
-        # 0. Connection-status fast path — "which apps am I connected to?" is a
-        # factual system-state question. Answer it directly from the real token
-        # store instead of letting an LLM (which could misroute it to the
-        # greeting path) invent a connected-apps list. No LLM, no hallucination.
-        if _is_connection_status_question(question):
-            answer = await asyncio.to_thread(_build_connection_status_answer, user_id)
-            if stream_callback:
-                for _tok in re.split(r"(\s+)", answer):
-                    if _tok:
-                        await stream_callback({"type": "token", "content": _tok})
-                        await asyncio.sleep(0.004)
-            await asyncio.to_thread(
-                self.user_memory.store_message,
-                user_id=user_id, session_id=session_id,
-                role="user", content=question, query_intent="connection_status",
-            )
-            await asyncio.to_thread(
-                self.user_memory.store_message,
-                user_id=user_id, session_id=session_id,
-                role="assistant", content=answer, query_intent="connection_status",
-                metadata={"sources": [], "confidence": 1.0},
-            )
-            return {
-                "answer": answer,
-                "sources": [],
-                "intent": {"intent": "connection_status", "confidence": 1.0, "entities": {},
-                           "search_strategy": "none", "requires_history": False, "rewritten_query": question},
-                "confidence": 1.0,
-                "traces": [],
-                "session_id": session_id,
-                "user_context": {},
-            }
-
         # Per-request agent instances. The query agents hold per-user mutable state
         # (_current_user_id, _connectors, _collected_sources, _trace), so a single
         # shared instance would interleave/leak state across concurrent users.
@@ -570,13 +486,18 @@ class KairosOrchestrator:
         history = await asyncio.to_thread(self.user_memory.get_current_session_context, user_id, max_turns=6, session_id=session_id)
         intent = await intent_agent.classify(question, conversation_history=history)
 
-        # Deterministic safety net: a request that names a connected tool with a
-        # retrieval verb ("list all data in notion", "show my github repos") must
-        # hit the LiveDataAgent, not the memory-search path where it dies with
-        # "I wasn't able to generate a response". Correct classifier drift here.
-        if intent.intent in ("search", "summary") and _looks_like_live_source_request(question):
-            log.info("Rerouting %r from %s → live_data (named live source + retrieval verb)", question[:60], intent.intent)
-            intent.intent = "live_data"
+        # Deterministic safety net → route anything about the user's tools/apps to
+        # the LiveDataAgent, which answers with a REAL LLM call over REAL connector
+        # output (not a canned template). This catches classifier drift where a
+        # question about connected tools ("list all data from my connected apps",
+        # "use slack, see my messages", "which apps am I connected to") gets
+        # labeled search/summary/greeting and dies in the memory-search path with
+        # "I wasn't able to generate a response". A why/decided/decision question
+        # about a tool is explicitly NOT rerouted — that belongs in memory search.
+        if intent.intent in ("search", "summary", "greeting", "general_qa"):
+            if _is_connection_status_question(question) or _looks_like_live_source_request(question):
+                log.info("Rerouting %r from %s → live_data (tool/app/connection request)", question[:60], intent.intent)
+                intent.intent = "live_data"
 
         if stream_callback:
             await stream_callback({
