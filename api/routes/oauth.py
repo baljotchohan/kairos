@@ -477,11 +477,20 @@ async def github_callback(code: str = None, state: str = None, error: str = None
             except Exception:
                 pass
 
-        _store_token(verified_uid, "github", {
+        token_row = {
             "access_token": access_token,
             "username": username,
             "service": "github",
-        })
+        }
+        # GitHub only issues these if the OAuth App has "Enable token expiration"
+        # turned on (an app-level, user-toggleable setting) — capture them when
+        # present so github_connector.py can refresh instead of permanently
+        # 401ing once the short-lived token expires (~8h).
+        if data.get("refresh_token"):
+            import time as _time
+            token_row["refresh_token"] = data["refresh_token"]
+            token_row["expires_at"] = int(_time.time()) + int(data.get("expires_in", 28800))
+        _store_token(verified_uid, "github", token_row)
         print(f"[OAuth] ✅ GitHub connected uid={verified_uid} user={username}")
         return _popup_success("GitHub", f"Connected as {username}")
 
