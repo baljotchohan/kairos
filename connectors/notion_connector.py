@@ -24,6 +24,40 @@ class NotionConnector:
             "Content-Type": "application/json",
         }
 
+    # ── Rate-limit-aware request ──────────────────────────────────────────────
+
+    async def _request_with_retry(self, client: httpx.AsyncClient, method: str, url: str,
+                                   json: dict | None = None, params: dict | None = None,
+                                   max_retries: int = 3) -> httpx.Response:
+        """A bare `resp.raise_for_status()` made a 429 indistinguishable from
+        any other error to the pagination loops below — they catch broadly and
+        just stop paging, so a rate-limited request silently returned whatever
+        partial data had already been fetched as if it were complete. Notion
+        sends a `Retry-After` header on 429s; this respects it and retries a
+        bounded number of times before finally raising."""
+        resp = None
+        for attempt in range(max_retries + 1):
+            resp = await client.request(method, url, headers=self._headers, json=json, params=params)
+            if resp.status_code == 429 and attempt < max_retries:
+                wait = self._retry_wait_seconds(resp)
+                print(f"[NotionConnector] Rate limited on {url} — retrying in {wait:.0f}s (attempt {attempt + 1}/{max_retries})")
+                await asyncio.sleep(wait)
+                continue
+            resp.raise_for_status()
+            return resp
+        resp.raise_for_status()
+        return resp
+
+    @staticmethod
+    def _retry_wait_seconds(resp: httpx.Response) -> float:
+        retry_after = resp.headers.get("retry-after")
+        if retry_after:
+            try:
+                return min(float(retry_after), 60.0)
+            except ValueError:
+                pass
+        return 2.0
+
     # ── Public async API ───────────────────────────────────────────────────────
 
     async def search_pages(self, days_back: int = 30) -> list[dict]:
@@ -42,12 +76,7 @@ class NotionConnector:
                     payload["start_cursor"] = start_cursor
 
                 try:
-                    resp = await client.post(
-                        f"{NOTION_API_BASE}/search",
-                        headers=self._headers,
-                        json=payload,
-                    )
-                    resp.raise_for_status()
+                    resp = await self._request_with_retry(client, "POST", f"{NOTION_API_BASE}/search", json=payload)
                     data = resp.json()
                 except Exception as e:
                     print(f"[NotionConnector] search error: {e}")
@@ -87,8 +116,7 @@ class NotionConnector:
                     params["start_cursor"] = start_cursor
 
                 try:
-                    resp = await client.get(url, headers=self._headers, params=params)
-                    resp.raise_for_status()
+                    resp = await self._request_with_retry(client, "GET", url, params=params)
                     data = resp.json()
                 except Exception as e:
                     print(f"[NotionConnector] blocks error ({block_id}): {e}")
@@ -126,12 +154,9 @@ class NotionConnector:
                     payload["start_cursor"] = start_cursor
 
                 try:
-                    resp = await client.post(
-                        f"{NOTION_API_BASE}/databases/{database_id}/query",
-                        headers=self._headers,
-                        json=payload,
+                    resp = await self._request_with_retry(
+                        client, "POST", f"{NOTION_API_BASE}/databases/{database_id}/query", json=payload,
                     )
-                    resp.raise_for_status()
                     data = resp.json()
                 except Exception as e:
                     print(f"[NotionConnector] database query error ({database_id}): {e}")
