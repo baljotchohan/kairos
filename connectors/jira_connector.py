@@ -187,6 +187,40 @@ class JiraConnector:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._get_issue_sync, issue_key)
 
+    # ── Rate-limit-aware request (sync — these run inside run_in_executor) ────
+
+    def _request_with_retry(self, method: str, url: str, max_retries: int = 3, **kwargs) -> httpx.Response:
+        """A bare `resp.raise_for_status()` made a 429 indistinguishable from
+        any other error to the sync call sites below — they catch broadly and
+        just stop paginating/return partial data, so a rate-limited request
+        silently returned whatever had already been fetched as if it were
+        complete. Jira Cloud sends a `Retry-After` header on 429s; this
+        respects it and retries a bounded number of times before finally
+        raising."""
+        headers = kwargs.pop("headers", self._headers)
+        resp = None
+        for attempt in range(max_retries + 1):
+            resp = httpx.request(method, url, auth=self._auth, headers=headers, **kwargs)
+            if resp.status_code == 429 and attempt < max_retries:
+                wait = self._retry_wait_seconds(resp)
+                print(f"[JiraConnector] Rate limited on {url} — retrying in {wait:.0f}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            return resp
+        resp.raise_for_status()
+        return resp
+
+    @staticmethod
+    def _retry_wait_seconds(resp: httpx.Response) -> float:
+        retry_after = resp.headers.get("retry-after")
+        if retry_after:
+            try:
+                return min(float(retry_after), 60.0)
+            except ValueError:
+                pass
+        return 2.0
+
     # ── Sync internals ─────────────────────────────────────────────────────────
 
     def _get_issues_sync(self, days_back: int) -> list[dict]:
@@ -225,14 +259,11 @@ class JiraConnector:
 
     def _get_projects_sync(self) -> list[dict]:
         try:
-            resp = httpx.get(
-                f"{self._base}/rest/api/3/project/search",
-                auth=self._auth,
-                headers=self._headers,
+            resp = self._request_with_retry(
+                "GET", f"{self._base}/rest/api/3/project/search",
                 params={"maxResults": 50, "orderBy": "lastIssueUpdatedTime"},
                 timeout=20,
             )
-            resp.raise_for_status()
             projects = []
             for p in resp.json().get("values", []):
                 projects.append({
@@ -260,14 +291,12 @@ class JiraConnector:
             safe = status_name.replace('"', '\\"')
             jql = f'status = "{safe}"'
             try:
-                resp = httpx.post(
-                    f"{self._base}/rest/api/3/search/jql",
-                    auth=self._auth,
+                resp = self._request_with_retry(
+                    "POST", f"{self._base}/rest/api/3/search/jql",
                     json={"jql": jql, "maxResults": 0, "fields": []},
                     headers={**self._headers, "Content-Type": "application/json"},
                     timeout=15,
                 )
-                resp.raise_for_status()
                 count = resp.json().get("total", 0)
                 if count > 0:
                     stats["by_status"][status_name] = count
@@ -282,14 +311,11 @@ class JiraConnector:
             params = {"maxResults": 10}
             if project_key:
                 params["projectKeyOrId"] = project_key
-            resp = httpx.get(
-                f"{self._base}/rest/agile/1.0/board",
-                auth=self._auth,
-                headers=self._headers,
+            resp = self._request_with_retry(
+                "GET", f"{self._base}/rest/agile/1.0/board",
                 params=params,
                 timeout=20,
             )
-            resp.raise_for_status()
             boards = resp.json().get("values", [])
             if not boards:
                 return {"error": "No Scrum/Kanban boards found."}
@@ -299,14 +325,11 @@ class JiraConnector:
                 board_id = board.get("id")
                 board_name = board.get("name", "")
                 try:
-                    sprint_resp = httpx.get(
-                        f"{self._base}/rest/agile/1.0/board/{board_id}/sprint",
-                        auth=self._auth,
-                        headers=self._headers,
+                    sprint_resp = self._request_with_retry(
+                        "GET", f"{self._base}/rest/agile/1.0/board/{board_id}/sprint",
                         params={"state": "active"},
                         timeout=15,
                     )
-                    sprint_resp.raise_for_status()
                     sprints = sprint_resp.json().get("values", [])
                     for s in sprints:
                         result["boards"].append({
@@ -326,13 +349,10 @@ class JiraConnector:
 
     def _get_issue_sync(self, issue_key: str) -> Optional[dict]:
         try:
-            resp = httpx.get(
-                f"{self._base}/rest/api/3/issue/{issue_key}",
-                auth=self._auth,
-                headers=self._headers,
+            resp = self._request_with_retry(
+                "GET", f"{self._base}/rest/api/3/issue/{issue_key}",
                 timeout=20,
             )
-            resp.raise_for_status()
             return self._parse_issue(resp.json())
         except Exception as e:
             print(f"[JiraConnector] get_issue error ({issue_key}): {e}")
@@ -390,14 +410,12 @@ class JiraConnector:
                 if next_page_token:
                     body["nextPageToken"] = next_page_token
 
-                resp = httpx.post(
-                    f"{self._base}/rest/api/3/search/jql",
-                    auth=self._auth,
+                resp = self._request_with_retry(
+                    "POST", f"{self._base}/rest/api/3/search/jql",
                     json=body,
                     headers={**self._headers, "Content-Type": "application/json"},
                     timeout=30,
                 )
-                resp.raise_for_status()
                 data = resp.json()
                 page_issues = data.get("issues", [])
                 issues.extend(page_issues)
@@ -412,13 +430,10 @@ class JiraConnector:
 
     def _get_comments(self, issue_key: str) -> list[str]:
         try:
-            resp = httpx.get(
-                f"{self._base}/rest/api/3/issue/{issue_key}/comment",
-                auth=self._auth,
-                headers=self._headers,
+            resp = self._request_with_retry(
+                "GET", f"{self._base}/rest/api/3/issue/{issue_key}/comment",
                 timeout=20,
             )
-            resp.raise_for_status()
             comments = []
             for c in resp.json().get("comments", [])[:10]:
                 author = (c.get("author") or {}).get("displayName", "Unknown")
