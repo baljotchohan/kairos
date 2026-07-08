@@ -8,10 +8,11 @@ epoch embedded in the token, invalidating everything issued at the old epoch.
 """
 
 import sqlite3
+from unittest.mock import patch
 
 import pytest
 
-from core.mcp_auth import mint_mcp_token, verify_mcp_token, revoke_mcp_tokens, _sign_legacy
+from core.mcp_auth import mint_mcp_token, verify_mcp_token, revoke_mcp_tokens, _sign_legacy, _EpochLookupFailed
 
 
 @pytest.fixture(autouse=True)
@@ -108,3 +109,28 @@ def test_revoke_is_idempotent_and_safe_to_call_repeatedly():
     assert verify_mcp_token(token1) is None
     assert verify_mcp_token(token2) is None
     assert verify_mcp_token(token3) == "user-a"
+
+
+def test_verify_fails_closed_when_epoch_lookup_errors():
+    """A transient DB error during verification must NOT be treated as
+    "epoch 0" — any epoch-0 token (including every legacy 2-part token, and
+    any token minted before a user's first revoke) would then incorrectly
+    re-validate during that failure window, defeating revocation exactly
+    when it matters most."""
+    token = mint_mcp_token("user-c")
+    assert verify_mcp_token(token) == "user-c"
+
+    import core.mcp_auth as mcp_auth_mod
+    with patch.object(mcp_auth_mod, "_get_epoch_strict", side_effect=_EpochLookupFailed("db locked")):
+        assert verify_mcp_token(token) is None
+
+
+def test_mint_still_succeeds_when_epoch_lookup_errors():
+    """Minting is not a security check the way verification is — the worst
+    case of failing open here is a token embedding a stale epoch, which
+    self-corrects (fails its own verification) rather than granting access
+    it shouldn't."""
+    import core.mcp_auth as mcp_auth_mod
+    with patch.object(mcp_auth_mod, "_get_epoch_strict", side_effect=_EpochLookupFailed("db locked")):
+        token = mint_mcp_token("user-d")
+    assert token
