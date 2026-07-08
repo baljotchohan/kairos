@@ -61,11 +61,19 @@ body {
 }
 
 /* Theme smooth color changes (excluding graph elements) */
+body,
+header,
+aside,
+main,
+nav,
+.p-8,
+.p-6,
+.rounded-2xl,
+.border-b,
 .theme-transition {
-  transition: background-color 0.25s var(--ease-out-quint),
-    border-color 0.25s var(--ease-out-quint),
-    color 0.25s var(--ease-out-quint),
-    fill 0.25s var(--ease-out-quint);
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Custom scrollbar — thin, smooth, fades on hover */

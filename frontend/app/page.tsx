@@ -138,15 +138,15 @@ function SiteBackground() {
     if (!ctx) return;
 
     let raf = 0;
-    let w = 0, h = 0;
+    let w = 0, h = 0, virtualH = 0;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     type BgNode = { x: number; y: number; vx: number; vy: number; r: number; side: "L" | "R" };
     let nodes: BgNode[] = [];
 
     const resize = () => {
       w = window.innerWidth;
-      // Use full document height so nodes span the whole page
-      h = Math.max(document.documentElement.scrollHeight, window.innerHeight);
+      h = window.innerHeight;
+      virtualH = Math.max(document.documentElement.scrollHeight, window.innerHeight);
       canvas.width = w * dpr;
       canvas.height = h * dpr;
       canvas.style.width = `${w}px`;
@@ -154,11 +154,11 @@ function SiteBackground() {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const strip = w * 0.17;
-      const perSide = Math.min(55, Math.floor(h / 75));
+      const perSide = Math.min(55, Math.floor(virtualH / 75));
       nodes = [
         ...Array.from({ length: perSide }, () => ({
           x: Math.random() * strip,
-          y: Math.random() * h,
+          y: Math.random() * virtualH,
           vx: (Math.random() - 0.5) * 0.2,
           vy: (Math.random() - 0.5) * 0.2,
           r: Math.random() * 1.6 + 0.9,
@@ -166,7 +166,7 @@ function SiteBackground() {
         })),
         ...Array.from({ length: perSide }, () => ({
           x: w - strip + Math.random() * strip,
-          y: Math.random() * h,
+          y: Math.random() * virtualH,
           vx: (Math.random() - 0.5) * 0.2,
           vy: (Math.random() - 0.5) * 0.2,
           r: Math.random() * 1.6 + 0.9,
@@ -179,6 +179,8 @@ function SiteBackground() {
       if (!w || !h) { raf = requestAnimationFrame(draw); return; }
       ctx.clearRect(0, 0, w, h);
       const strip = w * 0.17;
+      
+      // Update drift positions (always active in background)
       for (const n of nodes) {
         n.x += n.vx;
         n.y += n.vy;
@@ -189,34 +191,52 @@ function SiteBackground() {
           if (n.x < w - strip) n.vx = Math.abs(n.vx);
           if (n.x > w) n.vx = -Math.abs(n.vx);
         }
-        if (n.y < 0 || n.y > h) n.vy *= -1;
+        if (n.y < 0) n.y = virtualH;
+        if (n.y > virtualH) n.y = 0;
       }
-      // edges — color by midpoint Y position
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const a = nodes[i], b = nodes[j];
+
+      const scrollY = window.scrollY;
+      const viewportH = window.innerHeight;
+
+      // Filter nodes visible on screen (plus a buffer zone)
+      const visibleNodes = nodes.filter(n => {
+        const screenY = n.y - scrollY;
+        return screenY >= -100 && screenY <= viewportH + 100;
+      });
+
+      // Draw edges only among visible nodes
+      for (let i = 0; i < visibleNodes.length; i++) {
+        for (let j = i + 1; j < visibleNodes.length; j++) {
+          const a = visibleNodes[i], b = visibleNodes[j];
           if (a.side !== b.side) continue;
-          const d = Math.hypot(a.x - b.x, a.y - b.y);
+
+          const screenYA = a.y - scrollY;
+          const screenYB = b.y - scrollY;
+
+          const d = Math.hypot(a.x - b.x, screenYA - screenYB);
           if (d < 155) {
-            const c = sectionColor((a.y + b.y) / 2, h);
+            const c = sectionColor((a.y + b.y) / 2, virtualH);
             const op = (1 - d / 155) * 0.6;
             ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},${op})`;
             ctx.lineWidth = 0.85;
             ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
-            ctx.lineTo(b.x, b.y);
+            ctx.moveTo(a.x, screenYA);
+            ctx.lineTo(b.x, screenYB);
             ctx.stroke();
           }
         }
       }
-      // nodes — brighter, color by Y
-      for (const n of nodes) {
-        const c = sectionColor(n.y, h);
+
+      // Draw visible nodes
+      for (const n of visibleNodes) {
+        const screenY = n.y - scrollY;
+        const c = sectionColor(n.y, virtualH);
         ctx.beginPath();
-        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+        ctx.arc(n.x, screenY, n.r, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},0.72)`;
         ctx.fill();
       }
+
       raf = requestAnimationFrame(draw);
     };
 
@@ -229,7 +249,7 @@ function SiteBackground() {
   return (
     <canvas
       ref={canvasRef}
-      className="absolute top-0 left-0 pointer-events-none"
+      className="fixed inset-0 w-full h-full pointer-events-none"
       style={{
         zIndex: 1,
         mixBlendMode: "screen",
@@ -332,6 +352,9 @@ function Magnetic({
 /* ── Hero constellation (canvas) ─────────────────────────────────────────── */
 function Constellation({ scrollOpacity }: { scrollOpacity: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const opacityRef = useRef(scrollOpacity);
+  opacityRef.current = scrollOpacity;
+  const loopRunningRef = useRef(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -368,6 +391,12 @@ function Constellation({ scrollOpacity }: { scrollOpacity: number }) {
 
     let frame = 0;
     const draw = () => {
+      if (opacityRef.current <= 0.01) {
+        loopRunningRef.current = false;
+        raf = 0;
+        return;
+      }
+      loopRunningRef.current = true;
       frame++;
       ctx.clearRect(0, 0, w, h);
       for (const n of nodes) {
@@ -412,7 +441,9 @@ function Constellation({ scrollOpacity }: { scrollOpacity: number }) {
       draw();
       cancelAnimationFrame(raf);
     } else {
-      draw();
+      if (opacityRef.current > 0.01) {
+        draw();
+      }
     }
 
     const onMouse = (e: MouseEvent) => {
@@ -422,12 +453,29 @@ function Constellation({ scrollOpacity }: { scrollOpacity: number }) {
     };
     window.addEventListener("resize", resize);
     window.addEventListener("mousemove", onMouse);
+
+    const triggerStart = () => {
+      if (!loopRunningRef.current && !reduce) {
+        draw();
+      }
+    };
+    (canvas as any).__triggerStart = triggerStart;
+
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
       window.removeEventListener("mousemove", onMouse);
     };
   }, []);
+
+  useEffect(() => {
+    if (scrollOpacity > 0.01) {
+      const canvas = canvasRef.current;
+      if (canvas && (canvas as any).__triggerStart) {
+        (canvas as any).__triggerStart();
+      }
+    }
+  }, [scrollOpacity]);
 
   return (
     <canvas
