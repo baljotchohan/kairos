@@ -9,7 +9,7 @@ KAIROS is a **Company Organizational Memory OS** — AI agents connect to a pers
 **Hackathon:** AMD Developer Hackathon ACT II — deadline July 11, 2026. $10K+ prize.
 **Demo company name for all fake data:** Helios Tech (gated behind `DEMO_USER_ID` / `DEMO_LOGIN_EMAIL` — real users never see it).
 
-**Architecture model:** KAIROS is **per-user**, not company-wide-admin-installed. Each signed-in user connects their own Slack/Gmail/Drive/Notion/Zoom via OAuth from `/integrations`, and every memory read/write is scoped to their `user_id`. Jira is the one exception — it still uses a single global service-account credential, usable only by the user named in `JIRA_OWNER_UID`, pending per-user Jira OAuth.
+**Architecture model:** KAIROS is **per-user**, not company-wide-admin-installed. Each signed-in user connects their own Slack/Gmail/Drive/Notion/Zoom/Jira/GitHub via OAuth from `/integrations`, and every memory read/write is scoped to their `user_id`. Per-user Jira OAuth (full 3LO flow with Atlassian cloud_id resolution + refresh tokens, `api/routes/oauth.py`'s `jira_start`/`jira_callback` + `connectors/jira_connector.py`) is **fully implemented in code** — it's just not live in this deployment because `JIRA_CLIENT_ID`/`JIRA_CLIENT_SECRET` were never registered at developer.atlassian.com and set in `.env` (a one-time external credential-provisioning step, not a code gap; see `.env.example`). Until that's done, Jira falls back to a single global service-account credential, usable only by the user named in `JIRA_OWNER_UID`. Zoom has a narrower equivalent fallback: Server-to-Server auth against one global `ZOOM_CLIENT_ID`/`ZOOM_ACCOUNT_ID`, gated to `ZOOM_OWNER_UID` and explicitly disabled (`allow_s2s=False`) for every other user's connector.
 
 ## Commands
 
@@ -182,7 +182,7 @@ All defined in `config.py`. Copy `.env.example` → `.env`. Key vars:
 - **LLM (priority order):** `FIREWORKS_API_KEY` / `FIREWORKS_MODEL` (default `qwen3p7-plus`) / `FIREWORKS_MODEL_FAST` (default `llama-v3p3-70b-instruct`) — required for AMD hackathon compliance; `GROQ_API_KEY` / `GROQ_MODEL`; `GEMINI_API_KEY` / `GEMINI_MODEL` / `GEMINI_EMBED_MODEL` — fallback chain, all optional but recommended for resilience
 - **Memory paths:** `CHROMA_PERSIST_DIR`, `SQLITE_PATH`, `OBSIDIAN_VAULT`
 - **Security:** `TOKEN_ENCRYPTION_KEY` (Fernet key for stored OAuth tokens), `MCP_CONNECT_SECRET` (signs MCP tokens; also used as an oauth-state fallback secret), `FIREBASE_SERVICE_ACCOUNT` (JSON, or use `GOOGLE_APPLICATION_CREDENTIALS` / ADC)
-- **Connectors:** `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN` / `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET`; `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REFRESH_TOKEN` (Gmail + Drive share one grant); `ZOOM_ACCOUNT_ID` / `ZOOM_CLIENT_ID` / `ZOOM_CLIENT_SECRET`; `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET`; `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` (real per-user OAuth, `repo read:user` scope); `JIRA_URL` / `JIRA_EMAIL` / `JIRA_API_TOKEN` / `JIRA_OWNER_UID` (global, single-tenant until per-user Jira OAuth ships)
+- **Connectors:** `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN` / `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET`; `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REFRESH_TOKEN` (Gmail + Drive share one grant); `ZOOM_ACCOUNT_ID` / `ZOOM_CLIENT_ID` / `ZOOM_CLIENT_SECRET`; `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET`; `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` (real per-user OAuth, `repo read:user` scope); `JIRA_URL` / `JIRA_EMAIL` / `JIRA_API_TOKEN` / `JIRA_OWNER_UID` (global fallback credential) plus `JIRA_CLIENT_ID` / `JIRA_CLIENT_SECRET` (real per-user OAuth — code is complete, just needs these two values registered at developer.atlassian.com; currently unset in this deployment, so Jira falls back to the global credential for every user)
 - **App:** `PORT` (8000), `HOST`, `DEBUG`, `FRONTEND_URL`, `BACKEND_URL`, `SEED_DEMO_DATA`, `DEMO_USER_ID`, `DEMO_LOGIN_EMAIL`
 - **Ingestion tuning:** `SLACK_LOOKBACK_DAYS` / `EMAIL_LOOKBACK_DAYS` (30), `INGEST_INTERVAL_MINUTES` (12), `MAX_MESSAGES_PER_CHANNEL` (500), `MAX_EXTRACT_PER_CYCLE` (24), `EXTRACT_DELAY_SECONDS` (4) — throttle LLM calls per ingestion cycle to stay under provider TPM limits
 
@@ -191,9 +191,9 @@ Frontend (`frontend/.env.local`, all `NEXT_PUBLIC_*`): `NEXT_PUBLIC_API_URL`, `N
 ## Current Status
 
 All 8 connectors/agents (Slack, Gmail, Drive, Jira, Zoom, Notion, GitHub, plus meeting/Zoom transcription), dual-transport MCP, WebSocket streaming, the physics-based decision graph, and fail-closed multi-tenant isolation are implemented and live (see `docs/REMOTE_MCP.md` for the remote MCP model). Known open gaps:
-- Jira is still single-tenant (global credentials, one `JIRA_OWNER_UID`) — per-user Jira OAuth is the remaining connector migration.
+- Per-user Jira OAuth is fully coded (`api/routes/oauth.py`'s `jira_start`/`jira_callback`, `connectors/jira_connector.py`'s cloud_id resolution + refresh tokens) but not live in this deployment — `JIRA_CLIENT_ID`/`JIRA_CLIENT_SECRET` were never registered at developer.atlassian.com, so Jira currently falls back to the single global `JIRA_OWNER_UID` credential for every user. Registering those and setting them in `.env` is the only remaining step, not a code change.
 - Meeting transcription needs `openai-whisper` installed locally; it's intentionally excluded from the HF Docker image, so Zoom recordings list but don't transcribe in the hosted deployment.
-- The MCP "Activity Monitor" panel in the dashboard's MCP tab renders from a simulated/hardcoded log, not live call telemetry yet.
+- The MCP "Activity Monitor" panel's backend is real (core/mcp_telemetry.py logs every tool call on both transports, `GET /api/admin/mcp-activity` serves it, the dashboard fetches it), but the actual visual panel in the MCP tab's JSX needs to be (re)built — it was removed in a prior edit, leaving the fetch wired to state nothing currently renders.
 
 ## Non-Negotiables
 
