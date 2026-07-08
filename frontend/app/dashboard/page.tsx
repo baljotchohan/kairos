@@ -79,33 +79,20 @@ const explorerDecisions = [
 
 const McpLogos = {
   claude: (
-    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor">
-      <path d="M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.5409Zm-.3712 10.2232 2.2914-5.9456 2.2914 5.9456Z" />
-    </svg>
+    <img src="/claude-logo.svg" className="w-5 h-5 shrink-0 select-none pointer-events-none" alt="Claude" />
   ),
   chatgpt: (
     <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor">
-      <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z" />
+      <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79. 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z" />
     </svg>
   ),
   cursor: (
-    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor">
-      <path d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23" />
+    <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" fill="currentColor">
+      <path d="M22.106 5.68L12.5.135a.998.998 0 00-.998 0L1.893 5.68a.84.84 0 00-.419.726v11.186c0 .3.16.577.42.727l9.607 5.547a.999.999 0 00.998 0l9.608-5.547a.84.84 0 00.42-.727V6.407a.84.84 0 00-.42-.726zm-.603 1.176L12.228 22.92c-.063.108-.228.064-.228-.061V12.34a.59.59 0 00-.295-.51l-9.11-5.26c-.107-.062-.063-.228.062-.228h18.55c.264 0 .428.286.296.514z" />
     </svg>
   ),
   antigravity: (
-    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor">
-      <defs>
-        <radialGradient id="ag-glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#d8b4fe"/>
-          <stop offset="60%" stopColor="#8b5cf6"/>
-          <stop offset="100%" stopColor="#4c1d95"/>
-        </radialGradient>
-      </defs>
-      <ellipse cx="12" cy="14" rx="9" ry="2.5" strokeWidth="1.2" transform="rotate(-15 12 14)" opacity="0.6"/>
-      <circle cx="12" cy="9.5" r="5" fill="url(#ag-glow)"/>
-      <ellipse cx="12" cy="11.5" rx="8" ry="2" strokeWidth="1.6" transform="rotate(15 12 11.5)"/>
-    </svg>
+    <img src="/antigravity.svg" className="w-5 h-5 shrink-0 select-none pointer-events-none" alt="Antigravity" />
   )
 };
 
@@ -301,6 +288,8 @@ export default function Home() {
     github: "synced",
   });
 
+  const [autoExtractionEnabled, setAutoExtractionEnabled] = useState(true);
+
   const [slackToken, setSlackToken] = useState("xoxb-8241793264-9182371239-••••••••");
   const [googleClient, setGoogleClient] = useState("9182371982-client.apps.googleusercontent.com");
   const [jiraUrl, setJiraUrl] = useState("https://company.atlassian.net");
@@ -329,19 +318,16 @@ export default function Home() {
   } | null>(null);
   const [debtScoreLoading, setDebtScoreLoading] = useState(false);
 
-  // Simulated live MCP activity logs
-  const [mcpLogs, setMcpLogs] = useState<any[]>([
-    { id: "1", timestamp: "17:20:12", client: "Cursor IDE", logo: "cursor", tool: "get_context", params: 'query: "SaaS agreement auto-renewal"', status: "success" },
-    { id: "2", timestamp: "17:15:45", client: "Claude AI", logo: "claude", tool: "store_context", params: 'decision: "Frontend team selects Vitest"', status: "success" },
-    { id: "3", timestamp: "16:40:22", client: "ChatGPT", logo: "chatgpt", tool: "search_decisions", params: 'project: "Project Phoenix"', status: "success" },
-    { id: "4", timestamp: "16:12:05", client: "Antigravity", logo: "antigravity", tool: "get_context", params: 'query: "React vs Vue talent pool"', status: "success" },
-  ]);
+  // Real MCP activity logs, fetched from /api/admin/mcp-activity (core/mcp_telemetry.py) —
+  // previously this was a hardcoded array plus a setInterval that fabricated
+  // random entries every 4.5s, with no relationship to actual MCP tool calls.
+  const [mcpLogs, setMcpLogs] = useState<any[]>([]);
 
   const [mcpStats, setMcpStats] = useState({
-    totalRequests: 1284,
-    readOps: 1042,
-    writeOps: 242,
-    activeClients: 4
+    totalRequests: 0,
+    readOps: 0,
+    writeOps: 0,
+    activeClients: 0
   });
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard?.writeText(text);
@@ -517,34 +503,76 @@ export default function Home() {
   // Sync log simulation
   useEffect(() => {
     if (!user) return;
-    const logPool = [
-      "INFO: [slack] Polling Workspace channels...",
-      "INFO: [slack] Found 1 new decision thread in #engineering-core",
-      "SUCCESS: [slack] Ingested decision: Standardize analytical schemas to Parquet format",
-      "INFO: [gmail] Fetching unread approvals thread for user 'john.smith@company.com'",
-      "INFO: [drive] Indexing spec changes in: architecture_v2_evaluation.docx",
-      "SUCCESS: [drive] Mapped 3 relations (People: Priya, Technology: React, Date: Aug 2022)",
-      "INFO: [jira] Scanning sprint epics for resolution status changes",
-      "INFO: [zoom] Running Whisper-large-v3 transcription on: Q4_Planning_Record.mp4",
-      "SUCCESS: [zoom] Audio transcription completed (length: 42m 14s). Extracted 2 decisions.",
+
+    const generalLogs = [
       "INFO: [chromadb] Persisting vector embeddings to ./chroma_db",
       "SUCCESS: [memory] SQLite database synchronized (relations updated)."
     ];
 
-    setLogs([
-      `[${new Date().toLocaleTimeString()}] SYSTEM: Ingestion engine initialized.`,
-      `[${new Date().toLocaleTimeString()}] INFO: chromaDB persistence connected.`,
-      `[${new Date().toLocaleTimeString()}] INFO: slack_connector OAuth active.`
-    ]);
+    const platformLogs: Record<string, string[]> = {
+      slack: [
+        "INFO: [slack] Polling Workspace channels...",
+        "INFO: [slack] Found 1 new decision thread in #engineering-core",
+        "SUCCESS: [slack] Ingested decision: Standardize analytical schemas to Parquet format"
+      ],
+      gmail: [
+        "INFO: [gmail] Fetching unread approvals thread for user 'john.smith@company.com'"
+      ],
+      drive: [
+        "INFO: [drive] Indexing spec changes in: architecture_v2_evaluation.docx",
+        "SUCCESS: [drive] Mapped 3 relations (People: Priya, Technology: React, Date: Aug 2022)"
+      ],
+      jira: [
+        "INFO: [jira] Scanning sprint epics for resolution status changes"
+      ],
+      zoom: [
+        "INFO: [zoom] Running Whisper-large-v3 transcription on: Q4_Planning_Record.mp4",
+        "SUCCESS: [zoom] Audio transcription completed (length: 42m 14s). Extracted 2 decisions."
+      ],
+      github: [
+        "INFO: [github] Checking latest PR approvals and code owner reviews",
+        "SUCCESS: [github] Parsed decision from PR-128: Shift database migrations to async script"
+      ]
+    };
+
+    const getActiveLogPool = () => {
+      const pool = [...generalLogs];
+      let activeCount = 0;
+      Object.keys(platformLogs).forEach((plat) => {
+        if (syncStatus[plat] === "synced") {
+          pool.push(...platformLogs[plat]);
+          activeCount++;
+        }
+      });
+      return { pool, activeCount };
+    };
+
+    const initialPoolData = getActiveLogPool();
+    if (initialPoolData.activeCount === 0) {
+      setLogs([
+        `[${new Date().toLocaleTimeString()}] SYSTEM: Ingestion engine idle. No active connectors found. Go to Connectors to authorize apps.`
+      ]);
+    } else {
+      setLogs([
+        `[${new Date().toLocaleTimeString()}] SYSTEM: Ingestion engine initialized.`,
+        `[${new Date().toLocaleTimeString()}] INFO: chromaDB persistence connected.`,
+        ...initialPoolData.pool.slice(0, 2).map(msg => `[${new Date().toLocaleTimeString()}] ${msg}`)
+      ]);
+    }
 
     const interval = setInterval(() => {
-      const randomMsg = logPool[Math.floor(Math.random() * logPool.length)];
+      const poolData = getActiveLogPool();
       const timestamp = new Date().toLocaleTimeString();
-      setLogs((prev) => [...prev.slice(-30), `[${timestamp}] ${randomMsg}`]);
+      if (poolData.activeCount === 0) {
+        setLogs((prev) => [...prev.slice(-30), `[${timestamp}] SYSTEM: Ingestion engine idle. No active connectors found. Go to Connectors to authorize apps.`]);
+      } else {
+        const randomMsg = poolData.pool[Math.floor(Math.random() * poolData.pool.length)];
+        setLogs((prev) => [...prev.slice(-30), `[${timestamp}] ${randomMsg}`]);
+      }
     }, 9000);
 
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, syncStatus]);
 
   // Handle user logout/switching cleanup
   useEffect(() => {
@@ -570,19 +598,98 @@ export default function Home() {
       setCurrentGraphNodes([]);
       setCurrentGraphTitle("");
     } else {
-      setSyncStatus({
-        slack: "synced",
-        gmail: "synced",
-        drive: "synced",
-        jira: "synced",
-        zoom: "synced",
-      });
+      if (!token) {
+        setSyncStatus({
+          slack: "synced",
+          gmail: "synced",
+          drive: "synced",
+          jira: "synced",
+          zoom: "synced",
+          github: "synced",
+        });
+      } else {
+        setSyncStatus({
+          slack: "disconnected",
+          gmail: "disconnected",
+          drive: "disconnected",
+          jira: "disconnected",
+          zoom: "disconnected",
+          github: "disconnected",
+        });
+      }
       setSlackToken("xoxb-8241793264-9182371239-••••••••");
       setGoogleClient("9182371982-client.apps.googleusercontent.com");
       setJiraUrl("https://company.atlassian.net");
       setZoomKey("z_api_key_8123981273");
     }
-  }, [user]);
+  }, [user, token]);
+
+  // Fetch real connection statuses and db metrics from backend
+  const fetchAdminStatus = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch("/api/admin/status", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && data.connectors) {
+        const newSyncStatus: Record<string, string> = {};
+        data.connectors.forEach((conn: any) => {
+          newSyncStatus[conn.name] = conn.connected ? "synced" : "disconnected";
+        });
+        setSyncStatus(newSyncStatus);
+
+        setSimulatedStats({
+          total_decisions: data.total_decisions || 0,
+          total_relations: data.total_relations || 0,
+          connected_components: Math.ceil((data.total_decisions || 0) / 4)
+        });
+      }
+    } catch (e) {
+      console.error("Error fetching admin status", e);
+    }
+  }, [token]);
+
+  const fetchSettings = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch("/api/memory/profile/settings", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && typeof data.auto_extraction === "boolean") {
+        setAutoExtractionEnabled(data.auto_extraction);
+      }
+    } catch (e) {
+      console.error("Error fetching settings", e);
+    }
+  }, [token]);
+
+  const toggleAutoExtraction = async (val: boolean) => {
+    setAutoExtractionEnabled(val);
+    if (!token) return;
+    try {
+      await fetch("/api/memory/profile/settings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ auto_extraction: val })
+      });
+    } catch (e) {
+      console.error("Error updating settings", e);
+    }
+  };
+
+  useEffect(() => {
+    if (token) {
+      fetchAdminStatus();
+      fetchSettings();
+    }
+  }, [token, fetchAdminStatus, fetchSettings]);
 
   // Fetch real decisions dynamically from database
   const fetchRealDecisions = useCallback(async () => {
@@ -772,56 +879,45 @@ export default function Home() {
       .finally(() => setDebtScoreLoading(false));
   }, [activeTab, token]);
 
-  // Simulated live MCP query logs tick-tock
+  // Real MCP activity — polls /api/admin/mcp-activity (core/mcp_telemetry.py),
+  // which both MCP transports (mcp_server.py stdio tools, api/routes/mcp_remote.py)
+  // write to on every actual tool call. Replaces a setInterval that used to
+  // fabricate a random log entry + stat increment every 4.5s regardless of
+  // whether any real MCP activity occurred.
+  const guessLogo = (clientName: string): string => {
+    const c = (clientName || "").toLowerCase();
+    if (c.includes("claude")) return "claude";
+    if (c.includes("cursor")) return "cursor";
+    if (c.includes("chatgpt") || c.includes("openai")) return "chatgpt";
+    if (c.includes("antigravity")) return "antigravity";
+    return "generic";
+  };
+
+  const fetchMcpActivity = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch("/api/admin/mcp-activity", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.logs) {
+        setMcpLogs(data.logs.map((log: any) => ({ ...log, logo: guessLogo(log.client) })));
+      }
+      if (data?.stats) {
+        setMcpStats(data.stats);
+      }
+    } catch (e) {
+      console.error("Error fetching MCP activity", e);
+    }
+  }, [token]);
+
   useEffect(() => {
-    if (activeTab !== "mcp") return;
-    const interval = setInterval(() => {
-      const clients = [
-        { name: "Cursor IDE", logo: "cursor" },
-        { name: "Claude AI", logo: "claude" },
-        { name: "ChatGPT", logo: "chatgpt" },
-        { name: "Antigravity", logo: "antigravity" }
-      ];
-      const tools = [
-        { name: "get_context", params: ['query: "obsidian sync config"', 'query: "redis caching decision"', 'query: "AWS billing alerts"'] },
-        { name: "store_context", params: ['decision: "Use Tailwind v3"', 'decision: "Set token expiration to 24h"', 'decision: "Migrate auth to Firebase"'] },
-        { name: "search_decisions", params: ['person: "Priya Sharma"', 'project: "Helios Tech"', 'date: "Q3 2024"'] },
-        { name: "find_similar_decisions", params: ['query: "switching payroll vendor"', 'query: "building a mobile app"'] },
-        { name: "detect_decision_patterns", params: ['scope: "all"', 'scope: "Infrastructure"'] },
-        { name: "predict_decision_risk", params: ['scope: "all"', 'decision_id: "dec-4"'] },
-        { name: "ask_kairos", params: ['question: "What are my open PRs?"', 'question: "Why did we pick AWS?"'] },
-        { name: "trigger_ingestion", params: ["(no arguments)"] },
-      ];
-
-      const client = clients[Math.floor(Math.random() * clients.length)];
-      const tool = tools[Math.floor(Math.random() * tools.length)];
-      const param = tool.params[Math.floor(Math.random() * tool.params.length)];
-
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString("en-US", { hour12: false });
-
-      const newLog = {
-        id: Math.random().toString(),
-        timestamp: timeStr,
-        client: client.name,
-        logo: client.logo,
-        tool: tool.name,
-        params: param,
-        status: "success" as const
-      };
-
-      const isWrite = tool.name === "store_context" || tool.name === "trigger_ingestion";
-      setMcpLogs(prev => [newLog, ...prev.slice(0, 7)]);
-      setMcpStats(prev => ({
-        totalRequests: prev.totalRequests + 1,
-        readOps: isWrite ? prev.readOps : prev.readOps + 1,
-        writeOps: isWrite ? prev.writeOps + 1 : prev.writeOps,
-        activeClients: 4
-      }));
-    }, 4500);
-
+    if (activeTab !== "mcp" || !token) return;
+    fetchMcpActivity();
+    const interval = setInterval(fetchMcpActivity, 8000);
     return () => clearInterval(interval);
-  }, [activeTab]);
+  }, [activeTab, token, fetchMcpActivity]);
 
   // Compile combined decision graph from message citations
   useEffect(() => {
@@ -1092,7 +1188,10 @@ export default function Home() {
           `[${doneTimestamp}] SUCCESS: Ingestion started for [${platform}] — decisions will appear shortly`,
         ]);
         // Refresh graph after a short delay to pick up new decisions
-        setTimeout(() => fetchRealDecisions(), 15000);
+        setTimeout(() => {
+          fetchRealDecisions();
+          fetchAdminStatus();
+        }, 15000);
       } else {
         setSyncStatus((prev) => ({ ...prev, [platform]: "error" }));
         setLogs((prev) => [...prev, `[${doneTimestamp}] ERROR: Ingest failed for [${platform}]: ${res.status}`]);
@@ -1105,16 +1204,146 @@ export default function Home() {
   };
 
   const exportDecisionIndex = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(explorerDecisions, null, 2));
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(filteredDecisions, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", "kairos_decision_records.json");
+    downloadAnchor.setAttribute("download", `kairos_decisions_${selectedSourceFilter}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
     
     const timestamp = new Date().toLocaleTimeString();
     setLogs((prev) => [...prev, `[${timestamp}] SYSTEM: Exported decision index JSON payload.`]);
+  };
+
+  const exportDecisionPDF = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const html = `
+      <html>
+        <head>
+          <title>KAIROS Decision Index Export - ${new Date().toLocaleDateString()}</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+              color: #111;
+              line-height: 1.5;
+              padding: 40px;
+              max-width: 800px;
+              margin: 0 auto;
+            }
+            .header {
+              border-bottom: 2px solid #333;
+              padding-bottom: 20px;
+              margin-bottom: 30px;
+            }
+            .logo {
+              font-size: 24px;
+              font-weight: bold;
+              letter-spacing: -0.5px;
+            }
+            .subtitle {
+              font-size: 12px;
+              color: #666;
+              font-family: monospace;
+              margin-top: 5px;
+            }
+            .summary-info {
+              margin-top: 15px;
+              font-size: 13px;
+              color: #444;
+            }
+            .decision-card {
+              border-bottom: 1px solid #eee;
+              padding: 20px 0;
+              page-break-inside: avoid;
+            }
+            .decision-title {
+              font-size: 18px;
+              font-weight: bold;
+              color: #111;
+              margin: 0 0 8px 0;
+            }
+            .meta-grid {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 10px;
+              font-size: 11px;
+              color: #666;
+              margin-bottom: 12px;
+              font-family: monospace;
+              background: #f9f9f9;
+              padding: 8px 12px;
+              border-radius: 6px;
+            }
+            .meta-item strong {
+              color: #333;
+            }
+            .section-title {
+              font-size: 12px;
+              font-weight: bold;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              color: #444;
+              margin: 12px 0 4px 0;
+            }
+            .section-content {
+              font-size: 13px;
+              color: #222;
+              margin-bottom: 10px;
+            }
+            @media print {
+              body {
+                padding: 20px;
+              }
+              .decision-card {
+                page-break-inside: avoid;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo">KAIROS Decision Index Export</div>
+            <div class="subtitle">Generated on ${new Date().toLocaleString()} · Scope: ${selectedSourceFilter.toUpperCase()}</div>
+            <div class="summary-info">Exported <strong>${filteredDecisions.length}</strong> decisions from corporate memory.</div>
+          </div>
+          <div>
+            ${filteredDecisions.map((d, index) => `
+              <div class="decision-card">
+                <h2 class="decision-title">${index + 1}. ${d.title}</h2>
+                <div class="meta-grid">
+                  <div class="meta-item"><strong>Date:</strong> ${d.date}</div>
+                  <div class="meta-item"><strong>Source:</strong> ${d.source.toUpperCase()}</div>
+                  <div class="meta-item"><strong>Owner:</strong> ${d.owner || "N/A"}</div>
+                  <div class="meta-item"><strong>ID:</strong> ${d.id.slice(0, 8)}...</div>
+                </div>
+                <div class="section-title">Context / Rationale</div>
+                <div class="section-content">${d.context || "No context provided."}</div>
+                ${d.outcome ? `
+                  <div class="section-title">Outcome</div>
+                  <div class="section-content">${d.outcome}</div>
+                ` : ""}
+              </div>
+            `).join("")}
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            }
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    
+    const timestamp = new Date().toLocaleTimeString();
+    setLogs((prev) => [...prev, `[${timestamp}] SYSTEM: Exported decision index PDF document.`]);
   };
 
   const getSourceIcon = (source: string) => {
@@ -2072,9 +2301,29 @@ export default function Home() {
           {/* DASHBOARD & STATS OVERVIEW */}
           {activeTab === "dashboard" && (
             <div className="p-8 max-w-4xl mx-auto flex flex-col gap-6 animate-message-in">
-              <div className="border-b border-[rgb(var(--border))]/40 pb-4">
-                <h3 className="text-lg font-bold tracking-tight text-[rgb(var(--text-primary))] mb-0.5">System Ingest Metrics</h3>
-                <p className="text-xs text-[rgb(var(--text-muted))]">Monitor indexing sizes, relations logs, and dynamic app integration statuses.</p>
+              <div className="border-b border-[rgb(var(--border))]/40 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold tracking-tight text-[rgb(var(--text-primary))] mb-0.5">System Ingest Metrics</h3>
+                  <p className="text-xs text-[rgb(var(--text-muted))]">Monitor indexing sizes, relations logs, and dynamic app integration statuses.</p>
+                </div>
+                <div className="flex items-center gap-3.5 bg-[rgb(var(--surface))]/40 border border-[rgb(var(--border))]/60 rounded-2xl px-4 py-2.5 shrink-0 self-start sm:self-auto shadow-sm">
+                  <div className="flex flex-col">
+                    <span className="text-[10.5px] font-bold text-[rgb(var(--text-primary))] font-mono tracking-wider uppercase">Auto-Extraction</span>
+                    <span className="text-[9px] text-[rgb(var(--text-muted))]">Runs background scraper tasks</span>
+                  </div>
+                  <button
+                    onClick={() => toggleAutoExtraction(!autoExtractionEnabled)}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 ${
+                      autoExtractionEnabled ? "bg-indigo-500" : "bg-zinc-600"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        autoExtractionEnabled ? "translate-x-4" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
 
               {/* Metrics cards grid */}
@@ -2165,7 +2414,18 @@ export default function Home() {
                     <div key={plat.key} className="p-4 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/30 flex flex-col justify-between h-28 hover:border-[rgb(var(--border-focus))] transition-all">
                       <div className="flex items-center justify-between">
                         <span className="text-[9px] font-mono text-[rgb(var(--text-muted))] uppercase font-bold">{plat.key}</span>
-                        <span className={`w-2 h-2 rounded-full ${syncStatus[plat.key] === "syncing" ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`} />
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            syncStatus[plat.key] === "syncing"
+                              ? "bg-amber-500 animate-pulse"
+                              : syncStatus[plat.key] === "synced"
+                              ? "bg-emerald-500"
+                              : syncStatus[plat.key] === "error"
+                              ? "bg-rose-500 animate-pulse"
+                              : "bg-zinc-500/80"
+                          }`}
+                          title={syncStatus[plat.key] || "disconnected"}
+                        />
                       </div>
                       <div>
                         <span className="text-xs font-bold text-[rgb(var(--text-primary))] block">{plat.name}</span>
@@ -2214,6 +2474,16 @@ export default function Home() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                     EXPORT JSON
+                  </button>
+
+                  <button
+                    onClick={exportDecisionPDF}
+                    className="px-3.5 py-1.5 rounded-xl bg-[rgb(var(--surface))] border border-[rgb(var(--border))]/80 hover:bg-[rgb(var(--surface-hover))] text-[10px] font-mono font-bold tracking-wider text-[rgb(var(--text-primary))] flex items-center gap-2 transition-all shadow-sm"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    EXPORT PDF
                   </button>
 
                   <div className="flex gap-1 overflow-x-auto max-w-xs md:max-w-none">
@@ -2488,6 +2758,20 @@ export default function Home() {
                       { label: "Avg Latency", value: "640ms" },
                       { label: "Sources Hit", value: "4.1 avg" }
                     ]
+                  },
+                  {
+                    name: "synthesis_agent",
+                    label: "Decision Synthesis Hub",
+                    status: isChatStreaming ? "processing" : "idle",
+                    description: "Acts as the orchestration layer for the multi-agent memory network. Evaluates context variables, queries SQLite graph relational index, runs ChromaDB hybrid semantic search, and compiles real-time citation stream responses.",
+                    model: "Qwen 2.5 72B Instruct",
+                    hardware: "AMD Instinct GPU (Fireworks Cloud)",
+                    icon: "🧠",
+                    metrics: [
+                      { label: "Total Queries", value: "142" },
+                      { label: "Avg Response", value: "1.2s" },
+                      { label: "Cache Hit", value: "84.1%" }
+                    ]
                   }
                 ].map((agent, i) => (
                   <div
@@ -2504,7 +2788,10 @@ export default function Home() {
                         <div className="flex items-center gap-1.5">
                           <span className={`w-1.5 h-1.5 rounded-full ${agent.status === "processing" ? "bg-amber-500 animate-ping" : "bg-emerald-500"}`} />
                           <span className="text-[9px] font-mono font-bold tracking-wider uppercase text-[rgb(var(--text-muted))]">
-                            {agent.status === "processing" ? "SYNCING" : "IDLE"}
+                            {agent.status === "processing"
+                              ? (["intent_agent", "context_agent", "research_agent", "live_data_agent", "synthesis_agent"].includes(agent.name) ? "QUERYING" : "SYNCING")
+                              : "IDLE"
+                            }
                           </span>
                         </div>
                       </div>
@@ -2532,51 +2819,6 @@ export default function Home() {
                     </div>
                   </div>
                 ))}
-
-                {/* Synthesis Orchestrator full width */}
-                <div className="col-span-1 md:col-span-2 p-5 rounded-2xl border border-[rgb(var(--border))]/80 bg-[rgb(var(--surface))]/30 flex flex-col md:flex-row justify-between gap-5 hover:border-[rgb(var(--border-focus))] transition-all shadow-sm">
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm">🧠</span>
-                        <span className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase">{agentPersonas["synthesis_agent"] || "Decision Synthesis Hub (Orchestrator)"}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${isChatStreaming ? "bg-indigo-500 animate-ping" : "bg-emerald-500"}`} />
-                        <span className="text-[9px] font-mono font-bold tracking-wider uppercase text-[rgb(var(--text-muted))]">
-                          {isChatStreaming ? "QUERYING" : "IDLE"}
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-[11.5px] text-[rgb(var(--text-muted))] leading-relaxed mb-3.5">
-                      Acts as the orchestration layer for the multi-agent memory network. Evaluates context variables, queries SQLite graph relational index, runs ChromaDB hybrid semantic search, and compiles real-time citation stream responses.
-                    </p>
-                    
-                    <div className="space-y-1">
-                      <div className="flex gap-4 text-[10px] font-mono">
-                        <span className="text-[rgb(var(--text-muted))] w-16">Model:</span>
-                        <span className="text-[rgb(var(--text-primary))] font-bold">Qwen 2.5 72B Instruct</span>
-                      </div>
-                      <div className="flex gap-4 text-[10px] font-mono">
-                        <span className="text-[rgb(var(--text-muted))] w-16">Hardware:</span>
-                        <span className="text-[rgb(var(--text-primary))]">AMD Instinct GPU (Fireworks Cloud)</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex md:flex-col justify-around gap-2 px-5 md:border-l border-[rgb(var(--border))]/40 md:w-52 shrink-0">
-                    {[
-                      { label: "Total Queries", value: "142" },
-                      { label: "Avg Response", value: "1.2s" },
-                      { label: "Chroma Cache Hit", value: "84.1%" }
-                    ].map((m, idx) => (
-                      <div key={idx} className="text-center md:text-left">
-                        <span className="text-[9px] font-mono text-[rgb(var(--text-muted))] uppercase block font-bold tracking-wider">{m.label}</span>
-                        <span className="text-[12.5px] font-bold text-[rgb(var(--text-primary))] font-mono">{m.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               </div>
             </div>
           )}
@@ -2595,168 +2837,67 @@ export default function Home() {
                 </p>
               </div>
 
-              {/* Status and Activity Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Left Card: Status & Sync */}
-                <div className="p-6 rounded-2xl border border-[rgb(var(--border))]/70 bg-[rgb(var(--surface))]/10 flex flex-col justify-between gap-4 shadow-lg shadow-black/20">
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">🔒</span>
-                        <h4 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider">Personal AI Link</h4>
-                      </div>
-                      <span className="flex items-center gap-1.5 text-[9px] font-mono px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold uppercase tracking-wider">
-                        <span className="relative flex h-1.5 w-1.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
-                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                        </span>
-                        Sync Active
-                      </span>
+              {/* Status and AI Link Card */}
+              <div className="p-6 rounded-2xl border border-[rgb(var(--border))]/70 bg-[rgb(var(--surface))]/10 flex flex-col justify-between gap-4 shadow-lg shadow-black/20">
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">🔒</span>
+                      <h4 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider">Personal AI Link</h4>
                     </div>
+                    <span className="flex items-center gap-1.5 text-[9px] font-mono px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold uppercase tracking-wider">
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                      </span>
+                      Sync Active
+                    </span>
+                  </div>
 
-                    <p className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">
-                      Use this unique URL to connect remote clients. Keep it secret to protect your company's memory space.
-                    </p>
+                  <p className="text-[11px] text-[rgb(var(--text-muted))] leading-relaxed">
+                    Use this unique URL to connect remote clients. Keep it secret to protect your company's memory space.
+                  </p>
 
-                    {/* Personal MCP URL + copy */}
-                    <div className="flex items-stretch gap-2 bg-[rgb(var(--bg))]/80 border border-[rgb(var(--border))]/80 rounded-xl p-1 mt-1">
-                      <div className="flex-1 px-2.5 py-2 font-mono text-[10px] text-[rgb(var(--text-muted))] overflow-x-auto whitespace-nowrap scrollbar-none flex items-center select-all">
-                        {mcpConnectionError
-                          ? "Couldn't load — see below"
-                          : mcpConnection?.url || "Generating connection URL…"}
-                      </div>
+                  {/* Personal MCP URL + copy */}
+                  <div className="flex items-stretch gap-2 bg-[rgb(var(--bg))]/80 border border-[rgb(var(--border))]/80 rounded-xl p-1 mt-1">
+                    <div className="flex-1 px-2.5 py-2 font-mono text-[10px] text-[rgb(var(--text-muted))] overflow-x-auto whitespace-nowrap scrollbar-none flex items-center select-all">
+                      {mcpConnectionError
+                        ? "Couldn't load — see below"
+                        : mcpConnection?.url || "Generating connection URL…"}
+                    </div>
+                    <button
+                      disabled={!mcpConnection?.url}
+                      onClick={() => copyToClipboard(mcpConnection.url, "url")}
+                      className="shrink-0 px-3 py-1.5 rounded-lg bg-[rgb(var(--accent))] text-white text-[9.5px] font-bold tracking-wider hover:opacity-90 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed uppercase"
+                    >
+                      {copiedKey === "url" ? "✓" : "Copy"}
+                    </button>
+                  </div>
+                  {mcpConnectionError && (
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 mt-1">
+                      <p className="text-[10px] text-rose-300 font-mono">Couldn&apos;t reach the server to load your MCP connection.</p>
                       <button
-                        disabled={!mcpConnection?.url}
-                        onClick={() => copyToClipboard(mcpConnection.url, "url")}
-                        className="shrink-0 px-3 py-1.5 rounded-lg bg-[rgb(var(--accent))] text-white text-[9.5px] font-bold tracking-wider hover:opacity-90 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed uppercase"
+                        onClick={fetchMcpConnection}
+                        className="text-[10px] font-semibold text-rose-300 hover:text-rose-200 underline shrink-0"
                       >
-                        {copiedKey === "url" ? "✓" : "Copy"}
+                        Retry
                       </button>
                     </div>
-                    {mcpConnectionError && (
-                      <div className="flex items-center justify-between gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 mt-1">
-                        <p className="text-[10px] text-rose-300 font-mono">Couldn&apos;t reach the server to load your MCP connection.</p>
-                        <button
-                          onClick={fetchMcpConnection}
-                          className="text-[10px] font-semibold text-rose-300 hover:text-rose-200 underline shrink-0"
-                        >
-                          Retry
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Badges */}
-                  <div className="flex flex-col gap-1.5 border-t border-[rgb(var(--border))]/40 pt-3 mt-1">
-                    {[
-                      { text: "100% Secure & Scoped", icon: "🛡️" },
-                      { text: user?.displayName ? `${user.displayName}'s Workspace` : "Your Workspace", icon: "🏢" },
-                      { text: "Real-time Two-way Sync", icon: "⚡" }
-                    ].map((badge, idx) => (
-                      <div key={idx} className="flex items-center gap-2 text-[10px] text-[rgb(var(--text-muted))]">
-                        <span className="text-xs shrink-0">{badge.icon}</span>
-                        <span className="font-mono">{badge.text}</span>
-                      </div>
-                    ))}
-                  </div>
+                  )}
                 </div>
 
-                {/* Right Card: Activity Monitor & Usage Graph */}
-                <div className="p-6 rounded-2xl border border-[rgb(var(--accent))]/25 bg-gradient-to-br from-[rgb(var(--accent))]/10 via-[rgb(var(--surface))]/40 to-[rgb(var(--bg))]/60 flex flex-col gap-4 shadow-lg shadow-black/10">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">📊</span>
-                      <h4 className="text-xs font-bold text-[rgb(var(--text-primary))] font-mono uppercase tracking-wider">Activity Monitor</h4>
+                {/* Badges (Horizontal Layout) */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 border-t border-[rgb(var(--border))]/40 pt-3.5 mt-1">
+                  {[
+                    { text: "100% Secure & Scoped", icon: "🛡️" },
+                    { text: user?.displayName ? `${user.displayName}'s Workspace` : "Your Workspace", icon: "🏢" },
+                    { text: "Real-time Two-way Sync", icon: "⚡" }
+                  ].map((badge, idx) => (
+                    <div key={idx} className="flex items-center gap-2 text-[10px] text-[rgb(var(--text-muted))]">
+                      <span className="text-xs shrink-0">{badge.icon}</span>
+                      <span className="font-mono">{badge.text}</span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="text-[9px] font-mono text-emerald-400 font-bold uppercase tracking-wider">Live</span>
-                    </div>
-                  </div>
-
-                  {/* Live Stats */}
-                  <div className="grid grid-cols-3 gap-2 border-b border-[rgb(var(--border))]/40 pb-3">
-                    <div className="text-center bg-[rgb(var(--bg))]/40 border border-[rgb(var(--border))]/70 rounded-xl p-2">
-                      <div className="text-[14px] font-bold text-[rgb(var(--text-primary))] font-mono">{mcpStats.totalRequests}</div>
-                      <div className="text-[8px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Total Hits</div>
-                    </div>
-                    <div className="text-center bg-[rgb(var(--bg))]/40 border border-[rgb(var(--border))]/70 rounded-xl p-2">
-                      <div className="text-[14px] font-bold text-violet-400 font-mono">{mcpStats.readOps}</div>
-                      <div className="text-[8px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Reads</div>
-                    </div>
-                    <div className="text-center bg-[rgb(var(--bg))]/40 border border-[rgb(var(--border))]/70 rounded-xl p-2">
-                      <div className="text-[14px] font-bold text-emerald-400 font-mono">{mcpStats.writeOps}</div>
-                      <div className="text-[8px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Writes</div>
-                    </div>
-                  </div>
-
-                  {/* Simulated 7-day Usage Graph */}
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[9px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Weekly Request Load</span>
-                    <div className="h-16 flex items-end justify-between gap-1 px-2 pt-2 border-b border-[rgb(var(--border))]">
-                      {[
-                        { day: "M", val: 120, height: "h-[35%]", color: "from-indigo-600 to-indigo-500" },
-                        { day: "T", val: 85, height: "h-[25%]", color: "from-indigo-600 to-indigo-500" },
-                        { day: "W", val: 230, height: "h-[65%]", color: "from-indigo-500 to-violet-500" },
-                        { day: "T", val: 190, height: "h-[55%]", color: "from-indigo-500 to-violet-500" },
-                        { day: "F", val: 310, height: "h-[85%]", color: "from-violet-500 to-fuchsia-500" },
-                        { day: "S", val: 140, height: "h-[40%]", color: "from-fuchsia-500 to-pink-500" },
-                        { day: "S", val: mcpStats.totalRequests % 200 + 100, height: "h-[70%]", color: "from-fuchsia-500 to-emerald-500", live: true },
-                      ].map((item, idx) => (
-                        <div key={idx} className="flex-1 flex flex-col items-center group relative cursor-pointer">
-                          {/* Tooltip */}
-                          <div className="absolute bottom-full mb-1 scale-0 group-hover:scale-100 bg-[rgb(var(--surface))] border border-[rgb(var(--border))] text-[8.5px] font-mono text-[rgb(var(--text-primary))]/85 px-1.5 py-0.5 rounded shadow-xl whitespace-nowrap z-10 transition-transform">
-                            {item.val} calls
-                          </div>
-                          {/* Bar */}
-                          <div className={`w-full ${item.height} bg-gradient-to-t ${item.color} rounded-t-sm transition-all duration-500 ${item.live ? 'animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.3)]' : ''}`} />
-                          <span className="text-[8px] font-mono text-[rgb(var(--text-muted))] mt-1">{item.day}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Connected Clients and active state */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-[9px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Connected Clients</span>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { name: "Claude AI", active: true, color: "text-amber-400/80", bg: "bg-amber-500/5", border: "border-amber-500/10", icon: "claude" },
-                        { name: "ChatGPT", active: true, color: "text-emerald-400/80", bg: "bg-emerald-500/5", border: "border-emerald-500/10", icon: "chatgpt" },
-                        { name: "Cursor IDE", active: true, color: "text-sky-400/80", bg: "bg-sky-500/5", border: "border-sky-500/10", icon: "cursor" },
-                        { name: "Antigravity", active: true, color: "text-violet-400/80", bg: "bg-violet-500/5", border: "border-violet-500/10", icon: "antigravity" }
-                      ].map((c) => (
-                        <div key={c.name} className={`flex items-center gap-2 p-1.5 rounded-xl border ${c.bg} ${c.border}`}>
-                          <div className={`w-6 h-6 rounded-lg bg-[rgb(var(--bg))] flex items-center justify-center ${c.color} shrink-0`}>
-                            {McpLogos[c.icon as keyof typeof McpLogos]}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-[10px] font-semibold text-[rgb(var(--text-primary))]/85 truncate">{c.name}</div>
-                            <div className="text-[7.5px] font-mono text-[rgb(var(--text-muted))] uppercase tracking-wider">Connected</div>
-                          </div>
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Live Request Stream */}
-                  <div className="flex flex-col gap-2 mt-1">
-                    <span className="text-[9px] text-[rgb(var(--text-muted))] uppercase font-mono tracking-wider">Live API Request Stream</span>
-                    <div className="bg-[rgb(var(--bg))]/90 border border-[rgb(var(--border))]/70 rounded-xl p-3 font-mono text-[9px] h-[105px] overflow-y-auto flex flex-col gap-1.5 scrollbar-thin">
-                      {mcpLogs.map((log) => (
-                        <div key={log.id} className="flex items-start gap-1.5 text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] transition-colors animate-[fadeIn_0.15s_ease-out]">
-                          <span className="text-[rgb(var(--text-muted))]/70 shrink-0">[{log.timestamp}]</span>
-                          <span className="text-violet-400 font-bold shrink-0">{log.client}</span>
-                          <span className="text-[rgb(var(--text-muted))] shrink-0">→</span>
-                          <span className="text-emerald-400 font-semibold shrink-0">{log.tool}</span>
-                          <span className="text-[rgb(var(--text-muted))] truncate">{log.params}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
+                  ))}
                 </div>
               </div>
 
