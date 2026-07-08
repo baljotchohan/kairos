@@ -83,7 +83,7 @@ class FireworksClient:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
-        # Find first non-rate-limited provider
+        # Find first usable provider by probing each with a cheap 1-token call.
         chosen = None
         for api_key, base_url, model in _providers():
             try:
@@ -96,11 +96,18 @@ class FireworksClient:
                     if r.status_code == 429:
                         print(f"[AI] Rate limited on {base_url} ({model}) — trying next provider")
                         continue
+                    r.raise_for_status()
                     chosen = (api_key, base_url, model)
                     break
-            except Exception:
-                chosen = (api_key, base_url, model)
-                break
+            except Exception as e:
+                # Mirror complete()'s fallback semantics: ANY failure here (dead
+                # key, provider outage, network error) rolls to the next
+                # provider. The previous `except Exception: chosen = (...); break`
+                # did the opposite — it SELECTED the very provider that just
+                # failed the probe instead of skipping it, contradicting this
+                # method's own purpose.
+                print(f"[AI] {base_url} ({model}) probe failed ({str(e)[:140]}) — trying next provider")
+                continue
 
         if not chosen:
             yield "Error: all AI providers are currently rate-limited. Please try again in a few minutes."
