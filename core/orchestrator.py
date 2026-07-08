@@ -264,7 +264,7 @@ class KairosOrchestrator:
         max_per_cycle = config.MAX_EXTRACT_PER_CYCLE
         user_id = state.get("user_id")
 
-        processed_ids = self.memory.get_processed_item_ids(user_id) if user_id else set()
+        processed_ids = await asyncio.to_thread(self.memory.get_processed_item_ids, user_id) if user_id else set()
         unprocessed_batches = []
         for item in all_batches:
             item_id = self._get_item_id(item)
@@ -294,7 +294,7 @@ class KairosOrchestrator:
             ):
                 inv.extend(self._inv_row(it, src, kind) for it in items)
             if user_id and inv:
-                self.memory.store_inventory(user_id, inv)
+                await asyncio.to_thread(self.memory.store_inventory, user_id, inv)
         except Exception as e:
             print(f"[Ingestion] inventory snapshot error: {e}")
 
@@ -313,7 +313,7 @@ class KairosOrchestrator:
                 await asyncio.sleep(config.EXTRACT_DELAY_SECONDS)
 
         if user_id and processed_item_ids:
-            self.memory.mark_items_as_processed(user_id, processed_item_ids)
+            await asyncio.to_thread(self.memory.mark_items_as_processed, user_id, processed_item_ids)
 
         print(f"[Ingestion] Synthesize complete — {count} decisions from {len(batches)}/{len(unprocessed_batches)} unprocessed items (out of {len(all_batches)} total)")
         return {"decisions_extracted": count, "errors": errors, "status": "complete"}
@@ -350,8 +350,19 @@ class KairosOrchestrator:
                 "status": "starting",
             }
 
-            # Offload graph execution to event loop
-            result = await self._graph.ainvoke(initial)
+            # Offload graph execution to event loop. Bounded by a timeout so a
+            # hang inside any connector/LLM call (as opposed to a raised
+            # exception, which `async with lock` already releases on) can't
+            # hold this user's ingestion lock forever.
+            try:
+                result = await asyncio.wait_for(
+                    self._graph.ainvoke(initial), timeout=config.INGESTION_TIMEOUT_SECONDS
+                )
+            except asyncio.TimeoutError:
+                msg = f"Ingestion timed out after {config.INGESTION_TIMEOUT_SECONDS:.0f}s"
+                if progress_callback:
+                    await progress_callback(f"⏱️ {msg}")
+                return {"decisions_extracted": 0, "errors": [msg], "status": "timeout"}
 
             if progress_callback:
                 n = result.get("decisions_extracted", 0)
@@ -468,15 +479,25 @@ class KairosOrchestrator:
                 await stream_callback({"type": "thinking", "agent": "synthesis_agent", "step": "think", "content": "Recording this decision to memory..."})
 
             from datetime import datetime as _dt
-            stored = await synthesis_agent.extract_decisions(
-                {
-                    "text": resolved_context.resolved_query,
-                    "source": "KAIROS Chat (manually added)",
-                    "source_url": f"kairos://session/{session_id}",
-                    "date": _dt.utcnow().strftime("%Y-%m-%d"),
-                },
-                user_id=user_id,
-            )
+            try:
+                stored = await synthesis_agent.extract_decisions(
+                    {
+                        "text": resolved_context.resolved_query,
+                        "source": "KAIROS Chat (manually added)",
+                        "source_url": f"kairos://session/{session_id}",
+                        "date": _dt.utcnow().strftime("%Y-%m-%d"),
+                    },
+                    user_id=user_id,
+                )
+            except Exception as e:
+                # extract_decisions() now raises ExtractionFailedError (or any
+                # other exception) on a genuine LLM/parse failure rather than
+                # swallowing it to []. That distinction matters for ingestion
+                # (retry vs. permanently-processed), but here — a live chat
+                # request — there's no retry path, so surface it as a normal
+                # "couldn't do that" answer instead of a 500/WS error.
+                print(f"[Orchestrator] store_decision extraction failed: {e}")
+                stored = []
             merged_traces.extend(synthesis_agent.get_trace())
 
             if stored:
