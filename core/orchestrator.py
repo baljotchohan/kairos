@@ -129,6 +129,40 @@ def _build_connection_status_answer(user_id: str) -> str:
     return "\n".join(lines)
 
 
+# ── Live-source request safety net ────────────────────────────────────────────
+# Naming a connected tool (Notion/Slack/Gmail/Drive/Jira/Zoom/GitHub) with a
+# list/show/get verb ALWAYS means "fetch from that tool" — never "search stored
+# decision memory". The LLM intent classifier sometimes routes these to
+# search/summary anyway (esp. "list all …", which reads like an aggregation),
+# and they then die in the synthesis agent with "I wasn't able to generate a
+# response". This deterministic override guarantees such requests reach the
+# LiveDataAgent regardless of classifier drift.
+
+_LIVE_SOURCE_TERMS = (
+    "notion", "slack", "gmail", "email", "emails", "drive", "google drive",
+    "jira", "ticket", "tickets", "zoom", "recording", "recordings",
+    "github", "repo", "repos", "repository", "repositories",
+    "pull request", "pull requests", " pr ", " prs",
+)
+_LIVE_RETRIEVAL_VERBS = (
+    "list", "show", "get ", "fetch", "count", "how many", "what's in",
+    "whats in", "what is in", "all my", "all data", "all the", "everything",
+    "recent", "give me", "pull up", "display", "what are my", "what do i have",
+)
+# A history/reasoning question about a tool ("why did we pick Slack") belongs in
+# search, NOT live_data — these terms veto the reroute.
+_DECISION_TERMS = ("why ", "decide", "decided", "decision", "chose", "choose", "rationale", "reason ")
+
+
+def _looks_like_live_source_request(question: str) -> bool:
+    ql = f" {question.lower()} "
+    if not any(t in ql for t in _LIVE_SOURCE_TERMS):
+        return False
+    if any(t in ql for t in _DECISION_TERMS):
+        return False
+    return any(v in ql for v in _LIVE_RETRIEVAL_VERBS)
+
+
 # ── Orchestrator ──────────────────────────────────────────────────────────────
 
 class KairosOrchestrator:
@@ -535,6 +569,14 @@ class KairosOrchestrator:
 
         history = await asyncio.to_thread(self.user_memory.get_current_session_context, user_id, max_turns=6, session_id=session_id)
         intent = await intent_agent.classify(question, conversation_history=history)
+
+        # Deterministic safety net: a request that names a connected tool with a
+        # retrieval verb ("list all data in notion", "show my github repos") must
+        # hit the LiveDataAgent, not the memory-search path where it dies with
+        # "I wasn't able to generate a response". Correct classifier drift here.
+        if intent.intent in ("search", "summary") and _looks_like_live_source_request(question):
+            log.info("Rerouting %r from %s → live_data (named live source + retrieval verb)", question[:60], intent.intent)
+            intent.intent = "live_data"
 
         if stream_callback:
             await stream_callback({

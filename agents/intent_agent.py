@@ -58,14 +58,14 @@ Classify the user's query into exactly one intent category and extract key entit
 
 Intent categories:
 - "greeting": Casual conversation, greetings, small talk, thanks, or meta questions about KAIROS itself ("hi", "hello", "how are you", "who are you", "what can you do", "thanks", "help"). NOT a request to look up a past decision.
-- "live_data": The user wants their CURRENT, real data from a connected tool right now — listing, counting, or looking up actual files, emails, messages, tickets, or recordings. Examples: "what's in my drive", "how many files do I have", "show my last email", "any recent emails from Priya", "list my recent slack messages", "what are my jira tickets", "my zoom recordings", "did I get any new emails". This is a LIVE lookup of the user's own data, NOT a past company decision.
+- "live_data": The user wants their CURRENT, real data from a connected tool right now — listing, counting, or looking up actual files, emails, messages, pages, tickets, repos, or recordings. IF THE QUERY NAMES A SPECIFIC CONNECTED TOOL (Slack, Gmail, Drive, Notion, Jira, Zoom, GitHub) AND asks to list/show/get/count/fetch its content, it is ALWAYS live_data — even if the wording is "list all" or "everything" (do NOT call that "summary"). Examples: "what's in my drive", "how many files do I have", "show my last email", "list my recent slack messages", "what are my jira tickets", "my zoom recordings", "list all data in notion", "list all my notion pages", "show me everything in notion", "list my github repos", "what are my open PRs", "search my github issues", "give me all my drive files". This is a LIVE lookup of the user's own data, NOT a past company decision.
 - "search": General lookup of past decisions or organizational knowledge
 - "follow_up": References previous conversation context ("tell me more", "that decision", "it", "what about...")
 - "comparison": Comparing alternatives or options that were considered
 - "timeline": Questions about when something happened or chronological ordering
 - "person_lookup": Questions focused on who did something or who was involved
 - "what_if": Hypothetical or counterfactual questions
-- "summary": Aggregation or overview questions ("how many", "list all", "overview of")
+- "summary": Aggregation or overview of STORED DECISIONS already in KAIROS memory ("how many decisions in Q3", "overview of our vendor decisions"). NOT for listing live data from a connected tool — if a tool (Slack/Gmail/Drive/Notion/Jira/Zoom/GitHub) is named, use live_data instead.
 - "store_decision": The user is TELLING KAIROS to record a new decision, not asking a question about an existing one. Examples: "add a decision that we're hiring interns next week", "remember that we decided to use Postgres", "note in memory that the vendor contract was renewed", "add to the graph: we're launching in March". The giveaway is an imperative verb (add/remember/note/record/log) aimed at KAIROS itself plus a statement of fact, not a question.
 
 Extract entities:

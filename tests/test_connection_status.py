@@ -68,6 +68,37 @@ def test_answer_reflects_connected_sources(monkeypatch):
     assert "## ⚪ Not connected yet" in answer
 
 
+def test_live_source_reroute_fires_on_named_tool_requests():
+    # Naming a connected tool + a retrieval verb must be recognized as a
+    # live-data request so the orchestrator reroutes it away from the memory
+    # search path (where it died with "I wasn't able to generate a response").
+    for q in [
+        "ok so use notion list all data in kairos",
+        "list all data in notion",
+        "list all my notion pages",
+        "show me everything in notion",
+        "list my github repos",
+        "what are my open PRs",
+        "give me all my drive files",
+        "how many jira tickets do I have",
+    ]:
+        assert orch._looks_like_live_source_request(q) is True, q
+
+
+def test_live_source_reroute_ignores_decision_and_generic_questions():
+    # Decision/history questions that merely mention a tool must NOT be
+    # rerouted — they belong in the memory-search path.
+    for q in [
+        "why did we decide to use slack",
+        "why do we use notion over confluence",
+        "what was the reason we chose github",
+        "why do we use React",
+        "who approved the vendor contract",
+        "summarize our q3 vendor decisions",
+    ]:
+        assert orch._looks_like_live_source_request(q) is False, q
+
+
 def test_disconnected_row_counts_as_not_connected(monkeypatch):
     def fake(uid, svc):
         if svc == "slack":
