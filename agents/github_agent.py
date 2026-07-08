@@ -32,8 +32,8 @@ class GitHubAgent(BaseAgent):
         days = input_data if isinstance(input_data, int) else None
         return await self.fetch(lookback_days=days)
 
-    def _get_github_token(self, user_id: str | None = None) -> str | None:
-        """Per-user GitHub token, fail-closed. Unlike Jira/Zoom, GitHub has no
+    def _get_github_token_data(self, user_id: str | None = None) -> dict | None:
+        """Per-user GitHub token_data, fail-closed. Unlike Jira/Zoom, GitHub has no
         global/shared credential in this deployment — a missing per-user token
         always means "not connected for this user", never a fallback."""
         if not user_id:
@@ -50,9 +50,8 @@ class GitHubAgent(BaseAgent):
             if row:
                 from core.token_crypto import decrypt_token_data
                 data = decrypt_token_data(row["token_data"])
-                token = data.get("access_token")
-                if token and not data.get("disconnected"):
-                    return token
+                if data.get("access_token") and not data.get("disconnected"):
+                    return data
         except Exception:
             pass
         return None
@@ -60,13 +59,19 @@ class GitHubAgent(BaseAgent):
     async def fetch(self, lookback_days: int = None, user_id: str | None = None) -> list[dict]:
         """Fetch raw GitHub PR/issue content to pass to the synthesis agent."""
         days = lookback_days or 30
-        token = self._get_github_token(user_id=user_id)
-        if not token:
+        token_data = self._get_github_token_data(user_id=user_id)
+        if not token_data:
             print(f"[GitHubAgent] No GitHub token for user {user_id} — skipping")
             return []
 
         from connectors.github_connector import GitHubConnector
-        connector = GitHubConnector(access_token=token)
+        from core.live_connectors import save_refreshed_token
+        connector = GitHubConnector(
+            access_token=token_data.get("access_token"),
+            refresh_token=token_data.get("refresh_token"),
+            expires_at=token_data.get("expires_at"),
+            on_token_refresh=(lambda data: save_refreshed_token(user_id, "github", data)) if user_id else None,
+        )
         items = await connector.fetch_all(days_back=days)
 
         results = []
