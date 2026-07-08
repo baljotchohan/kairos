@@ -351,6 +351,17 @@ Provide your synthesis answer:"""
                 if stream_callback:
                     await stream_callback({"type": "token", "content": answer_parts[-1]})
             answer = "".join(answer_parts)
+
+            # A clean (non-exception) stream that yields zero content tokens is
+            # a real, observed failure mode — e.g. a low-signal input like "hlo"
+            # can produce a completion with no content chunks at all. Without
+            # this, the chat bubble renders completely blank (still showing
+            # intent/confidence/traces, since those come from elsewhere), which
+            # looks broken even though nothing technically raised.
+            if not answer.strip():
+                answer = "I wasn't able to generate a response for that — could you rephrase or try again?"
+                if stream_callback:
+                    await stream_callback({"type": "token", "content": answer})
         else:
             # Call LLM non-streaming
             response = await self._chat_completion_with_fallback(
@@ -363,8 +374,10 @@ Provide your synthesis answer:"""
                 temperature=0.3,
                 max_tokens=1500,
             )
-            answer = response.choices[0].message.content
-        
+            answer = response.choices[0].message.content or ""
+            if not answer.strip():
+                answer = "I wasn't able to generate a response for that — could you rephrase or try again?"
+
         # Self-reflection / evaluation
         confidence = await self.evaluate_confidence(question, {"answer": answer, "relevant_count": len(relevant)})
 
