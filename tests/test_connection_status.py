@@ -39,6 +39,20 @@ def test_named_tool_and_all_tools_requests_route_to_live_data():
         assert _routes_to_live_data(q) is True, q
 
 
+def test_mailbox_phrasings_route_to_live_data():
+    # "mail"/"inbox"/"unread" were holes in the keyword list — "ok so what is my
+    # last mail" got labeled search and died. These must reach the LiveDataAgent.
+    for q in [
+        "ok so what is my last mail",
+        "what is my last mail",
+        "how many unread emails do I have",
+        "show my latest email from finance",
+        "check my inbox",
+        "ok so list all files in my drive",
+    ]:
+        assert _routes_to_live_data(q) is True, q
+
+
 def test_connection_status_questions_route_to_live_data():
     for q in [
         "which apps are connected",
@@ -65,3 +79,33 @@ def test_decision_and_history_questions_stay_in_search():
         "summarize our q3 vendor decisions",
     ]:
         assert _routes_to_live_data(q) is False, q
+
+
+# ── store_decision backstop ───────────────────────────────────────────────────
+# The user hands KAIROS a fact to SAVE. If the LLM router mislabels it as search,
+# the request dies in memory-search AND nothing is written. This backstop catches
+# that drift — but must never fire on an ordinary question.
+
+def test_record_a_fact_requests_route_to_store_decision():
+    for q in [
+        "ok add decision we are hiring interns in next week with date add by yourself",
+        "remember that we decided to use Postgres",
+        "note that the vendor contract was renewed",
+        "log a decision: launching in March",
+        "store this: Raj approved the AWS migration",
+        "for the record, we picked AWS",
+        "add a decision that we will launch mobile in March",
+    ]:
+        assert orch._looks_like_store_decision(q) is True, q
+
+
+def test_questions_and_fetches_are_not_store_decisions():
+    for q in [
+        "add up my unread emails",            # data fetch reusing "add"
+        "why did we add the vendor decision",  # history question
+        "what decisions did we make in Q3",    # question about stored decisions
+        "list my files",                       # live_data fetch
+        "show my last email",                  # live_data fetch
+        "why do we use React",                 # search
+    ]:
+        assert orch._looks_like_store_decision(q) is False, q
