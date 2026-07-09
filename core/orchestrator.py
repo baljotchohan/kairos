@@ -60,10 +60,12 @@ class KairosState(TypedDict):
 # that is genuine decision history and belongs in memory search.
 
 _LIVE_SOURCE_TERMS = (
-    "notion", "slack", "gmail", "email", "emails", "drive", "google drive",
+    "notion", "slack", "gmail", "email", "emails", "e-mail", "mail", "inbox",
+    "unread", "drive", "google drive", "file", "files", "document", "documents",
     "jira", "ticket", "tickets", "zoom", "recording", "recordings",
     "github", "repo", "repos", "repository", "repositories",
     "pull request", "pull requests", " pr ", " prs", "message", "messages",
+    "dm", "dms", "channel", "channels",
 )
 # Phrases that mean "across all my connected tools at once" → dashboard snapshot.
 _ALL_TOOLS_TERMS = (
@@ -110,6 +112,77 @@ def _looks_like_live_source_request(question: str) -> bool:
     if any(t in ql for t in _DECISION_TERMS):
         return False
     return any(t in ql for t in _LIVE_SOURCE_TERMS) or any(t in ql for t in _ALL_TOOLS_TERMS)
+
+
+# ── Store-a-decision request detection (routes to the store_decision handler) ──
+# The user hands KAIROS a fact to remember ("add a decision we're hiring interns",
+# "remember that we chose Postgres"). If the LLM router mislabels this as search,
+# it dies in memory-search with "I wasn't able to generate a response" AND nothing
+# is saved. This backstop catches that drift. It is deliberately conservative:
+# it only fires on an imperative store-verb leading the (filler-stripped) request,
+# never on a question — a why/what/who query is never a store command.
+
+_FILLER_PREFIXES = (
+    "ok kairos ", "hey kairos ", "ok so ", "okay so ", "ok ", "okay ", "so ",
+    "hey ", "hi ", "hello ", "please ", "now ", "alright ", "kairos ", "just ",
+    "yo ", "well ", "um ", "uh ", "can you ", "could you ", "i want to ",
+    "i want you to ", "i need you to ",
+)
+_STORE_VERBS = ("add", "record", "remember", "note", "log", "save", "store", "track")
+_STRONG_STORE_VERBS = ("remember", "record", "note", "log", "store", "save")
+_QUESTION_STARTS = (
+    "why", "what", "whats", "what's", "who", "when", "where", "how", "which",
+    "is", "are", "do", "does", "did", "can", "could", "should", "would",
+    "was", "were", "has", "have", "list", "show", "give", "get", "find",
+    "search", "count", "fetch", "check", "tell",
+)
+
+
+def _strip_filler(text: str) -> str:
+    """Remove leading conversational filler so position-sensitive routing sees the
+    real request: 'ok so what is my last mail' -> 'what is my last mail'."""
+    t = text.strip()
+    changed = True
+    while changed:
+        changed = False
+        low = t.lower()
+        for f in _FILLER_PREFIXES:
+            if low.startswith(f):
+                t = t[len(f):].lstrip(" ,")
+                changed = True
+                break
+    return t
+
+
+def _looks_like_store_decision(question: str) -> bool:
+    """True when the user is telling KAIROS to RECORD a new fact/decision rather
+    than asking about one — e.g. 'add a decision we are hiring interns', 'remember
+    that we chose Postgres', 'note that the contract renewed', 'for the record, we
+    picked AWS'. Backstop for classifier drift that would otherwise drop these into
+    memory-search (where they answer 'I wasn't able to generate a response' and,
+    worse, save nothing)."""
+    ql = _strip_filler(question.lower()).strip()
+    if not ql or ql.rstrip().endswith("?"):
+        return False
+    words = ql.split()
+    first = words[0] if words else ""
+    if first in _QUESTION_STARTS:
+        return False
+    if ql.startswith("for the record"):
+        return True
+    if first not in _STORE_VERBS:
+        return False
+    # An imperative store-verb leads — confirm it targets a fact/decision to save,
+    # not a data-fetch that merely reused the verb ("add up my unread emails").
+    if re.search(r"\bdecisions?\b", ql):
+        return True
+    if re.search(r"\b(that|this)\b", ql[:45]):
+        return True
+    # A strong store-verb ("remember/record/note/…") plus a real statement is a
+    # store even without the word 'decision'. "add"/"track" alone are too ambiguous.
+    if first in _STRONG_STORE_VERBS and len(words) >= 4:
+        return True
+    return False
 
 
 # ── Orchestrator ──────────────────────────────────────────────────────────────
@@ -486,16 +559,23 @@ class KairosOrchestrator:
         history = await asyncio.to_thread(self.user_memory.get_current_session_context, user_id, max_turns=6, session_id=session_id)
         intent = await intent_agent.classify(question, conversation_history=history)
 
-        # Deterministic safety net → route anything about the user's tools/apps to
-        # the LiveDataAgent, which answers with a REAL LLM call over REAL connector
-        # output (not a canned template). This catches classifier drift where a
-        # question about connected tools ("list all data from my connected apps",
-        # "use slack, see my messages", "which apps am I connected to") gets
-        # labeled search/summary/greeting and dies in the memory-search path with
-        # "I wasn't able to generate a response". A why/decided/decision question
-        # about a tool is explicitly NOT rerouted — that belongs in memory search.
+        # Deterministic safety net → correct the LLM router when it mislabels a
+        # request and would drop it into the memory-search path (which answers
+        # "I wasn't able to generate a response" for anything not in stored
+        # memory). The LLM router is the primary decision-maker; these backstops
+        # only catch drift on the two highest-cost misroutes:
+        #   1. store_decision — the user handed us a fact to SAVE. Misrouting this
+        #      loses data silently, so it takes priority (matches the router's own
+        #      priority order: save-a-fact > fetch-live-data).
+        #   2. live_data — a request about the user's own connected tools/apps,
+        #      answered by a REAL LLM call over REAL connector output.
+        # A why/decided/decision *question* about a tool is NOT rerouted — that is
+        # genuine decision history and belongs in memory search.
         if intent.intent in ("search", "summary", "greeting", "general_qa"):
-            if _is_connection_status_question(question) or _looks_like_live_source_request(question):
+            if _looks_like_store_decision(question):
+                log.info("Rerouting %r from %s → store_decision (record-a-fact request)", question[:60], intent.intent)
+                intent.intent = "store_decision"
+            elif _is_connection_status_question(question) or _looks_like_live_source_request(question):
                 log.info("Rerouting %r from %s → live_data (tool/app/connection request)", question[:60], intent.intent)
                 intent.intent = "live_data"
 
