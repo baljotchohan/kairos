@@ -373,32 +373,33 @@ class DecisionGraph:
             return pairs
 
     def all_decisions(self, user_id: Optional[str] = None) -> list[DecisionNode]:
+        # Excludes auto-indexed chat Q&A nodes (CONVERSATION_TOPIC) — those exist so
+        # MCP's get_context (a different read path, via hybrid_search) can surface past
+        # conversations to external clients, but every "list/count the decisions" view
+        # in this app (Decision Index, Metrics tiles, debt score, pattern/risk scans)
+        # should only ever see real decisions, not the user's own questions echoed back.
         with self._lock:
             return [
                 self.graph.nodes[n]["data"]
                 for n in self.graph.nodes
                 if "data" in self.graph.nodes[n]
+                and CONVERSATION_TOPIC not in (self.graph.nodes[n]["data"].topics or [])
                 and (user_id is None or self.graph.nodes[n]["data"].user_id == user_id)
             ]
 
     def stats(self, user_id: Optional[str] = None) -> dict:
         with self._lock:
-            if user_id is None:
-                return {
-                    "total_decisions": self.graph.number_of_nodes(),
-                    "total_relations": self.graph.number_of_edges(),
-                    "connected_components": nx.number_weakly_connected_components(self.graph),
-                }
-            
-            user_nodes = [
-                n for n in self.graph.nodes 
-                if "data" in self.graph.nodes[n] and self.graph.nodes[n]["data"].user_id == user_id
+            keep_nodes = [
+                n for n in self.graph.nodes
+                if "data" in self.graph.nodes[n]
+                and CONVERSATION_TOPIC not in (self.graph.nodes[n]["data"].topics or [])
+                and (user_id is None or self.graph.nodes[n]["data"].user_id == user_id)
             ]
-            user_subgraph = self.graph.subgraph(user_nodes)
+            subgraph = self.graph.subgraph(keep_nodes)
             return {
-                "total_decisions": user_subgraph.number_of_nodes(),
-                "total_relations": user_subgraph.number_of_edges(),
-                "connected_components": nx.number_weakly_connected_components(user_subgraph) if len(user_nodes) > 0 else 0,
+                "total_decisions": subgraph.number_of_nodes(),
+                "total_relations": subgraph.number_of_edges(),
+                "connected_components": nx.number_weakly_connected_components(subgraph) if keep_nodes else 0,
             }
 
     # ── Auto-linking ──────────────────────────────────────────────────────────

@@ -646,7 +646,7 @@ export default function Home() {
         setSimulatedStats({
           total_decisions: data.total_decisions || 0,
           total_relations: data.total_relations || 0,
-          connected_components: Math.ceil((data.total_decisions || 0) / 4)
+          connected_components: data.connectors.filter((c: any) => c.connected).length
         });
       }
       if (typeof data?.db_size_mb === "number") {
@@ -884,6 +884,15 @@ export default function Home() {
       .catch((e) => console.error("Error fetching decision debt score", e))
       .finally(() => setDebtScoreLoading(false));
   }, [activeTab, token]);
+
+  // Keep the top stat tiles (Decisions Index / Graph Relations / Connected APIs) in
+  // sync with the Debt Score panel above — fetchAdminStatus previously only ran once
+  // per login, so it could silently drift from the debt score (which refetches every
+  // time this tab opens) whenever decisions were added mid-session.
+  useEffect(() => {
+    if (activeTab !== "dashboard" || !token) return;
+    fetchAdminStatus();
+  }, [activeTab, token, fetchAdminStatus]);
 
   // Real MCP activity — polls /api/admin/mcp-activity (core/mcp_telemetry.py),
   // which both MCP transports (mcp_server.py stdio tools, api/routes/mcp_remote.py)
@@ -2337,7 +2346,10 @@ export default function Home() {
                 {[
                   { label: "Decisions Index", value: displayStats.total_decisions, decimals: 0, tag: "records" },
                   { label: "Graph Relations", value: displayStats.total_relations, decimals: 0, tag: "links" },
-                  { label: "Connected APIs", value: displayStats.connected_components, decimals: 0, tag: "active" },
+                  // Real per-service OAuth status (syncStatus), not displayStats.connected_components —
+                  // that field is graph-topology (NetworkX weakly-connected-components) when sourced from
+                  // the live WS stats message, which has nothing to do with how many integrations are connected.
+                  { label: "Connected APIs", value: Object.values(syncStatus).filter((s) => s === "synced").length, decimals: 0, tag: "active" },
                   { label: "Memory DB Size", value: dbSizeMb, decimals: 1, tag: "MB" },
                 ].map((stat, idx) => (
                   <div
