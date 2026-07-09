@@ -1176,30 +1176,33 @@ function GemmaBenchmarkChart() {
       </div>
 
       {showTable ? (
-        <div className="overflow-x-auto rounded-xl border border-violet-500/15">
-          <table className="w-full text-sm border-collapse min-w-[560px]">
-            <thead>
-              <tr className="bg-white/[0.03] text-left text-[11px] font-mono uppercase tracking-wider text-zinc-500">
-                <th className="px-4 py-3 font-medium">Benchmark</th>
-                {GEMMA_MODEL_SIZES.map((c) => (
-                  <th key={c} className="px-4 py-3 font-medium text-right">{c}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-violet-500/10">
-              {GEMMA_BENCHMARK_SERIES.map((s) => (
-                <tr key={s.key}>
-                  <td className="px-4 py-3 font-mono text-zinc-300 whitespace-nowrap">
-                    <span className="inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle" style={{ background: s.color }} />
-                    {s.label}
-                  </td>
-                  {s.values.map((v, i) => (
-                    <td key={i} className="px-4 py-3 text-right font-mono text-zinc-300">{v.toFixed(1)}</td>
+        <div className="relative">
+          <div className="overflow-x-auto rounded-xl border border-violet-500/15">
+            <table className="w-full text-sm border-collapse min-w-[560px]">
+              <thead>
+                <tr className="bg-white/[0.03] text-left text-[11px] font-mono uppercase tracking-wider text-zinc-500">
+                  <th className="px-4 py-3 font-medium">Benchmark</th>
+                  {GEMMA_MODEL_SIZES.map((c) => (
+                    <th key={c} className="px-4 py-3 font-medium text-right">{c}</th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-violet-500/10">
+                {GEMMA_BENCHMARK_SERIES.map((s) => (
+                  <tr key={s.key}>
+                    <td className="px-4 py-3 font-mono text-zinc-300 whitespace-nowrap">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle" style={{ background: s.color }} />
+                      {s.label}
+                    </td>
+                    {s.values.map((v, i) => (
+                      <td key={i} className="px-4 py-3 text-right font-mono text-zinc-300">{v.toFixed(1)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="hidden max-md:block absolute top-0 right-0 bottom-0 w-9 rounded-r-xl bg-gradient-to-l from-[#0b0b0d] to-transparent pointer-events-none" />
         </div>
       ) : (
         <svg
@@ -1939,32 +1942,35 @@ export default function Landing() {
           </Reveal>
 
           <Reveal delay={80}>
-            <div className="mb-10 overflow-x-auto rounded-2xl border border-violet-500/15">
-              <table className="w-full text-sm border-collapse min-w-[720px]">
-                <thead>
-                  <tr className="bg-white/[0.03] text-left text-[11px] font-mono uppercase tracking-wider text-zinc-500">
-                    <th className="px-5 py-3.5 font-medium">Spec</th>
-                    <th className="px-5 py-3.5 font-medium">MI300X</th>
-                    <th className="px-5 py-3.5 font-medium">MI350X</th>
-                    <th className="px-5 py-3.5 font-medium">
-                      MI355X
-                      <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[9.5px] font-sans font-semibold bg-violet-500/20 text-violet-300 align-middle normal-case tracking-normal">
-                        FLAGSHIP
-                      </span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-violet-500/10">
-                  {AMD_GPU_SPECS.map((row) => (
-                    <tr key={row.label} className="transition-colors hover:bg-violet-500/[0.04]">
-                      <td className="px-5 py-3.5 font-mono text-[12.5px] text-zinc-500 whitespace-nowrap">{row.label}</td>
-                      <td className="px-5 py-3.5 text-zinc-300 font-sans whitespace-nowrap">{row.mi300x}</td>
-                      <td className="px-5 py-3.5 text-zinc-300 font-sans whitespace-nowrap">{row.mi350x}</td>
-                      <td className="px-5 py-3.5 text-white font-sans font-medium whitespace-nowrap">{row.mi355x}</td>
+            <div className="relative mb-10">
+              <div className="overflow-x-auto rounded-2xl border border-violet-500/15">
+                <table className="w-full text-sm border-collapse min-w-[720px]">
+                  <thead>
+                    <tr className="bg-white/[0.03] text-left text-[11px] font-mono uppercase tracking-wider text-zinc-500">
+                      <th className="px-5 py-3.5 font-medium">Spec</th>
+                      <th className="px-5 py-3.5 font-medium">MI300X</th>
+                      <th className="px-5 py-3.5 font-medium">MI350X</th>
+                      <th className="px-5 py-3.5 font-medium">
+                        MI355X
+                        <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[9.5px] font-sans font-semibold bg-violet-500/20 text-violet-300 align-middle normal-case tracking-normal">
+                          FLAGSHIP
+                        </span>
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-violet-500/10">
+                    {AMD_GPU_SPECS.map((row) => (
+                      <tr key={row.label} className="transition-colors hover:bg-violet-500/[0.04]">
+                        <td className="px-5 py-3.5 font-mono text-[12.5px] text-zinc-500 whitespace-nowrap">{row.label}</td>
+                        <td className="px-5 py-3.5 text-zinc-300 font-sans whitespace-nowrap">{row.mi300x}</td>
+                        <td className="px-5 py-3.5 text-zinc-300 font-sans whitespace-nowrap">{row.mi350x}</td>
+                        <td className="px-5 py-3.5 text-white font-sans font-medium whitespace-nowrap">{row.mi355x}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="hidden max-md:block absolute top-0 right-0 bottom-0 w-9 rounded-r-2xl bg-gradient-to-l from-[#080808] to-transparent pointer-events-none" />
             </div>
           </Reveal>
 
@@ -2044,41 +2050,44 @@ export default function Landing() {
           </Reveal>
 
           <Reveal delay={80}>
-            <div className="mb-14 overflow-x-auto rounded-2xl border border-violet-500/15">
-              <table className="w-full text-sm border-collapse min-w-[640px]">
-                <thead>
-                  <tr className="bg-white/[0.03] text-left text-[11px] font-mono uppercase tracking-wider text-zinc-500">
-                    <th className="px-5 py-3.5 font-medium">Model</th>
-                    <th className="px-5 py-3.5 font-medium">Parameters</th>
-                    <th className="px-5 py-3.5 font-medium">Context</th>
-                    <th className="px-5 py-3.5 font-medium">Modalities</th>
-                    <th className="px-5 py-3.5 font-medium">Role</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-violet-500/10">
-                  {GEMMA_MODELS.map((m) => (
-                    <tr
-                      key={m.name}
-                      className={`transition-colors hover:bg-violet-500/[0.04] ${
-                        m.name === "26B-A4B" ? "bg-violet-500/[0.06]" : ""
-                      }`}
-                    >
-                      <td className="px-5 py-4 font-mono font-semibold text-white whitespace-nowrap">
-                        Gemma 4 {m.name}
-                        {m.name === "26B-A4B" && (
-                          <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[9.5px] font-sans font-semibold bg-violet-500/20 text-violet-300 align-middle">
-                            ATTEMPTED FIRST
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4 text-zinc-400 font-sans whitespace-nowrap">{m.params}</td>
-                      <td className="px-5 py-4 text-zinc-400 font-mono whitespace-nowrap">{m.ctx}</td>
-                      <td className="px-5 py-4 text-zinc-400 font-sans whitespace-nowrap">{m.modalities}</td>
-                      <td className="px-5 py-4 text-zinc-400 font-sans">{m.note}</td>
+            <div className="relative mb-14">
+              <div className="overflow-x-auto rounded-2xl border border-violet-500/15">
+                <table className="w-full text-sm border-collapse min-w-[640px]">
+                  <thead>
+                    <tr className="bg-white/[0.03] text-left text-[11px] font-mono uppercase tracking-wider text-zinc-500">
+                      <th className="px-5 py-3.5 font-medium">Model</th>
+                      <th className="px-5 py-3.5 font-medium">Parameters</th>
+                      <th className="px-5 py-3.5 font-medium">Context</th>
+                      <th className="px-5 py-3.5 font-medium">Modalities</th>
+                      <th className="px-5 py-3.5 font-medium">Role</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-violet-500/10">
+                    {GEMMA_MODELS.map((m) => (
+                      <tr
+                        key={m.name}
+                        className={`transition-colors hover:bg-violet-500/[0.04] ${
+                          m.name === "26B-A4B" ? "bg-violet-500/[0.06]" : ""
+                        }`}
+                      >
+                        <td className="px-5 py-4 font-mono font-semibold text-white whitespace-nowrap">
+                          Gemma 4 {m.name}
+                          {m.name === "26B-A4B" && (
+                            <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[9.5px] font-sans font-semibold bg-violet-500/20 text-violet-300 align-middle">
+                              ATTEMPTED FIRST
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-5 py-4 text-zinc-400 font-sans whitespace-nowrap">{m.params}</td>
+                        <td className="px-5 py-4 text-zinc-400 font-mono whitespace-nowrap">{m.ctx}</td>
+                        <td className="px-5 py-4 text-zinc-400 font-sans whitespace-nowrap">{m.modalities}</td>
+                        <td className="px-5 py-4 text-zinc-400 font-sans">{m.note}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="hidden max-md:block absolute top-0 right-0 bottom-0 w-9 rounded-r-2xl bg-gradient-to-l from-[#080808] to-transparent pointer-events-none" />
             </div>
           </Reveal>
 
@@ -2183,34 +2192,37 @@ export default function Landing() {
                   <span className="text-violet-300 font-mono text-[11px]">agents/intent_agent.py</span>.
                 </p>
               </div>
-              <div className="overflow-x-auto rounded-xl border border-violet-500/15">
-                <table className="w-full text-sm border-collapse min-w-[560px]">
-                  <thead>
-                    <tr className="bg-white/[0.03] text-left text-[11px] font-mono uppercase tracking-wider text-zinc-500">
-                      <th className="px-5 py-3 font-medium">Model</th>
-                      <th className="px-5 py-3 font-medium">Avg. completion tokens</th>
-                      <th className="px-5 py-3 font-medium">Avg. latency</th>
-                      <th className="px-5 py-3 font-medium">Accuracy</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-violet-500/10">
-                    {MODEL_BENCHMARK.map((row) => (
-                      <tr key={row.model} className={row.tag ? "bg-violet-500/[0.06]" : ""}>
-                        <td className="px-5 py-3 font-mono text-[12.5px] text-white whitespace-nowrap">
-                          {row.model}
-                          {row.tag && (
-                            <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[9.5px] font-sans font-semibold bg-violet-500/20 text-violet-300 align-middle">
-                              PRIMARY
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3 text-zinc-300 font-mono whitespace-nowrap">{row.tokens}</td>
-                        <td className="px-5 py-3 text-zinc-300 font-mono whitespace-nowrap">{row.latency.toFixed(1)}s</td>
-                        <td className="px-5 py-3 text-zinc-300 font-mono whitespace-nowrap">{row.accuracy}</td>
+              <div className="relative">
+                <div className="overflow-x-auto rounded-xl border border-violet-500/15">
+                  <table className="w-full text-sm border-collapse min-w-[560px]">
+                    <thead>
+                      <tr className="bg-white/[0.03] text-left text-[11px] font-mono uppercase tracking-wider text-zinc-500">
+                        <th className="px-5 py-3 font-medium">Model</th>
+                        <th className="px-5 py-3 font-medium">Avg. completion tokens</th>
+                        <th className="px-5 py-3 font-medium">Avg. latency</th>
+                        <th className="px-5 py-3 font-medium">Accuracy</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-violet-500/10">
+                      {MODEL_BENCHMARK.map((row) => (
+                        <tr key={row.model} className={row.tag ? "bg-violet-500/[0.06]" : ""}>
+                          <td className="px-5 py-3 font-mono text-[12.5px] text-white whitespace-nowrap">
+                            {row.model}
+                            {row.tag && (
+                              <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[9.5px] font-sans font-semibold bg-violet-500/20 text-violet-300 align-middle">
+                                PRIMARY
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3 text-zinc-300 font-mono whitespace-nowrap">{row.tokens}</td>
+                          <td className="px-5 py-3 text-zinc-300 font-mono whitespace-nowrap">{row.latency.toFixed(1)}s</td>
+                          <td className="px-5 py-3 text-zinc-300 font-mono whitespace-nowrap">{row.accuracy}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="hidden max-md:block absolute top-0 right-0 bottom-0 w-9 rounded-r-xl bg-gradient-to-l from-[#0b0b0d] to-transparent pointer-events-none" />
               </div>
               <p className="mt-4 text-sm text-zinc-400 leading-relaxed font-sans max-w-3xl">
                 <span className="text-white font-medium">gpt-oss-120b</span> won on every axis that
@@ -2225,8 +2237,8 @@ export default function Landing() {
           </Reveal>
 
           <Reveal delay={240}>
-            <div className="p-6 md:p-8 rounded-2xl border border-violet-500/20 bg-[#0b0b0d]">
-              <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-violet-400 mb-2">In one sentence</p>
+            <div className="p-6 md:p-8 rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-600/[0.08] to-transparent">
+              <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-violet-300 mb-3">In one sentence</p>
               <p className="text-base text-white leading-relaxed font-sans max-w-3xl">
                 KAIROS tries <span className="text-violet-300">Gemma on AMD Instinct</span> first for
                 cheap query routing, falls into <span className="text-violet-300">Fireworks&apos; gpt-oss-120b</span> —
