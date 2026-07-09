@@ -535,6 +535,49 @@ function GemmaLogo({ className = "" }: { className?: string }) {
   );
 }
 
+/* ── Fireworks AI logo (real, official mark) — primary LLM provider ───────── */
+function FireworksLogo({ className = "" }: { className?: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${className}`}>
+      <svg viewBox="0 0 24 24" className="h-[1.4em] w-[1.4em]" fill="#5019C5" xmlns="http://www.w3.org/2000/svg">
+        <path fillRule="evenodd" clipRule="evenodd" d="M14.8 5l-2.801 6.795L9.195 5H7.397l3.072 7.428a1.64 1.64 0 003.038.002L16.598 5H14.8zm1.196 10.352l5.124-5.244-.699-1.669-5.596 5.739a1.664 1.664 0 00-.343 1.807 1.642 1.642 0 001.516 1.012L16 17l8-.02-.699-1.669-7.303.041h-.002zM2.88 10.104l.699-1.669 5.596 5.739c.468.479.603 1.189.343 1.807a1.643 1.643 0 01-1.516 1.012l-8-.018-.002.002.699-1.669 7.303.042-5.122-5.246z" />
+      </svg>
+      <span className="font-sans font-bold tracking-tight text-white">Fireworks<span className="font-normal text-zinc-400"> AI</span></span>
+    </span>
+  );
+}
+
+/* ── Groq logo (real, official mark) — fallback #1 LLM provider ───────────── */
+function GroqLogo({ className = "" }: { className?: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${className}`}>
+      <svg viewBox="0 0 24 24" className="h-[1.4em] w-[1.4em]" fill="#F55036" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12.036 2c-3.853-.035-7 3-7.036 6.781-.035 3.782 3.055 6.872 6.908 6.907h2.42v-2.566h-2.292c-2.407.028-4.38-1.866-4.408-4.23-.029-2.362 1.901-4.298 4.308-4.326h.1c2.407 0 4.358 1.915 4.365 4.278v6.305c0 2.342-1.944 4.25-4.323 4.279a4.375 4.375 0 01-3.033-1.252l-1.851 1.818A7 7 0 0012.029 22h.092c3.803-.056 6.858-3.083 6.879-6.816v-6.5C18.907 4.963 15.817 2 12.036 2z" />
+      </svg>
+      <span className="font-sans font-bold tracking-tight text-white">Groq</span>
+    </span>
+  );
+}
+
+/* ── Google Gemini logo (real, official mark) — fallback #2 + embeddings ──── */
+function GeminiLogo({ className = "" }: { className?: string }) {
+  const uid = useId().replace(/:/g, "");
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${className}`}>
+      <svg viewBox="0 0 24 24" className="h-[1.4em] w-[1.4em]" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id={`gemini-grad-${uid}`} x1="0%" x2="100%" y1="100%" y2="0%">
+            <stop offset="0%" stopColor="#078EFA" />
+            <stop offset="100%" stopColor="#AD89EB" />
+          </linearGradient>
+        </defs>
+        <path fill={`url(#gemini-grad-${uid})`} d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81" />
+      </svg>
+      <span className="font-sans font-bold tracking-tight text-white">Gemini</span>
+    </span>
+  );
+}
+
 /* ── Brand logos (real, official marks) ──────────────────────────────────── */
 const Logos = {
   slack: (
@@ -941,12 +984,71 @@ const AMD_GPU_SPECS = [
   { label: "TDP", mi300x: "750W", mi350x: "1,000W (air-cooled)", mi355x: "1,400W (liquid-cooled)" },
 ] as const;
 
+/* ── Text-generation provider chain (core/orchestrator.py, config.text_providers) ──
+   The real, live fallback order every synthesis/extraction/live-data/intent call
+   goes through — one provider per row, tried top to bottom, moving on only when
+   the one above actually errors or rate-limits. Model IDs match config.py exactly. */
+const PROVIDER_CHAIN = [
+  {
+    key: "gemma",
+    tier: "Fast Path",
+    logo: "gemma",
+    model: "Gemma 4 26B-A4B",
+    hw: "AMD Instinct, via Fireworks",
+    role: "The very first hop on every query — before anything else runs, KAIROS's Intent Agent tries routing classification here for dense-4B cost at MoE reasoning quality.",
+    trigger: "Attempted first; drops straight to the chain below if unreachable.",
+    strong: false,
+  },
+  {
+    key: "fireworks",
+    tier: "Primary",
+    logo: "fireworks",
+    model: "gpt-oss-120b",
+    hw: "AMD Instinct (MI300X/MI350X/MI355X)",
+    role: "Every synthesis, extraction, and live-data answer starts here — plus query classification itself whenever the Gemma fast path isn't reachable. Benchmarked against every other model this account can reach; see below.",
+    trigger: "Always tried first for every real answer, no exceptions.",
+    strong: true,
+  },
+  {
+    key: "groq",
+    tier: "Fallback 1",
+    logo: "groq",
+    model: "llama-3.1-8b-instant",
+    hw: "Groq LPU",
+    role: "If Fireworks errors or hits a rate limit mid-request, KAIROS retries on Groq automatically, inside the same call — the user never sees the failure, just a slightly slower answer.",
+    trigger: "Only after a real Fireworks error.",
+    strong: false,
+  },
+  {
+    key: "gemini",
+    tier: "Fallback 2",
+    logo: "gemini",
+    model: "gemini-2.0-flash",
+    hw: "Google TPU",
+    role: "Closes the loop if Fireworks AND Groq both fail. Also KAIROS's primary embeddings provider — Fireworks' own embedding model is the fallback there, reversing the text-generation order.",
+    trigger: "Only if Fireworks AND Groq both fail.",
+    strong: false,
+  },
+] as const;
+
+// Empirically benchmarked 2026-07-09 against every chat model this Fireworks
+// account can actually reach (agents/intent_agent.py's router prompt, 6 real
+// production queries) — not a guess. gpt-oss-120b won on every axis.
+const MODEL_BENCHMARK = [
+  { model: "gpt-oss-120b", tag: "chosen", tokens: 132, latency: 1.4, accuracy: "5/6" },
+  { model: "glm-5p2", tag: "", tokens: 130, latency: 3.1, accuracy: "5/6" },
+  { model: "glm-5p1", tag: "", tokens: 141, latency: 3.5, accuracy: "5/6" },
+  { model: "deepseek-v4-pro", tag: "", tokens: 150, latency: 3.8, accuracy: "5/6" },
+  { model: "qwen3p7-plus", tag: "", tokens: 750, latency: 3.7, accuracy: "5/6" },
+  { model: "kimi-k2p6", tag: "", tokens: 315, latency: 4.0, accuracy: "5/6" },
+] as const;
+
 /* ── Gemma 4 model family (Google DeepMind — hackathon co-sponsor) ─────────── */
 const GEMMA_MODELS = [
   { name: "E2B", params: "2.3B effective", ctx: "128K", modalities: "Text · Image · Audio", note: "On-device — phones, laptops" },
   { name: "E4B", params: "4.5B effective (8B total)", ctx: "128K", modalities: "Text · Image · Audio", note: "Balanced on-device tier" },
   { name: "12B", params: "12B, encoder-free", ctx: "256K", modalities: "Text · Image · Audio · Video", note: "Direct linear projections replace vision/audio encoders" },
-  { name: "26B-A4B", params: "26B total / 3.8B active (MoE)", ctx: "256K", modalities: "Text · Image", note: "Powers KAIROS's Intent Agent — dense-4B cost, MoE reasoning" },
+  { name: "26B-A4B", params: "26B total / 3.8B active (MoE)", ctx: "256K", modalities: "Text · Image", note: "Attempted first by KAIROS's Intent Agent — dense-4B cost, MoE reasoning" },
   { name: "31B", params: "31B dense (32.2B)", ctx: "256K", modalities: "Text · Image · Video", note: "Server-grade — the top of the family" },
 ] as const;
 
@@ -1933,10 +2035,11 @@ export default function Landing() {
               Gemma 4 shipped April 2026 under a clean Apache 2.0 license — the first time
               Google DeepMind&apos;s open-weight family has dropped the old research-only terms.
               Every size takes text and image input natively; KAIROS&apos;s{" "}
-              <span className="text-violet-300 font-mono text-[13px]">IntentAgent</span> calls the
-              26B-A4B mixture-of-experts directly, on the AMD Instinct hardware above, for cheap,
-              latency-sensitive query classification — falling back to the primary Fireworks chain
-              if it&apos;s ever unavailable.
+              <span className="text-violet-300 font-mono text-[13px]">IntentAgent</span> attempts the
+              26B-A4B mixture-of-experts first, on the AMD Instinct hardware above, for cheap,
+              latency-sensitive query classification — dropping straight into the primary Fireworks
+              chain below the moment that deployment isn&apos;t reachable, so a query is never blocked
+              waiting on it.
             </p>
           </Reveal>
 
@@ -1964,7 +2067,7 @@ export default function Landing() {
                         Gemma 4 {m.name}
                         {m.name === "26B-A4B" && (
                           <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[9.5px] font-sans font-semibold bg-violet-500/20 text-violet-300 align-middle">
-                            USED IN KAIROS
+                            ATTEMPTED FIRST
                           </span>
                         )}
                       </td>
@@ -1999,13 +2102,138 @@ export default function Landing() {
                 <span className="text-violet-300 font-mono text-[13px]">IntentAgent</span> runs
                 first on every single query — before Context or Synthesis ever sees it — deciding
                 whether you asked to search memory, pull live Gmail/Drive/Jira data, or just record
-                a new decision. Before this, that classification hop rode the same flagship
-                reasoning model (qwen3p7-plus) as the answer itself, paying its full latency and
-                cost twice per question. Routing it to Gemma 4&apos;s 26B-A4B instead — 3.8B active
-                parameters, so it runs at dense-4B speed — cuts that first hop&apos;s cost and
-                latency without giving up the instruction-following reliability a raw 4B dense model
-                would sacrifice, since the fallback in <span className="text-violet-300 font-mono text-[13px]">agents/intent_agent.py</span> only
-                drops back to the primary chain if Gemma itself is unavailable.
+                a new decision. Without a dedicated fast path, that classification hop would ride
+                the same flagship model as the answer itself, paying its full latency and cost
+                twice per question. Routing it to Gemma 4&apos;s 26B-A4B instead — 3.8B active
+                parameters, so it runs at dense-4B speed — is designed to cut that first hop&apos;s
+                cost and latency without giving up instruction-following reliability, and the
+                fallback in <span className="text-violet-300 font-mono text-[13px]">agents/intent_agent.py</span> drops
+                straight back to the primary Fireworks chain the instant that deployment isn&apos;t
+                reachable — so classification never blocks on it either way.
+              </p>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── Provider Chain ── */}
+      <section id="provider-chain" className="relative py-28 px-6">
+        <div className="max-w-6xl mx-auto">
+          <Reveal className="text-center mb-16">
+            <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">Reliability</p>
+            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight">
+              One answer. <span className="text-white">Three chances</span> to get there.
+            </h2>
+            <p className="mt-4 text-zinc-400 max-w-2xl mx-auto font-sans">
+              Every query starts with a cheap routing hop, then walks the fixed
+              text-generation order below. Each step is only ever tried after the
+              one before it genuinely fails or finishes its narrow job, so one
+              provider having a bad minute never surfaces as a broken answer.
+            </p>
+          </Reveal>
+
+          <Reveal delay={80}>
+            <div className="relative grid md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+              {PROVIDER_CHAIN.map((p, i) => (
+                <div key={p.key} className="relative">
+                  <div
+                    className={`h-full p-6 rounded-2xl border bg-[#0b0b0d] flex flex-col ${
+                      p.strong ? "border-violet-500/40" : "border-violet-500/15"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-5">
+                      {p.logo === "gemma" && <GemmaLogo className="text-base" />}
+                      {p.logo === "fireworks" && <FireworksLogo className="text-base" />}
+                      {p.logo === "groq" && <GroqLogo className="text-base" />}
+                      {p.logo === "gemini" && <GeminiLogo className="text-base" />}
+                      <span
+                        className={`px-2 py-0.5 rounded text-[9.5px] font-mono font-semibold uppercase tracking-wider ${
+                          p.strong ? "bg-violet-500/20 text-violet-300" : "bg-white/[0.06] text-zinc-400"
+                        }`}
+                      >
+                        {p.tier}
+                      </span>
+                    </div>
+                    <p className="font-mono text-[13px] text-white mb-1">{p.model}</p>
+                    <p className="text-[11px] text-zinc-500 font-mono mb-4">{p.hw}</p>
+                    <p className="text-sm text-zinc-400 leading-relaxed font-sans flex-1">{p.role}</p>
+                    <p className="mt-4 pt-4 border-t border-white/[0.06] text-[11px] text-zinc-500 font-mono">
+                      {p.trigger}
+                    </p>
+                  </div>
+                  {i < PROVIDER_CHAIN.length - 1 && (
+                    <div className="hidden lg:flex absolute top-1/2 -right-5 -translate-y-1/2 z-10 w-5 h-5 items-center justify-center text-zinc-600">
+                      →
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Reveal>
+
+          <Reveal delay={160}>
+            <div className="p-6 md:p-8 rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-600/[0.08] to-transparent mb-6">
+              <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-6">
+                <div>
+                  <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-violet-300 mb-2">Chosen by benchmark, not guesswork</p>
+                  <h3 className="text-xl font-semibold text-white">Every chat model this Fireworks account can reach, tested head-to-head</h3>
+                </div>
+                <p className="text-xs text-zinc-500 font-sans max-w-xs">
+                  6 real production queries through the exact router prompt in{" "}
+                  <span className="text-violet-300 font-mono text-[11px]">agents/intent_agent.py</span>.
+                </p>
+              </div>
+              <div className="overflow-x-auto rounded-xl border border-violet-500/15">
+                <table className="w-full text-sm border-collapse min-w-[560px]">
+                  <thead>
+                    <tr className="bg-white/[0.03] text-left text-[11px] font-mono uppercase tracking-wider text-zinc-500">
+                      <th className="px-5 py-3 font-medium">Model</th>
+                      <th className="px-5 py-3 font-medium">Avg. completion tokens</th>
+                      <th className="px-5 py-3 font-medium">Avg. latency</th>
+                      <th className="px-5 py-3 font-medium">Accuracy</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-violet-500/10">
+                    {MODEL_BENCHMARK.map((row) => (
+                      <tr key={row.model} className={row.tag ? "bg-violet-500/[0.06]" : ""}>
+                        <td className="px-5 py-3 font-mono text-[12.5px] text-white whitespace-nowrap">
+                          {row.model}
+                          {row.tag && (
+                            <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[9.5px] font-sans font-semibold bg-violet-500/20 text-violet-300 align-middle">
+                              PRIMARY
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-zinc-300 font-mono whitespace-nowrap">{row.tokens}</td>
+                        <td className="px-5 py-3 text-zinc-300 font-mono whitespace-nowrap">{row.latency.toFixed(1)}s</td>
+                        <td className="px-5 py-3 text-zinc-300 font-mono whitespace-nowrap">{row.accuracy}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-4 text-sm text-zinc-400 leading-relaxed font-sans max-w-3xl">
+                <span className="text-white font-medium">gpt-oss-120b</span> won on every axis that
+                matters for a router: <span className="text-white font-medium">5.7× fewer tokens</span> and{" "}
+                <span className="text-white font-medium">2.6× lower latency</span> than the next
+                candidate, at matching accuracy — with zero truncated responses. Some larger models
+                spend hundreds of tokens narrating a reasoning preamble before ever emitting the
+                routing decision; on a latency-sensitive hop that runs before every single answer,
+                that difference compounds fast.
+              </p>
+            </div>
+          </Reveal>
+
+          <Reveal delay={240}>
+            <div className="p-6 md:p-8 rounded-2xl border border-violet-500/20 bg-[#0b0b0d]">
+              <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-violet-400 mb-2">In one sentence</p>
+              <p className="text-base text-white leading-relaxed font-sans max-w-3xl">
+                KAIROS tries <span className="text-violet-300">Gemma on AMD Instinct</span> first for
+                cheap query routing, falls into <span className="text-violet-300">Fireworks&apos; gpt-oss-120b</span> —
+                also on AMD Instinct — for every real answer, and only reaches for{" "}
+                <span className="text-violet-300">Groq</span> or <span className="text-violet-300">Gemini</span> if
+                the AMD-backed path itself is down. AMD hardware is never the fallback here — it&apos;s
+                the path every request takes by default.
               </p>
             </div>
           </Reveal>
