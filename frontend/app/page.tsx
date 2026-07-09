@@ -2252,6 +2252,66 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── Q&A Cheat Sheet ── */}
+      <section id="qa-cheatsheet" className="relative py-28 px-6 bg-gradient-to-b from-transparent via-violet-950/10 to-transparent">
+        <div className="max-w-5xl mx-auto">
+          <Reveal className="flex items-center gap-4 mb-12">
+            <KairosLogo size={40} className="shrink-0" />
+            <h2 className="text-2xl md:text-4xl font-display font-bold tracking-tight">
+              Q&amp;A Cheat Sheet — <span className="text-violet-400">AMD / Gemma / Fallbacks</span>
+            </h2>
+          </Reveal>
+
+          {/* Q1 */}
+          <Reveal delay={60} className="mb-10">
+            <div className="p-6 md:p-8 rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-600/[0.08] to-transparent">
+              <p className="text-violet-300 font-semibold text-base mb-3">&ldquo;Does this actually run on AMD?&rdquo;</p>
+              <p className="text-sm text-zinc-300 leading-relaxed font-sans">
+                Yes — the real, permanent connection is Fireworks. KAIROS&apos;s brain calls Fireworks&apos; API, and Fireworks runs that service on real AMD Instinct hardware as their official inference partner. Every synthesis, extraction, and live-data answer goes through AMD Instinct. Separately, development happened on an AMD dev cloud machine (verified with <span className="font-mono text-violet-300">rocm-smi</span>) — that&apos;s just where the code was written and tested, not part of the live product path.
+              </p>
+            </div>
+          </Reveal>
+
+          {/* Q2 */}
+          <Reveal delay={120} className="mb-10">
+            <div className="p-6 md:p-8 rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-600/[0.08] to-transparent">
+              <p className="text-violet-300 font-semibold text-base mb-3">&ldquo;What about Gemma — is that on AMD too?&rdquo;</p>
+              <p className="text-sm text-zinc-300 leading-relaxed font-sans">
+                Attempted first, not guaranteed yet — and the product says so out loud, it&apos;s not hidden. Gemma 4 26B-A4B is used for one narrow job: classifying what kind of question came in, before routing it, on AMD Instinct. Fireworks hasn&apos;t enabled AMD support for that specific model architecture yet (confirmed live: rejected on MI300X, NVIDIA-only for now). KAIROS&apos;s fallback chain already handles this — when Gemma isn&apos;t reachable, it drops straight back to the same AMD-backed Fireworks → Groq → Gemini chain used for every real answer. Zero errors shown to the user, zero code changes needed the moment Fireworks flips Gemma&apos;s AMD support on.
+              </p>
+            </div>
+          </Reveal>
+
+          {/* Q3 */}
+          <Reveal delay={180} className="mb-10">
+            <div className="p-6 md:p-8 rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-600/[0.08] to-transparent">
+              <p className="text-violet-300 font-semibold text-base mb-3">&ldquo;Walk me through your fallbacks.&rdquo;</p>
+              <p className="text-sm text-zinc-300 leading-relaxed font-sans mb-5">
+                Nothing in KAIROS ever just breaks — everything has a plan B and downgrades quietly instead of erroring:
+              </p>
+              <ol className="space-y-2.5 text-sm text-zinc-300 font-sans list-none pl-0">
+                {[
+                  { n: 1, text: <>Main AI brain: Fireworks (<span className="text-white font-mono text-xs">gpt-oss-120b</span>, AMD Instinct) → Groq → Gemini.</> },
+                  { n: 2, text: <>Question-sorting step: Gemma 4 on AMD first, falls back to #1&apos;s chain if unavailable.</> },
+                  { n: 3, text: <>Embeddings (text → searchable vectors): Gemini → Fireworks → local basic option.</> },
+                  { n: 4, text: <>Jira: per-user OAuth is fully coded, pending an Atlassian app-registration step (external, not code) — falls back to one shared login in the meantime.</> },
+                  { n: 5, text: <>Zoom: same shared-fallback pattern, scoped to the owner account only — no shared fallback for other users.</> },
+                  { n: 6, text: <>Notion: one-click OAuth normally, manual API-key paste as backup if that fails.</> },
+                  { n: 7, text: <>Meeting transcription: skipped gracefully (not crashed) if Whisper isn&apos;t installed on that deployment.</> },
+                ].map((item) => (
+                  <li key={item.n} className="flex gap-3">
+                    <span className="shrink-0 w-6 h-6 rounded-full bg-violet-500/20 text-violet-300 text-xs font-mono font-bold flex items-center justify-center mt-0.5">
+                      {item.n}
+                    </span>
+                    <span className="leading-relaxed">{item.text}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
       {/* ── CTA ── */}
       <section className="relative py-32 px-6">
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
