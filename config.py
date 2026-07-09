@@ -13,26 +13,38 @@ class Config:
     # ── Fireworks AI (AMD hardware — OpenAI-compatible) ────────────────────────
     FIREWORKS_API_KEY: str = os.getenv("FIREWORKS_API_KEY", "")
     FIREWORKS_BASE_URL: str = "https://api.fireworks.ai/inference/v1"
+    # Benchmarked against every chat model this account can actually reach
+    # (2026-07-09, agents/intent_agent.py router prompt, 6 real queries incl.
+    # "ok so what is my last mail" / "ok add decision..."): gpt-oss-120b beat
+    # qwen3p7-plus, glm-5p1/5p2, deepseek-v4-pro, and kimi-k2p6 on every axis —
+    # ~132 avg completion tokens vs. 750-863 for the others (qwen3p7-plus in
+    # particular burns tokens narrating a "Thinking Process" preamble before
+    # ever emitting JSON), ~1.4s vs. 3-4s latency, identical accuracy, zero
+    # truncations. kimi-k2p5 500-errored on every call. This is that empirical
+    # winner, not a guess — re-run the benchmark before changing it.
     FIREWORKS_MODEL: str = os.getenv(
         "FIREWORKS_MODEL",
-        "accounts/fireworks/models/qwen3p7-plus"
+        "accounts/fireworks/models/gpt-oss-120b"
     )
-    # Cheap/fast Fireworks model for high-volume ingestion extraction — keeps
-    # cost + latency down vs. running the 72B on every Slack/email/Drive item.
+    # Same benchmark winner — also the fast/cheap tier for high-volume ingestion
+    # extraction. No smaller/cheaper model was reachable on this account (every
+    # llama-v3p*/qwen2p5/mixtral candidate 404'd); gpt-oss-120b's own latency and
+    # token profile already beat every other reachable model, so it doubles as
+    # both tiers rather than falling back to a dead placeholder.
     FIREWORKS_MODEL_FAST: str = os.getenv(
         "FIREWORKS_MODEL_FAST",
-        "accounts/fireworks/models/llama-v3p3-70b-instruct"
+        "accounts/fireworks/models/gpt-oss-120b"
     )
     FIREWORKS_EMBED_MODEL: str = "nomic-ai/nomic-embed-text-v1.5"
-    # Gemma 4 (Google DeepMind — hackathon co-sponsor model family), served on
-    # Fireworks' AMD Instinct GPUs. 26B-A4B is a mixture-of-experts with only
-    # 3.8B active params, so it runs at small-model cost/latency while staying
-    # instruction-tuned — used for cheap, latency-sensitive classification
-    # (see agents/intent_agent.py) instead of the flagship reasoning model.
-    FIREWORKS_MODEL_GEMMA: str = os.getenv(
-        "FIREWORKS_MODEL_GEMMA",
-        "accounts/fireworks/models/gemma-4-26b-a4b-it"
-    )
+    # Google Gemma (DeepMind — hackathon co-sponsor model family) for cheap,
+    # latency-sensitive classification instead of the flagship reasoning model.
+    # No Gemma model is currently reachable on this Fireworks account or via the
+    # configured Gemini key (both checked directly — every candidate ID 404'd),
+    # so this intentionally defaults to empty rather than a guaranteed-dead
+    # placeholder name. agents/intent_agent.py skips the Gemma call entirely
+    # when this is unset, instead of wasting a doomed round-trip on every query.
+    # Set this once a real serverless Gemma deployment is confirmed reachable.
+    FIREWORKS_MODEL_GEMMA: str = os.getenv("FIREWORKS_MODEL_GEMMA", "")
 
     # ── Groq API (Text Completions) ─────────────────────────────────────────────
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
