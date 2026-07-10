@@ -283,10 +283,17 @@ async def slack_callback(code: str = None, state: str = None, error: str = None)
             return _popup_error(data.get("error", "Slack auth failed"))
 
         team_name = data.get("team_name") or data.get("team", {}).get("name", "Your Workspace")
+        # authed_user.id is the Slack member ID of the person who authorized the
+        # app — i.e. the OWNER of this workspace connection. The Slack bot uses it
+        # to answer @mentions ONLY for this person, never for other workspace
+        # members (who would otherwise read the owner's full cross-source private
+        # KAIROS memory just by being in the same workspace). See slack_bot.py.
+        authed_user_id = (data.get("authed_user") or {}).get("id") or ""
         _store_token(verified_uid, "slack", {
             "bot_token": data.get("access_token"),
             "team_id": data.get("team_id"),
             "team_name": team_name,
+            "authed_user_id": authed_user_id,
             "service": "slack",
         })
         print(f"[OAuth] ✅ Slack connected uid={verified_uid} team={team_name}")

@@ -23,12 +23,15 @@ class SlackBot:
         self.orchestrator = orchestrator
         self._bolt_app = None
         self._handler = None
-        # team_id -> (bot_token, user_uid). A single Socket Mode connection (one
-        # SLACK_APP_TOKEN) receives app_mention events for EVERY workspace this
-        # Slack app is installed to, so each event must be routed using ITS OWN
-        # team's bot token and user_uid — never a single hardcoded "owner". This
-        # map is what makes that possible; see _handle_mention/_team_creds.
-        self._team_creds: dict[str, tuple[str, str]] = {}
+        # team_id -> (bot_token, user_uid, owner_slack_id). A single Socket Mode
+        # connection (one SLACK_APP_TOKEN) receives app_mention events for EVERY
+        # workspace this Slack app is installed to, so each event must be routed
+        # using ITS OWN team's bot token and user_uid — never a single hardcoded
+        # "owner". owner_slack_id is the Slack member ID of the person who
+        # connected this workspace (authed_user.id at OAuth time); the bot answers
+        # from KAIROS memory ONLY for that person, so other workspace members
+        # can't read the owner's private cross-source memory. See _handle_mention.
+        self._team_creds: dict[str, tuple[str, str, str]] = {}
         # team_id -> bot user id, so self-mention filtering works per-workspace too
         self._bot_user_ids: dict[str, str] = {}
 
@@ -38,9 +41,11 @@ class SlackBot:
         t = config.SLACK_APP_TOKEN or ""
         return t if (t.startswith("xapp-") and len(t) > 20) else ""
 
-    def _load_team_creds(self) -> dict[str, tuple[str, str]]:
-        """Build team_id -> (bot_token, user_uid) for every connected Slack workspace."""
-        team_creds: dict[str, tuple[str, str]] = {}
+    def _load_team_creds(self) -> dict[str, tuple[str, str, str]]:
+        """Build team_id -> (bot_token, user_uid, owner_slack_id) for every
+        connected Slack workspace. owner_slack_id is "" for legacy connections
+        made before it was captured — those fail closed in _handle_mention."""
+        team_creds: dict[str, tuple[str, str, str]] = {}
         try:
             conn = sqlite3.connect(config.SQLITE_PATH)
             rows = conn.execute(
@@ -57,9 +62,10 @@ class SlackBot:
                     continue
                 t = data.get("bot_token", "")
                 team_id = data.get("team_id", "")
+                owner_slack_id = data.get("authed_user_id", "") or ""
                 uid = row[1]
                 if t.startswith("xoxb-") and len(t) > 30 and uid and team_id:
-                    team_creds[team_id] = (t, uid)
+                    team_creds[team_id] = (t, uid, owner_slack_id)
         except Exception:
             pass
         return team_creds
@@ -90,7 +96,7 @@ class SlackBot:
         bootstrap_token = next(iter(self._team_creds.values()))[0]
         self._bolt_app = AsyncApp(token=bootstrap_token, ignoring_self_events_enabled=True)
 
-        for team_id, (bot_token, _uid) in self._team_creds.items():
+        for team_id, (bot_token, _uid, _owner) in self._team_creds.items():
             try:
                 auth = await AsyncWebClient(token=bot_token).auth_test()
                 self._bot_user_ids[team_id] = auth["user_id"]
@@ -123,11 +129,11 @@ class SlackBot:
         # a KAIROS connection for is dropped rather than answered from someone
         # else's memory.
         team_id = (context or {}).get("team_id") or event.get("team", "")
-        bot_token, user_uid = self._team_creds.get(team_id, (None, None))
+        bot_token, user_uid, owner_slack_id = self._team_creds.get(team_id, (None, None, None))
         if not bot_token:
             # The workspace may have connected after the bot started — refresh once.
             self._team_creds = self._load_team_creds()
-            bot_token, user_uid = self._team_creds.get(team_id, (None, None))
+            bot_token, user_uid, owner_slack_id = self._team_creds.get(team_id, (None, None, None))
         if not bot_token:
             print(f"[SlackBot] Ignoring mention from unrecognized team_id={team_id!r}")
             return
@@ -152,6 +158,37 @@ class SlackBot:
         thread_ts = event.get("thread_ts") or event.get("ts")
         raw_text = event.get("text", "")
         user = event.get("user", "unknown")
+
+        # ── Access control (fail-closed) ────────────────────────────────────────
+        # KAIROS memory is private to the person who connected THIS workspace.
+        # Their Slack member ID (owner_slack_id, = authed_user.id at OAuth time)
+        # is the only identity allowed to query it via @mention — otherwise ANY
+        # workspace member could read the owner's full cross-source private memory
+        # (Gmail/Drive/Jira/GitHub/Notion decisions, not just Slack) just by
+        # mentioning the bot. A missing owner_slack_id means a legacy connection
+        # made before we captured it: we can't verify the asker is the owner, so
+        # we refuse rather than risk the leak (owner reconnects Slack once to fix).
+        if not owner_slack_id or user != owner_slack_id:
+            reason = "unverified legacy connection" if not owner_slack_id else f"non-owner <@{user}>"
+            print(f"[SlackBot] Refusing mention in team {team_id} ({reason}) — memory is owner-private.")
+            try:
+                frontend = (config.FRONTEND_URL or "").rstrip("/")
+                connect_hint = f" Connect your own at {frontend}/integrations." if frontend else ""
+                await AsyncWebClient(token=bot_token).chat_postMessage(
+                    channel=channel,
+                    thread_ts=thread_ts,
+                    text=(
+                        "🔒 KAIROS memory is private to the teammate who connected this "
+                        "workspace, so I can't answer that here." + connect_hint
+                        if owner_slack_id else
+                        "🔒 This KAIROS Slack connection needs to be reconnected before I "
+                        "can answer @mentions securely — the workspace owner can reconnect "
+                        "Slack from KAIROS → Integrations."
+                    ),
+                )
+            except Exception as e:
+                print(f"[SlackBot] Could not post access-control notice: {e}")
+            return
 
         question = re.sub(r"<@[A-Z0-9]+>", "", raw_text).strip()
         if not question:

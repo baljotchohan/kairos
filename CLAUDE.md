@@ -42,7 +42,7 @@ Connectors → Agents → Core (Memory + Graph + Orchestration) → API + MCP + 
 
 **Connectors** (`connectors/`) — raw data fetch, no AI. Each wraps one external API:
 - `slack_connector.py` — Slack Web API (channels, history, workspace info)
-- `slack_bot.py` — Slack Socket Mode listener, routes @KAIROS mentions to the orchestrator
+- `slack_bot.py` — Slack Socket Mode listener, routes @KAIROS mentions to the orchestrator. Access-control fail-closed: a mention is only answered from KAIROS memory if the mentioning Slack member IS the person who connected that workspace (their `authed_user.id`, captured at OAuth time and stored as `authed_user_id`); any other workspace member — or a legacy connection made before `authed_user_id` was captured — is politely refused, never answered, so a coworker can't read the owner's full cross-source private memory just by being in the same workspace
 - `gmail_connector.py` — Gmail API (list/get/search messages)
 - `drive_connector.py` — Google Drive API (list/search/export files)
 - `jira_connector.py` — Jira REST API + JQL search (global credentials, see above)

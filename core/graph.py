@@ -192,9 +192,22 @@ class DecisionGraph:
             # Save to SQLite first (durable layer) to prevent desync if write fails
             self._save_node(node)
             self.graph.add_node(node.id, data=node)
-            affected = self._auto_link(node)  # IDs of nodes that gained new edges
+            # Chat Q&A turns (CONVERSATION_TOPIC, see orchestrator.py) skip auto-linking
+            # AND the Obsidian vault write entirely — they're excluded from every
+            # decision view already (see exclude_conversation_nodes()), so the O(n)
+            # topic/participant scan below would be pure overhead on the single most
+            # frequent write in the app (one per chat message), and writing a note for
+            # one would permanently clutter the user's real vault with one throwaway
+            # file per chat message (auto-linking alone being skipped doesn't stop the
+            # note from being written). Real decisions (ingestion, store_decision, MCP
+            # store_context) still auto-link and export normally.
+            is_conversation_turn = CONVERSATION_TOPIC in (node.topics or [])
+            if is_conversation_turn:
+                affected: set[str] = set()
+            else:
+                affected = self._auto_link(node)  # IDs of nodes that gained new edges
 
-            if vault_path:
+            if vault_path and not is_conversation_turn:
                 # user_id is assumed to always be a Firebase UID, never raw user
                 # input — but that assumption has exactly one exception in this
                 # codebase (api/auth.py's `sim-`/`simulated-` DEBUG-only bypass,
@@ -408,20 +421,22 @@ class DecisionGraph:
         """Create edges for shared topics/participants. Returns IDs of nodes that gained edges."""
         affected: set[str] = set()
         relations_to_add: list[tuple[str, str, RelationType]] = []
-        
-        with self._lock:
-            for existing_id in list(self.graph.nodes):
-                if existing_id == new_node.id:
-                    continue
-                if "data" not in self.graph.nodes[existing_id]:
-                    continue
-                existing: DecisionNode = self.graph.nodes[existing_id]["data"]
 
-                # Never link across users — a shared topic ("infrastructure") or a
-                # common first name must not connect User A's decisions to User B's
-                # (which would also leak B's titles into A's Obsidian notes).
-                if existing.user_id != new_node.user_id:
-                    continue
+        with self._lock:
+            # Filter to this user's nodes BEFORE the scan, not inside it — with a
+            # single process-wide lock, an unfiltered scan makes every user's write
+            # latency scale with the TOTAL node count across every tenant, not just
+            # their own. Also skip conversation-topic nodes as candidates (chat Q&A
+            # excluded from decision views entirely — see add_decision()).
+            candidate_ids = [
+                n for n in self.graph.nodes
+                if n != new_node.id
+                and "data" in self.graph.nodes[n]
+                and self.graph.nodes[n]["data"].user_id == new_node.user_id
+                and CONVERSATION_TOPIC not in (self.graph.nodes[n]["data"].topics or [])
+            ]
+            for existing_id in candidate_ids:
+                existing: DecisionNode = self.graph.nodes[existing_id]["data"]
 
                 shared_topics = set(t.lower() for t in new_node.topics) & set(t.lower() for t in existing.topics)
                 if shared_topics:

@@ -10,6 +10,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback, useId } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import KairosLogo from "@/components/KairosLogo";
@@ -2307,6 +2308,67 @@ export default function Landing() {
                   </li>
                 ))}
               </ol>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── About Me ── */}
+      <section id="about" className="relative py-28 px-6 overflow-hidden">
+        <div className="absolute -bottom-20 -right-20 w-72 h-72 rotate-12 rounded-[3rem] bg-gradient-to-br from-violet-500 to-violet-700 blur-2xl opacity-25 pointer-events-none" />
+        <div className="relative max-w-4xl mx-auto">
+          <Reveal className="text-center mb-14">
+            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight">
+              About <span className="text-violet-400">Me &amp;</span> Why <span className="text-violet-400">Kairos</span>
+            </h2>
+          </Reveal>
+
+          <Reveal delay={80}>
+            <div className="p-8 md:p-10 rounded-3xl border border-violet-500/20 bg-white/[0.02]">
+              <div className="flex items-center gap-5 mb-8">
+                <Image
+                  src="/baljot.png"
+                  alt="Baljot Singh"
+                  width={96}
+                  height={96}
+                  className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover border-2 border-violet-500/40 shrink-0"
+                />
+                <h3 className="text-xl md:text-2xl font-display font-bold tracking-tight">
+                  Baljot Singh <span className="text-violet-400">(Founder &amp; Builder)</span>
+                </h3>
+              </div>
+
+              <div className="space-y-5 text-sm md:text-[15px] text-zinc-300 leading-relaxed font-sans">
+                <p>
+                  BCA student from Punjab, India, working in agentic AI and AI automation — designing systems and directing AI tools to build them.
+                </p>
+                <p>
+                  KAIROS exists because of a pattern seen across every project: the reasoning behind a decision disappears the moment the conversation ends. A vendor contract renews for years because no one remembers why it was signed. A new hire re-learns lessons the team already paid for. The context was never lost — it was just never captured anywhere queryable.
+                </p>
+                <p>
+                  KAIROS solves this directly. Ten AI agents run in parallel across Slack, Gmail, Drive, Notion, Zoom, Jira, and GitHub — extracting decisions, not documents: who decided, why, what alternatives were considered, and where the reasoning lives. Ask &ldquo;why did we decide X,&rdquo; and KAIROS walks the decision graph and answers in under 4 seconds, sourced back to the original thread.
+                </p>
+                <p>
+                  It connects directly to Claude, ChatGPT, or Cursor through MCP — so any AI already in use checks memory before answering, and writes new decisions back the moment they&apos;re made.
+                </p>
+                <p>
+                  Built solo, end to end: architecture, agent pipeline, MCP server, and product, for the AMD Developer Hackathon ACT II.
+                </p>
+              </div>
+
+              <div className="mt-8 pt-6 border-t border-violet-500/10">
+                <a
+                  href="https://github.com/baljotchohan/kairos"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm font-mono text-violet-300 hover:text-violet-200 transition-colors"
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 .5C5.73.5.5 5.74.5 12.02c0 5.02 3.26 9.28 7.79 10.79.57.1.78-.25.78-.55 0-.27-.01-1.16-.02-2.11-3.17.69-3.84-1.36-3.84-1.36-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.75 1.18 1.75 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.72-1.53-2.53-.29-5.19-1.27-5.19-5.63 0-1.24.44-2.26 1.17-3.06-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.14 1.17a10.9 10.9 0 0 1 5.72 0c2.18-1.48 3.14-1.17 3.14-1.17.62 1.57.23 2.73.11 3.02.73.8 1.17 1.82 1.17 3.06 0 4.37-2.67 5.34-5.21 5.62.41.36.77 1.06.77 2.14 0 1.55-.01 2.79-.01 3.17 0 .3.2.66.79.55A10.53 10.53 0 0 0 23.5 12.02C23.5 5.74 18.27.5 12 .5Z" />
+                  </svg>
+                  github.com/baljotchohan/kairos
+                </a>
+              </div>
             </div>
           </Reveal>
         </div>

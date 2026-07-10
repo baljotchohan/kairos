@@ -72,10 +72,15 @@ async def lifespan(app: FastAPI):
 
     print(f"✅ Memory ready — {memory.graph.stats()}")
 
-    # Start Slack bot (listens for @KAIROS mentions via Socket Mode)
+    # Start Slack bot (listens for @KAIROS mentions via Socket Mode). Reference
+    # kept on app.state — an unreferenced asyncio.create_task() result is only
+    # weakly held by the event loop and can be garbage-collected mid-connect,
+    # silently killing the whole listener with no error (same class of bug
+    # fixed in core/orchestrator.py's _spawn_background).
     slack_bot = SlackBot(orchestrator=orchestrator)
     app.state.slack_bot = slack_bot
-    asyncio.create_task(slack_bot.start())
+    slack_bot_task = asyncio.create_task(slack_bot.start())
+    app.state.slack_bot_task = slack_bot_task
 
     # Start background ingestion loop
     task = asyncio.create_task(_ingestion_loop())
@@ -85,10 +90,12 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
+    slack_bot_task.cancel()
+    for t in (task, slack_bot_task):
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
     await slack_bot.stop()
     print("👋 KAIROS shut down cleanly")
 

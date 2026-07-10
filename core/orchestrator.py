@@ -197,6 +197,10 @@ class KairosOrchestrator:
         self.memory = memory
         self.user_memory = UserMemory(db_path=memory.db_path)
         self.ingestion_locks = {}
+        # Strong references to fire-and-forget tasks (see _spawn_background) —
+        # asyncio.create_task()'s return value is only weakly held by the event
+        # loop, so an unreferenced task can be garbage-collected mid-execution.
+        self._background_tasks: set[asyncio.Task] = set()
 
         # Lazy imports to avoid circular dependencies
         from agents.slack_agent import SlackAgent
@@ -786,36 +790,24 @@ class KairosOrchestrator:
         # Triggers profile preference summary update asynchronously every 5 queries
         profile = await asyncio.to_thread(self.user_memory.get_profile, user_id)
         if profile.total_queries > 0 and profile.total_queries % 5 == 0:
-            asyncio.create_task(self._trigger_profile_update(user_id))
+            self._spawn_background(self._trigger_profile_update(user_id))
 
         # Also store the Q&A exchange as a DecisionNode so it is searchable via
         # MCP get_context (which queries the decision graph, not UserMemory sessions).
         # This ensures Claude/ChatGPT can find past KAIROS conversations.
+        # Fire-and-forget: memory.store() does a SQLite write + a ChromaDB upsert
+        # (which calls out to an embedding provider over HTTP) + graph auto-linking,
+        # none of which the user should ever wait on after their answer has already
+        # streamed — this used to be awaited here, so every single chat turn stalled
+        # the WS "done" event (and therefore the UI unlocking for the next message)
+        # on that write, and got slower over time as the graph grew. See
+        # core/graph.py's add_decision()/_auto_link() for the other half of this fix
+        # (conversation nodes now skip the expensive O(n) auto-link scan entirely).
         if answer and intent.intent not in ("greeting",):
-            try:
-                from core.graph import DecisionNode, CONVERSATION_TOPIC
-                from datetime import datetime as _dt
-                qa_node = DecisionNode(
-                    id=self.memory.make_id(
-                        title=question[:100],
-                        source_url=f"kairos://session/{session_id}",
-                        user_id=user_id,
-                    ),
-                    title=question[:200],
-                    summary=f"Q: {question[:300]}\nA: {answer[:300]}",
-                    date=_dt.utcnow().strftime("%Y-%m-%d"),
-                    source="KAIROS Chat",
-                    source_url=f"kairos://session/{session_id}",
-                    participants=[],
-                    topics=[CONVERSATION_TOPIC, intent.intent],
-                    outcome=answer[:500],
-                    raw_text=f"Question: {question}\n\nAnswer: {answer}",
-                    metadata={"session_id": session_id, "intent": intent.intent, "confidence": confidence},
-                    user_id=user_id,
-                )
-                await asyncio.to_thread(self.memory.store, qa_node, user_id)
-            except Exception as _e:
-                log.warning("Failed to index Q&A to decision graph: %s", _e)
+            self._spawn_background(self._index_qa_to_graph(
+                question=question, answer=answer, session_id=session_id,
+                intent=intent.intent, confidence=confidence, user_id=user_id,
+            ))
 
         return {
             "answer": answer,
@@ -893,6 +885,25 @@ class KairosOrchestrator:
             await stream_callback({"type": "token", "content": fallback})
         return fallback
 
+    def run_ingestion_background(self, user_id: str) -> asyncio.Task:
+        """External callers (both MCP transports' trigger_ingestion tool) should
+        use this instead of a bare asyncio.create_task(orchestrator.run_ingestion(...))
+        — same GC-risk fix as _spawn_background, exposed here so mcp_server.py and
+        api/routes/mcp_remote.py don't each need their own task-tracking set."""
+        return self._spawn_background(self.run_ingestion(user_id=user_id))
+
+    def _spawn_background(self, coro) -> asyncio.Task:
+        """Fire-and-forget a coroutine while keeping a strong reference to the
+        Task. asyncio's event loop only holds a WEAK reference to tasks created
+        via create_task() — an unreferenced task can be garbage-collected mid-
+        execution with no error, no log, nothing (this is documented asyncio
+        behavior, not hypothetical). Storing it here until it completes, then
+        dropping it via the done-callback, is the standard fix."""
+        task = asyncio.create_task(coro)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+        return task
+
     async def _trigger_profile_update(self, user_id: str):
         """Asynchronously triggers LLM summary update on user profile context."""
         try:
@@ -957,6 +968,41 @@ User History:
             print(f"[Orchestrator] Updated learned profile context for user {user_id}")
         except Exception as e:
             print(f"[Orchestrator] Profile learn error: {e}")
+
+    async def _index_qa_to_graph(
+        self, question: str, answer: str, session_id: str,
+        intent: str, confidence: float, user_id: str,
+    ):
+        """Background write of a chat Q&A turn into the decision graph (as a
+        CONVERSATION_TOPIC node) purely so MCP's get_context can recall past
+        conversations for external clients. Never awaited by query_with_memory —
+        the user's answer has already streamed by the time this runs, and this
+        write (SQLite + a ChromaDB upsert that calls an embedding provider over
+        HTTP) has no business making them wait for the next message."""
+        try:
+            from core.graph import DecisionNode, CONVERSATION_TOPIC
+            from datetime import datetime as _dt
+            qa_node = DecisionNode(
+                id=self.memory.make_id(
+                    title=question[:100],
+                    source_url=f"kairos://session/{session_id}",
+                    user_id=user_id,
+                ),
+                title=question[:200],
+                summary=f"Q: {question[:300]}\nA: {answer[:300]}",
+                date=_dt.utcnow().strftime("%Y-%m-%d"),
+                source="KAIROS Chat",
+                source_url=f"kairos://session/{session_id}",
+                participants=[],
+                topics=[CONVERSATION_TOPIC, intent],
+                outcome=answer[:500],
+                raw_text=f"Question: {question}\n\nAnswer: {answer}",
+                metadata={"session_id": session_id, "intent": intent, "confidence": confidence},
+                user_id=user_id,
+            )
+            await asyncio.to_thread(self.memory.store, qa_node, user_id)
+        except Exception as _e:
+            log.warning("Failed to index Q&A to decision graph: %s", _e)
 
     # ── Backward compatibility ────────────────────────────────────────────────
 

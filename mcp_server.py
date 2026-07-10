@@ -501,7 +501,7 @@ async def trigger_ingestion() -> str:
         return f"KAIROS: Sync was triggered recently. Please wait {int(INGESTION_COOLDOWN_SECONDS - elapsed)}s before triggering again."
 
     _last_ingestion_trigger = time.time()
-    asyncio.create_task(orchestrator.run_ingestion(MCP_TENANT_ID))
+    orchestrator.run_ingestion_background(MCP_TENANT_ID)
     return (
         "KAIROS: Sync started in the background across your connected sources. "
         "New decisions will appear in memory within a minute or two — ask again then."

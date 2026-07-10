@@ -96,6 +96,20 @@ const McpLogos = {
   )
 };
 
+// Decision fields (title/context/outcome/owner/source) are extracted by the
+// backend from ingested Slack messages, emails, Notion pages, and GitHub
+// PR/issue titles — all attacker-influenceable text from third parties, not
+// KAIROS-authored content. exportDecisionPDF() builds a raw HTML string for
+// document.write(); every interpolated field MUST go through this first or a
+// crafted PR/issue title becomes a stored-XSS payload that runs same-origin
+// (window.open("", ...) inherits the opener's origin) with window.opener
+// access back into the live dashboard session.
+function escapeHtml(value: unknown): string {
+  return String(value ?? "").replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string
+  ));
+}
+
 // Animates a number counting up to `value` whenever it changes, instead of
 // snapping — used for the metrics tab's stat tiles.
 function CountUp({ value, decimals = 0 }: { value: number; decimals?: number }) {
@@ -266,6 +280,10 @@ export default function Home() {
   const [currentGraphNodes, setCurrentGraphNodes] = useState<GraphNode[]>([]);
   const [currentGraphEdges, setCurrentGraphEdges] = useState<GraphEdge[]>([]);
   const [currentGraphTitle, setCurrentGraphTitle] = useState("");
+  // Content signature of the last compiled graph — lets the sync effect below skip
+  // handing DecisionGraph a new nodes/edges array reference (which reheats its whole
+  // O(n^2) physics simulation) when the underlying decisions haven't actually changed.
+  const lastGraphSignatureRef = useRef<string>("");
   
   // Custom states for simulated interface
   const [simulatedMessages, setSimulatedMessages] = useState<any[]>([]);
@@ -458,8 +476,18 @@ export default function Home() {
     const decisionsToGraph = token ? realDecisions : activeSimulationDecisions;
     if (decisionsToGraph.length > 0) {
       const { nodes, edges } = compileGlobalGraph(decisionsToGraph);
-      setCurrentGraphNodes(nodes);
-      setCurrentGraphEdges(edges);
+      // fetchRealDecisions() reruns after every chat message even when it added no
+      // new decision — without this guard, that produced a brand-new nodes/edges
+      // array every time, which reheats DecisionGraph's whole physics simulation
+      // (see its "Sync nodes to simulation" effect) on every single message.
+      const signature =
+        nodes.map((n) => n.id).sort().join(",") + "|" +
+        edges.map((e) => `${e.source}>${e.target}`).sort().join(",");
+      if (signature !== lastGraphSignatureRef.current) {
+        lastGraphSignatureRef.current = signature;
+        setCurrentGraphNodes(nodes);
+        setCurrentGraphEdges(edges);
+      }
       setCurrentGraphTitle(token ? "Global Organizational Memory Network" : "Simulated Memory Graph");
     }
   }, [token, realDecisions, activeSimulationDecisions, compileGlobalGraph]);
@@ -1321,24 +1349,24 @@ export default function Home() {
         <body>
           <div class="header">
             <div class="logo">KAIROS Decision Index Export</div>
-            <div class="subtitle">Generated on ${new Date().toLocaleString()} · Scope: ${selectedSourceFilter.toUpperCase()}</div>
+            <div class="subtitle">Generated on ${escapeHtml(new Date().toLocaleString())} · Scope: ${escapeHtml(selectedSourceFilter.toUpperCase())}</div>
             <div class="summary-info">Exported <strong>${filteredDecisions.length}</strong> decisions from corporate memory.</div>
           </div>
           <div>
             ${filteredDecisions.map((d, index) => `
               <div class="decision-card">
-                <h2 class="decision-title">${index + 1}. ${d.title}</h2>
+                <h2 class="decision-title">${index + 1}. ${escapeHtml(d.title)}</h2>
                 <div class="meta-grid">
-                  <div class="meta-item"><strong>Date:</strong> ${d.date}</div>
-                  <div class="meta-item"><strong>Source:</strong> ${d.source.toUpperCase()}</div>
-                  <div class="meta-item"><strong>Owner:</strong> ${d.owner || "N/A"}</div>
-                  <div class="meta-item"><strong>ID:</strong> ${d.id.slice(0, 8)}...</div>
+                  <div class="meta-item"><strong>Date:</strong> ${escapeHtml(d.date)}</div>
+                  <div class="meta-item"><strong>Source:</strong> ${escapeHtml(d.source.toUpperCase())}</div>
+                  <div class="meta-item"><strong>Owner:</strong> ${escapeHtml(d.owner || "N/A")}</div>
+                  <div class="meta-item"><strong>ID:</strong> ${escapeHtml(d.id.slice(0, 8))}...</div>
                 </div>
                 <div class="section-title">Context / Rationale</div>
-                <div class="section-content">${d.context || "No context provided."}</div>
+                <div class="section-content">${escapeHtml(d.context || "No context provided.")}</div>
                 ${d.outcome ? `
                   <div class="section-title">Outcome</div>
-                  <div class="section-content">${d.outcome}</div>
+                  <div class="section-content">${escapeHtml(d.outcome)}</div>
                 ` : ""}
               </div>
             `).join("")}

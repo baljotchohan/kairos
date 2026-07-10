@@ -16,9 +16,11 @@ from connectors.slack_bot import SlackBot
 @pytest.fixture
 def bot():
     b = SlackBot(orchestrator=None)
+    # (bot_token, user_uid, owner_slack_id). owner_slack_id is the Slack member
+    # id of whoever connected the workspace — only they may query via @mention.
     b._team_creds = {
-        "TEAM_A": ("xoxb-team-a-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "user-alice"),
-        "TEAM_B": ("xoxb-team-b-token-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "user-bob"),
+        "TEAM_A": ("xoxb-team-a-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "user-alice", "UALICE"),
+        "TEAM_B": ("xoxb-team-b-token-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "user-bob", "UBOB"),
     }
     b._bot_user_ids = {"TEAM_A": "BOTALICE", "TEAM_B": "BOTBOB"}
     return b
@@ -44,7 +46,8 @@ async def test_mention_routes_to_the_mentioning_workspaces_own_user(bot):
     bot._query_kairos = fake_query_kairos
     patcher = _mock_slack_client()
     try:
-        event = {"channel": "C1", "ts": "1.1", "text": "<@BOTBOB> what did we decide", "user": "U999", "team": "TEAM_B"}
+        # Mention comes from the workspace OWNER (UBOB) — allowed.
+        event = {"channel": "C1", "ts": "1.1", "text": "<@BOTBOB> what did we decide", "user": "UBOB", "team": "TEAM_B"}
         await bot._handle_mention(event, {"team_id": "TEAM_B"})
     finally:
         patcher.stop()
@@ -66,11 +69,11 @@ async def test_two_different_workspaces_never_cross_contaminate(bot):
     patcher = _mock_slack_client()
     try:
         await bot._handle_mention(
-            {"channel": "C1", "ts": "1.1", "text": "<@BOTALICE> hi", "user": "U1", "team": "TEAM_A"},
+            {"channel": "C1", "ts": "1.1", "text": "<@BOTALICE> hi", "user": "UALICE", "team": "TEAM_A"},
             {"team_id": "TEAM_A"},
         )
         await bot._handle_mention(
-            {"channel": "C2", "ts": "2.1", "text": "<@BOTBOB> hi", "user": "U2", "team": "TEAM_B"},
+            {"channel": "C2", "ts": "2.1", "text": "<@BOTBOB> hi", "user": "UBOB", "team": "TEAM_B"},
             {"team_id": "TEAM_B"},
         )
     finally:
@@ -124,3 +127,53 @@ async def test_self_mention_is_ignored_per_workspace(bot):
         patcher.stop()
 
     assert called["count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_non_owner_member_cannot_query_owners_memory(bot):
+    """The access-control fix: a DIFFERENT workspace member mentioning the bot
+    must NOT reach the owner's KAIROS memory — otherwise any coworker could
+    read the owner's full cross-source private decisions (Gmail/Drive/Jira/…)
+    just by being in the same Slack workspace."""
+    captured = {}
+
+    async def fake_query_kairos(question, user_id):
+        captured["user_id"] = user_id
+        return ("answer", [], 0.9)
+
+    bot._query_kairos = fake_query_kairos
+    patcher = _mock_slack_client()
+    try:
+        # A coworker (UEVE), NOT the owner (UBOB), mentions the bot in TEAM_B.
+        event = {"channel": "C1", "ts": "1.1", "text": "<@BOTBOB> why do we pay this vendor", "user": "UEVE", "team": "TEAM_B"}
+        await bot._handle_mention(event, {"team_id": "TEAM_B"})
+    finally:
+        patcher.stop()
+
+    assert "user_id" not in captured  # memory was never queried
+
+
+@pytest.mark.asyncio
+async def test_legacy_connection_without_owner_id_fails_closed(bot):
+    """A connection made before owner_slack_id was captured (empty string) must
+    fail closed — we can't verify the asker is the owner, so we refuse rather
+    than risk leaking the owner's memory to whoever mentions the bot."""
+    captured = {}
+
+    async def fake_query_kairos(question, user_id):
+        captured["user_id"] = user_id
+        return ("answer", [], 0.9)
+
+    # Legacy: owner_slack_id is empty.
+    bot._team_creds["TEAM_B"] = (
+        "xoxb-team-b-token-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "user-bob", "",
+    )
+    bot._query_kairos = fake_query_kairos
+    patcher = _mock_slack_client()
+    try:
+        event = {"channel": "C1", "ts": "1.1", "text": "<@BOTBOB> what did we decide", "user": "UBOB", "team": "TEAM_B"}
+        await bot._handle_mention(event, {"team_id": "TEAM_B"})
+    finally:
+        patcher.stop()
+
+    assert "user_id" not in captured  # refused even for the (unverifiable) owner
