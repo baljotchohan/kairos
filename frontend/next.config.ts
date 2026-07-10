@@ -5,6 +5,22 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: true,
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          // No CSP yet — Firebase auth popups + inline Next.js runtime make a
+          // strict policy risky this close to the deadline; these four are
+          // drop-in safe and close clickjacking/MIME-sniff/referrer leaks.
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     return {
       beforeFiles: [

@@ -308,7 +308,7 @@ export default function Home() {
 
   const [autoExtractionEnabled, setAutoExtractionEnabled] = useState(true);
 
-  const [slackToken, setSlackToken] = useState("xoxb-8241793264-9182371239-••••••••");
+  const [slackToken, setSlackToken] = useState("xoxb-DEMO-PLACEHOLDER-••••••••");
   const [googleClient, setGoogleClient] = useState("9182371982-client.apps.googleusercontent.com");
   const [jiraUrl, setJiraUrl] = useState("https://company.atlassian.net");
   const [zoomKey, setZoomKey] = useState("z_api_key_8123981273");
@@ -648,7 +648,7 @@ export default function Home() {
           github: "disconnected",
         });
       }
-      setSlackToken("xoxb-8241793264-9182371239-••••••••");
+      setSlackToken("xoxb-DEMO-PLACEHOLDER-••••••••");
       setGoogleClient("9182371982-client.apps.googleusercontent.com");
       setJiraUrl("https://company.atlassian.net");
       setZoomKey("z_api_key_8123981273");
