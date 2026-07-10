@@ -2315,7 +2315,6 @@ export default function Landing() {
 
       {/* ── About Me ── */}
       <section id="about" className="relative py-28 px-6 overflow-hidden">
-        <div className="absolute -bottom-20 -right-20 w-72 h-72 rotate-12 rounded-[3rem] bg-gradient-to-br from-violet-500 to-violet-700 blur-2xl opacity-25 pointer-events-none" />
         <div className="relative max-w-4xl mx-auto">
           <Reveal className="text-center mb-14">
             <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight">
@@ -2372,30 +2371,6 @@ export default function Landing() {
             </div>
           </Reveal>
         </div>
-      </section>
-
-      {/* ── CTA ── */}
-      <section className="relative py-32 px-6">
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-[36rem] h-[36rem] rounded-full bg-violet-700/15 blur-[150px]" />
-        </div>
-        <Reveal className="relative max-w-3xl mx-auto text-center">
-          <KairosLogo size={56} className="mx-auto mb-8" />
-          <h2 className="text-4xl md:text-6xl font-display font-bold tracking-tight">
-            Stop losing the <span className="text-violet-300">why</span>.
-          </h2>
-          <p className="mt-5 text-zinc-400 max-w-xl mx-auto font-sans">
-            Connect your workspace and ask KAIROS your first question. The memory builds itself.
-          </p>
-          <Magnetic strength={0.3} className="mt-10">
-            <button
-              onClick={enter}
-              className="px-9 py-4 rounded-xl text-sm font-semibold bg-violet-600 hover:bg-violet-500 transition-all text-white shadow-[0_0_36px_rgba(139,92,246,0.5)] hover:-translate-y-0.5"
-            >
-              {user ? "Open Dashboard →" : "Enter KAIROS →"}
-            </button>
-          </Magnetic>
-        </Reveal>
       </section>
 
       {/* ── Footer ── */}
