@@ -227,6 +227,10 @@ export default function DecisionGraph({
   const physicsNodesRef = useRef<PhysicsNode[]>([]);
   const alphaRef = useRef(1.0); // simulation cooling parameter
   const draggedNodeRef = useRef<PhysicsNode | null>(null);
+  // Where the cursor/finger actually is during a drag. The dragged node is
+  // eased toward this each physics step instead of teleporting, so a fast
+  // drag feels elastic rather than snapping frame to frame.
+  const dragTargetRef = useRef<{ x: number; y: number } | null>(null);
   const isPanningRef = useRef(false);
   const panStartRef = useRef({ x: 0, y: 0 });
   // Mirrors touchMoved below, but for mouse: lets mouseup tell a genuine
@@ -344,6 +348,16 @@ export default function DecisionGraph({
     const collision = settingsRef.current.collision ?? 1.0;
     const damping = settingsRef.current.friction ?? 0.85;
     const alpha = alphaRef.current;
+
+    // Ease the dragged node toward the cursor (critically-damped-ish lerp)
+    // instead of teleporting it — fast drags pull neighbours along smoothly
+    // and the node lands exactly on the cursor within a few steps.
+    const dragged = draggedNodeRef.current;
+    const dragTarget = dragTargetRef.current;
+    if (dragged && dragTarget) {
+      dragged.x += (dragTarget.x - dragged.x) * 0.45;
+      dragged.y += (dragTarget.y - dragged.y) * 0.45;
+    }
 
     // Fast id → node lookup (avoids O(E·N) find() over the edge list) and
     // refresh each node's collision radius from the live size slider.
@@ -696,8 +710,16 @@ export default function DecisionGraph({
   // Set up game loop
   useEffect(() => {
     let animFrameId: number;
+    // Fixed-timestep physics: forces/damping are tuned for 60Hz steps, so on
+    // a 120Hz+ display a raw step-per-frame ran the whole simulation at
+    // double speed (twitchy), and on a slow frame it went sluggish.
+    // Accumulate real elapsed time and run whole 60Hz steps — capped at 3 so
+    // a background-tab hiccup can't unleash a burst of catch-up steps.
+    const STEP_MS = 1000 / 60;
+    let lastTime = 0;
+    let accumulator = 0;
 
-    const tick = () => {
+    const tick = (now: number) => {
       const canvas = canvasRef.current;
       const container = containerRef.current;
       if (!canvas || !container) {
@@ -708,14 +730,26 @@ export default function DecisionGraph({
       const width = container.clientWidth;
       const height = container.clientHeight;
 
+      if (lastTime === 0) lastTime = now;
+      accumulator += Math.min(now - lastTime, 100);
+      lastTime = now;
+
       if (alphaRef.current > 0.005) {
-        runPhysics(width, height);
-        alphaRef.current *= 0.985;
+        let steps = 0;
+        while (accumulator >= STEP_MS && steps < 3) {
+          runPhysics(width, height);
+          alphaRef.current *= 0.985;
+          accumulator -= STEP_MS;
+          steps++;
+        }
+        // Drop any backlog beyond one step so it can't build up while capped.
+        accumulator = Math.min(accumulator, STEP_MS);
       } else if (alphaRef.current !== 0) {
         // Settling to rest — zero any residual velocity so a future reheat
         // (new data, a settings change) ramps up from stillness instead of
         // unleashing a frame's worth of stale, undamped velocity as a snap.
         alphaRef.current = 0;
+        accumulator = 0;
         for (const n of physicsNodesRef.current) {
           n.vx = 0;
           n.vy = 0;
@@ -807,6 +841,7 @@ export default function DecisionGraph({
 
         if (node) {
           draggedNodeRef.current = node;
+          dragTargetRef.current = { x: node.x, y: node.y };
           node.vx = 0;
           node.vy = 0;
           // Don't reheat on touch-down alone — a tap that never turns into
@@ -823,6 +858,7 @@ export default function DecisionGraph({
       } else if (e.touches.length === 2) {
         e.preventDefault();
         draggedNodeRef.current = null;
+        dragTargetRef.current = null;
         isPanningRef.current = false;
         lastTouchCount = 2;
         const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -869,8 +905,10 @@ export default function DecisionGraph({
       }
 
       if (draggedNodeRef.current) {
-        draggedNodeRef.current.x = (screenX - panRef.current.x) / zoomRef.current;
-        draggedNodeRef.current.y = (screenY - panRef.current.y) / zoomRef.current;
+        dragTargetRef.current = {
+          x: (screenX - panRef.current.x) / zoomRef.current,
+          y: (screenY - panRef.current.y) / zoomRef.current,
+        };
         draggedNodeRef.current.vx = 0;
         draggedNodeRef.current.vy = 0;
         alphaRef.current = 1.0;
@@ -897,6 +935,7 @@ export default function DecisionGraph({
       }
       if (e.touches.length === 0) {
         draggedNodeRef.current = null;
+        dragTargetRef.current = null;
         isPanningRef.current = false;
         lastTouchCount = 0;
         pinchStartDist = 0;
@@ -941,6 +980,9 @@ export default function DecisionGraph({
 
     if (clickedNode) {
       draggedNodeRef.current = clickedNode;
+      // Start the drag target at the node itself so the first physics step
+      // doesn't yank it toward a stale point from a previous drag.
+      dragTargetRef.current = { x: clickedNode.x, y: clickedNode.y };
       setSelectedNodeId(clickedNode.id === selectedNodeId ? null : clickedNode.id);
 
       clickedNode.vx = 0;
@@ -987,8 +1029,7 @@ export default function DecisionGraph({
     }
 
     if (draggedNodeRef.current) {
-      draggedNodeRef.current.x = worldX;
-      draggedNodeRef.current.y = worldY;
+      dragTargetRef.current = { x: worldX, y: worldY };
       draggedNodeRef.current.vx = 0;
       draggedNodeRef.current.vy = 0;
       alphaRef.current = 1.0;
@@ -1023,6 +1064,7 @@ export default function DecisionGraph({
       setHoveredNodeId(null);
     }
     draggedNodeRef.current = null;
+    dragTargetRef.current = null;
     isPanningRef.current = false;
   };
 
