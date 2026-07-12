@@ -1629,7 +1629,7 @@ export default function Landing() {
             <span className="text-zinc-700">·</span>
             <span><span className="text-violet-300 font-semibold">7</span> connectors</span>
             <span className="text-zinc-700">·</span>
-            <span><span className="text-violet-300 font-semibold">6</span> MCP tools</span>
+            <span><span className="text-violet-300 font-semibold">8</span> MCP tools</span>
             <span className="text-zinc-700">·</span>
             <span><span className="text-violet-300 font-semibold">~4s</span> recall</span>
           </div>
