@@ -1590,7 +1590,7 @@ export default function Landing() {
           </h1>
 
           <p className="mt-7 text-base md:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed font-sans">
-            Nine AI agents read your Slack, email, Drive, Notion, Jira and Zoom —
+            Ten AI agents read your Slack, email, Drive, Notion, GitHub, Jira and Zoom —
             extracting every decision into a living decision graph that proactively
             flags risk. Ask in plain English, get the answer with sources in seconds.
           </p>
