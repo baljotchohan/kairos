@@ -1722,9 +1722,9 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto">
           <Reveal className="text-center mb-16">
             <p className="text-xs font-mono tracking-[0.25em] text-violet-400 uppercase mb-4">The Engine</p>
-            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight">Nine agents, running in parallel</h2>
+            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight">Ten agents, running in parallel</h2>
             <p className="mt-4 text-zinc-400 max-w-2xl mx-auto font-sans">
-              Orchestrated with LangGraph — five own a source and extract decisions, four reason
+              Orchestrated with LangGraph — six own a source and extract decisions, four reason
               over the graph to route, retrieve, synthesize and answer live queries.
             </p>
           </Reveal>
